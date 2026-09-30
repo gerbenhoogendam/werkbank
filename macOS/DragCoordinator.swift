@@ -84,9 +84,10 @@ final class DragCoordinator {
         func place(_ t: BoardTarget?) -> String { t.map { "\($0.column.rawValue)#\($0.index)" } ?? "nil" }
         let slotText = agendaSlot.map { "\(DutchDate.weekdayShort($0.day)) \(DutchDate.time($0.start))" } ?? "nil"
         let draftText = draft.map { "\(DutchDate.time($0.start))-\(DutchDate.time($0.end)) \($0.step)" } ?? "nil"
+        let areaText = agendaArea.map(rect) ?? "nil"
         return "phase \(phase) region \(region) target \(place(target)) origin \(place(origin))\n"
             + "board \(rect(boardFrame)) kolommen \(columnFrames.count) stapels \(stackFrames.count)\n"
-            + "agenda \(rect(agenda.frame)) dagen \(agenda.dayFrames.count) uurhoogte \(Int(agenda.hourHeight)) "
+            + "agenda \(rect(agenda.frame)) gebied \(areaText) viewport \(rect(agenda.scrollViewport)) dagen \(agenda.dayFrames.count) uurhoogte \(Int(agenda.hourHeight)) "
             + "uren \(agenda.startHour)-\(agenda.endHour) top \(Int(agenda.timelineTop))\n"
             + "slot \(slotText) draft \(draftText)\n"
             + "pointer \(Int(pointer.x)),\(Int(pointer.y))"
@@ -245,8 +246,18 @@ final class DragCoordinator {
         return columnFrames.values.dropFirst().reduce(first) { $0.union($1) }
     }
 
+    /// Agendagebied: het gemeten frame; anders afgeleid uit de dagkolommen (x-bereik, plus de urenkolom links)
+    /// en alles onder het board. (Het frame van de hele agenda kwam in de praktijk niet binnen, de dagkolommen wel.)
+    private var agendaArea: CGRect? {
+        if agenda.frame.width > 1 { return agenda.frame }
+        guard let first = agenda.dayFrames.values.first else { return nil }
+        let columns = agenda.dayFrames.values.dropFirst().reduce(first) { $0.union($1) }
+        let top = (boardArea?.maxY ?? columns.minY) + 4
+        return CGRect(x: columns.minX - 60, y: top, width: columns.width + 68, height: 10_000)
+    }
+
     private func region(at point: CGPoint) -> Region {
-        if agenda.frame.width > 1, agenda.frame.contains(point) { return .agenda }
+        if let area = agendaArea, area.contains(point) { return .agenda }
         // Zonder gemeten geometrie liever board dan niets: de kaart kan dan tenminste van kolom wisselen.
         guard let area = boardArea else { return .board }
         return area.insetBy(dx: -24, dy: -24).contains(point) ? .board : .outside

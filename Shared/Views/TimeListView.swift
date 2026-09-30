@@ -249,7 +249,11 @@ struct TimeEntryRow: View {
         }
         .frame(minHeight: 44)
         .opacity(entry.isWritten ? 0.55 : 1)
-        .help(entry.status == .finished ? entry.workDescription : "")
+        .help(entry.status == .finished
+              ? entry.workDescription + (entry.correctionSeconds > 0
+                  ? "\nGemeten \(Billing.formatHM(entry.accumulated)) u, correctie −\(Int((entry.correctionSeconds / 60).rounded())) min"
+                  : "")
+              : "")
         .contextMenu {
             if entry.status == .finished {
                 Button(entry.isWritten ? "Markeer als niet geschreven" : "Markeer als geschreven") {

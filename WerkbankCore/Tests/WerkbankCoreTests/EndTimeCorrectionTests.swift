@@ -63,3 +63,42 @@ final class EndTimeCorrectionTests: XCTestCase {
         XCTAssertEqual(d, t(10, 15))
     }
 }
+
+final class StartTimeCorrectionTests: XCTestCase {
+    private var cal = Calendar(identifier: .gregorian)
+    private func t(_ h: Int, _ m: Int, _ s: Int = 0) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 9, day: 29, hour: h, minute: m, second: s))!
+    }
+
+    func testEarlierStartAddsTime() {
+        let r = StartTimeCorrection.evaluate(firstStart: t(9, 30), requestedStart: t(9, 10), end: t(10, 30), measuredSeconds: 3600)
+        XCTAssertEqual(r.adjustmentSeconds, 20 * 60)
+        XCTAssertEqual(r.start, t(9, 10))
+        XCTAssertFalse(r.isOutOfRange)
+    }
+
+    func testLaterStartRemovesTime() {
+        let r = StartTimeCorrection.evaluate(firstStart: t(9, 0), requestedStart: t(9, 15), end: t(10, 0), measuredSeconds: 3600)
+        XCTAssertEqual(r.adjustmentSeconds, -15 * 60)
+        XCTAssertEqual(r.start, t(9, 15))
+    }
+
+    func testDifferenceUnderOneMinuteIgnored() {
+        let r = StartTimeCorrection.evaluate(firstStart: t(9, 12, 40), requestedStart: t(9, 12), end: t(10, 0), measuredSeconds: 1800)
+        XCTAssertEqual(r.adjustmentSeconds, 0)
+        XCTAssertEqual(r.start, t(9, 12, 40))
+    }
+
+    func testStartNotBeforeEndIsOutOfRange() {
+        let r = StartTimeCorrection.evaluate(firstStart: t(9, 0), requestedStart: t(10, 0), end: t(10, 0), measuredSeconds: 3600)
+        XCTAssertTrue(r.isOutOfRange)
+        XCTAssertEqual(r.adjustmentSeconds, 0)
+        XCTAssertEqual(r.start, t(9, 0))
+    }
+
+    func testLaterStartCannotRemoveMoreThanMeasured() {
+        let r = StartTimeCorrection.evaluate(firstStart: t(9, 0), requestedStart: t(9, 50), end: t(10, 0), measuredSeconds: 20 * 60)
+        XCTAssertEqual(r.adjustmentSeconds, -20 * 60)
+        XCTAssertEqual(r.start, t(9, 20))
+    }
+}

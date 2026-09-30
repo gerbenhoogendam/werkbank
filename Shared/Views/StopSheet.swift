@@ -10,7 +10,10 @@ struct StopSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
 
+    @State private var startText = ""
     @State private var endText = ""
+    @State private var correctionText = ""
+    @State private var confirmDelete = false
     @State private var workDescription = ""
     @State private var descriptionError = false
     @State private var shakes: CGFloat = 0
@@ -34,8 +37,33 @@ struct StopSheet: View {
     private var isInvalidText: Bool { parsedEnd == nil && !endText.isEmpty }
     private var showsRange: Bool { evaluation.isOutOfRange || isInvalidText }
 
-    private var worked: TimeInterval { max(0, entry.accumulated - evaluation.subtractedSeconds) }
-    private var billed: Double { Billing.billedHours(seconds: worked, unitMinutes: AppSettings.roundingMinutes) }
+    private var firstStart: Date { entry.firstStart ?? lastStart }
+    private var startIsCustomised: Bool { startText != DutchDate.time(firstStart) }
+
+    /// Begintijd op de dag van de eerste start. Ongeldige invoer telt als "niet aangepast".
+    private var parsedStart: Date? {
+        guard let (h, m) = Self.parse(startText) else { return nil }
+        return Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: firstStart)
+    }
+
+    private var startEvaluation: StartTimeEvaluation {
+        StartTimeCorrection.evaluate(firstStart: firstStart, requestedStart: parsedStart ?? firstStart,
+                                     end: evaluation.end,
+                                     measuredSeconds: entry.accumulated - evaluation.subtractedSeconds)
+    }
+
+    private var isInvalidStartText: Bool { parsedStart == nil && !startText.isEmpty }
+    private var showsStartRange: Bool { startEvaluation.isOutOfRange || isInvalidStartText }
+
+    /// Werkelijk gewerkt: gemeten tijd na begin- en eindtijdcorrectie.
+    private var worked: TimeInterval {
+        max(0, entry.accumulated - evaluation.subtractedSeconds + startEvaluation.adjustmentSeconds)
+    }
+    /// Aftrek op de te factureren tijd (bijv. een kwartier dat niet telt); nooit meer dan gewerkt.
+    private var correction: TimeInterval { min(Double(Int(correctionText) ?? 0) * 60, worked) }
+    private var billed: Double {
+        Billing.billedHours(seconds: max(0, worked - correction), unitMinutes: AppSettings.roundingMinutes)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -50,13 +78,17 @@ struct StopSheet: View {
             }
 
             endTimeSection
+            correctionSection
             descriptionSection
 
+            Text(summaryText)
+                .thingsFont(.todoTitleOpen)
+                .foregroundStyle(ThingsColor.textPrimary)
+                .monospacedDigit()
+
             HStack {
-                Text("Gewerkt \(Billing.formatHMS(worked)) · te factureren \(Billing.formatHours(billed)) u")
-                    .thingsFont(.todoTitleOpen)
-                    .foregroundStyle(ThingsColor.textPrimary)
-                    .monospacedDigit()
+                Button("Tijdregel verwijderen", role: .destructive) { confirmDelete = true }
+                    .help("Verwijdert deze tijdregel zonder iets te bewaren")
                 Spacer()
                 Button("Annuleer") { appState.stopContext = nil }
                     .keyboardShortcut(.cancelAction)
@@ -71,8 +103,15 @@ struct StopSheet: View {
         #endif
         .background(ThingsColor.backgroundContent)
         .onAppear {
+            startText = DutchDate.time(firstStart)
             endText = DutchDate.time(defaultEnd)
             descriptionFocused = true
+        }
+        .confirmationDialog("Tijdregel verwijderen?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Verwijder tijdregel", role: .destructive) { discard() }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text("De gemeten tijd van \"\(entry.title)\" wordt niet bewaard.")
         }
     }
 
@@ -80,32 +119,20 @@ struct StopSheet: View {
 
     private var endTimeSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Eindtijd controleren")
+            Text("Tijd controleren")
                 .thingsFont(.heading)
                 .foregroundStyle(ThingsColor.accent)
 
-            HStack(spacing: 8) {
-                TextField("uu:mm", text: $endText)
-                    .textFieldStyle(.plain)
-                    .monospacedDigit()
-                    .multilineTextAlignment(.center)
-                    .frame(width: 64)
-                    .padding(.vertical, 5)
-                    .background(
-                        RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
-                            .strokeBorder(showsRange ? ThingsColor.error : ThingsColor.separator, lineWidth: 1.5)
-                    )
-                    .onSubmit(clampText)
-                    #if os(iOS)
-                    .keyboardType(.numbersAndPunctuation)
-                    #endif
-                    .accessibilityLabel("Eindtijd")
+            HStack(spacing: 12) {
+                timeField("Van", text: $startText, invalid: showsStartRange, onSubmit: {})
+                timeField("Tot", text: $endText, invalid: showsRange, onSubmit: clampText)
 
-                if endIsCustomised {
+                if startIsCustomised || endIsCustomised {
                     Button {
+                        startText = DutchDate.time(firstStart)
                         endText = DutchDate.time(defaultEnd)
                     } label: {
-                        Label("Terug naar \(DutchDate.time(defaultEnd))", systemImage: "arrow.uturn.backward")
+                        Label("Terug naar standaard", systemImage: "arrow.uturn.backward")
                     }
                     .buttonStyle(.borderless)
                     .thingsFont(.metadata)
@@ -116,10 +143,25 @@ struct StopSheet: View {
                 .thingsFont(.metadata)
                 .foregroundStyle(ThingsColor.textSecondary)
 
+            if showsStartRange {
+                Text("De begintijd moet vóór de eindtijd (\(DutchDate.time(evaluation.end))) liggen.")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.error)
+            }
+
             if showsRange {
                 Text("De eindtijd moet tussen \(DutchDate.time(lastStart)) en \(DutchDate.time(defaultEnd)) liggen.")
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.error)
+            }
+
+            if startEvaluation.adjustmentSeconds != 0 {
+                let minutes = Int((abs(startEvaluation.adjustmentSeconds) / 60).rounded())
+                Text(startEvaluation.adjustmentSeconds > 0
+                     ? "\(minutes) min erbij door de eerdere begintijd"
+                     : "\(minutes) min eraf door de latere begintijd")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textPrimary)
             }
 
             if evaluation.subtractedSeconds > 0 {
@@ -136,6 +178,78 @@ struct StopSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func timeField(_ title: String, text: Binding<String>, invalid: Bool,
+                           onSubmit: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textSecondary)
+            TextField("uu:mm", text: text)
+                .textFieldStyle(.plain)
+                .monospacedDigit()
+                .multilineTextAlignment(.center)
+                .frame(width: 64)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
+                        .strokeBorder(invalid ? ThingsColor.error : ThingsColor.separator, lineWidth: 1.5)
+                )
+                .onSubmit(onSubmit)
+                #if os(iOS)
+                .keyboardType(.numbersAndPunctuation)
+                #endif
+                .accessibilityLabel(title == "Van" ? "Begintijd" : "Eindtijd")
+        }
+    }
+
+    // MARK: Correctie
+
+    /// Tijd die wel gewerkt is maar niet gefactureerd wordt (bijv. een kwartier afgeleid): de gewerkte tijd
+    /// blijft in de regel staan, alleen de te factureren tijd gaat omlaag.
+    private var correctionSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Correctie")
+                .thingsFont(.heading)
+                .foregroundStyle(ThingsColor.accent)
+
+            HStack(spacing: 8) {
+                Text("Niet factureren")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textSecondary)
+                TextField("", text: $correctionText, prompt: Text("0"))
+                    .textFieldStyle(.plain)
+                    .monospacedDigit()
+                    .multilineTextAlignment(.center)
+                    .frame(width: 48)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
+                            .strokeBorder(ThingsColor.separator, lineWidth: 1.5)
+                    )
+                    #if os(iOS)
+                    .keyboardType(.numberPad)
+                    #endif
+                    .onChange(of: correctionText) { _, new in
+                        let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
+                        if digits != new { correctionText = digits }
+                    }
+                Text("min")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+
+            Text("De gewerkte tijd blijft in de regel staan; alleen de te factureren tijd wordt lager.")
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textSecondary)
+        }
+    }
+
+    private var summaryText: String {
+        var text = "Gewerkt \(Billing.formatHMS(worked))"
+        if correction >= 60 { text += " · correctie −\(Int(correction / 60)) min" }
+        return text + " · te factureren \(Billing.formatHours(billed)) u"
     }
 
     private var infoText: String {
@@ -192,10 +306,20 @@ struct StopSheet: View {
             return
         }
         let result = evaluation
+        let start = startEvaluation
         TimerService.finish(entry, description: workDescription, end: result.end,
-                            subtracted: result.subtractedSeconds, in: context)
+                            subtracted: result.subtractedSeconds,
+                            startAdjust: start.adjustmentSeconds,
+                            newFirstStart: start.adjustmentSeconds != 0 ? start.start : nil,
+                            correction: correction, in: context)
         appState.stopContext = nil
         appState.showToast("Tijd vastgelegd, klaar om te factureren")
+    }
+
+    private func discard() {
+        TimerService.discard(entry, in: context)
+        appState.stopContext = nil
+        appState.showToast("Tijdregel verwijderd")
     }
 
     /// "10:15", "1015", "9.05" → (uur, minuut).

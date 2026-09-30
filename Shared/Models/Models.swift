@@ -123,6 +123,8 @@ final class TimeEntry {
     var finishedAt: Date?
 
     var workDescription: String = ""
+    /// Aftrek op de te factureren tijd (bijv. een kwartier dat niet telt). De gemeten tijd blijft ongewijzigd.
+    var correctionSeconds: TimeInterval = 0
     /// Vinkje "geschreven" (in het facturatiesysteem).
     var isWritten: Bool = false
     var todoID: UUID?

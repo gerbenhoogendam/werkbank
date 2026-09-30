@@ -198,7 +198,7 @@ extension TimeEntry {
                     title: title,
                     workDescription: workDescription,
                     minutes: Int((accumulated / 60).rounded()),
-                    billedHours: Billing.billedHours(seconds: accumulated, unitMinutes: AppSettings.roundingMinutes),
+                    billedHours: Billing.billedHours(seconds: max(0, accumulated - correctionSeconds), unitMinutes: AppSettings.roundingMinutes),
                     source: source.title)
     }
 }
