@@ -28,6 +28,14 @@ struct DayAgendaView: View {
         }
     }
 
+    private func addToTimeList(_ event: AgendaEvent) {
+        if TimerService.addCalendarEvent(event, in: context) != nil {
+            appState.showToast("Afspraak toegevoegd aan Tijd schrijven")
+        } else {
+            appState.showToast("Deze afspraak staat al in Tijd schrijven")
+        }
+    }
+
     private var content: some View {
         _ = service.revision
         let next = calendar.date(byAdding: .day, value: 1, to: day) ?? day
@@ -50,13 +58,7 @@ struct DayAgendaView: View {
                 ThingsEmptyStateSymbol(symbol: "calendar")
             } else {
                 List(events) { event in
-                    Button {
-                        if TimerService.addCalendarEvent(event, in: context) != nil {
-                            appState.showToast("Afspraak toegevoegd aan Tijd schrijven")
-                        } else {
-                            appState.showToast("Deze afspraak staat al in Tijd schrijven")
-                        }
-                    } label: {
+                    Group {
                         HStack(spacing: 12) {
                             Circle().fill(event.color).frame(width: 9, height: 9)
                             Text(event.isAllDay ? "Hele dag" : DutchDate.time(event.start))
@@ -72,7 +74,16 @@ struct DayAgendaView: View {
                         }
                         .frame(minHeight: ThingsMetrics.rowHeight)
                     }
-                    .buttonStyle(.plain)
+                    // Bewust geen actie bij tikken: toevoegen aan Tijd schrijven via vegen of lang indrukken.
+                    .swipeActions(edge: .trailing) {
+                        Button { addToTimeList(event) } label: { Label("Tijd", systemImage: "clock.badge.plus") }
+                            .tint(ThingsColor.accent)
+                    }
+                    .contextMenu {
+                        Button { addToTimeList(event) } label: {
+                            Label("Toevoegen aan Tijd schrijven", systemImage: "clock.badge.plus")
+                        }
+                    }
                     .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)

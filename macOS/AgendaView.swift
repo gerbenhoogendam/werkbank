@@ -453,7 +453,11 @@ private struct DayColumn: View {
                         EventBlock(event: event)
                             .frame(width: max(0, laneWidth - 3), height: max(18, bottom - top - 1))
                             .offset(x: laneWidth * CGFloat(slot.lane) + 1.5, y: top)
-                            .onTapGesture { onTapEvent(event) }
+                            // Bewust: een enkele klik doet niets; dubbelklik of rechtsklik voegt toe aan Tijd schrijven.
+                            .onTapGesture(count: 2) { onTapEvent(event) }
+                            .contextMenu {
+                                Button("Toevoegen aan Tijd schrijven") { onTapEvent(event) }
+                            }
                     }
                 }
 
@@ -563,7 +567,7 @@ private struct EventBlock: View {
         .background(event.color.opacity(0.18))
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .contentShape(Rectangle())
-        .help("\(event.title)\n\(DutchDate.range(event.start, event.end))\nKlik om toe te voegen aan Tijd schrijven")
+        .help("\(event.title)\n\(DutchDate.range(event.start, event.end))\nDubbelklik om toe te voegen aan Tijd schrijven")
         .accessibilityLabel("\(event.title), \(DutchDate.range(event.start, event.end))")
         .accessibilityHint("Voegt de afspraak toe aan Tijd schrijven")
     }
