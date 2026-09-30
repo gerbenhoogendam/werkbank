@@ -123,6 +123,25 @@ enum TimerService {
         return entry
     }
 
+    /// Tijd die al aan een to-do besteed is voordat de kaart in Werkbank kwam (bijv. een gesprek over de mail):
+    /// direct een afgeronde regel met die duur, gekoppeld aan de kaart.
+    @discardableResult
+    static func logPriorTime(for card: TodoCard, minutes: Int, in context: ModelContext,
+                             now: Date = .now) -> TimeEntry {
+        let entry = TimeEntry(title: card.title, client: normalized(card.clientLabel ?? ""),
+                              source: .todo, todoID: card.id)
+        let start = now.addingTimeInterval(-Double(minutes) * 60)
+        entry.accumulated = Double(minutes) * 60
+        entry.firstStart = start
+        entry.lastStart = start
+        entry.finishedAt = now
+        entry.workDescription = card.title
+        entry.status = .finished
+        context.insert(entry)
+        save(context)
+        return entry
+    }
+
     /// Agenda-afspraak als afgeronde tijdregel. Geeft `nil` terug als de afspraak al is toegevoegd.
     @discardableResult
     static func addCalendarEvent(_ event: AgendaEvent, in context: ModelContext) -> TimeEntry? {

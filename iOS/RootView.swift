@@ -139,7 +139,7 @@ struct QuickAddSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Nieuwe kaart in Inbox")
+            Text("Nieuwe kaart in \(column.title)")
                 .thingsFont(.listTitle)
                 .foregroundStyle(ThingsColor.textPrimary)
             TextField("Titel — #klant voor een label", text: $text)
@@ -161,8 +161,8 @@ struct QuickAddSheet: View {
     }
 
     private func add() {
-        guard BoardService.addQuickEntry(text, in: context) != nil else { return }
-        appState.showToast("Toegevoegd aan Inbox")
+        guard BoardService.addQuickEntry(text, column: column, in: context) != nil else { return }
+        appState.showToast("Toegevoegd aan \(column.title)")
         dismiss()
     }
 }

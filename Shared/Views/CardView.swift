@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Kaart op het board: titel, optioneel klantlabel en -logo, afzenderregel en een timerknop.
+/// Kaart op het board: titel, optioneel klantlabel en -logo, afzenderregel, uitklapbare mailtekst en een timerknop.
 struct CardView: View {
     let card: TodoCard
     var isTimerRunning = false
@@ -8,85 +8,55 @@ struct CardView: View {
     var isEditable = false
     var onStartTimer: () -> Void = {}
 
+    private enum Field: Hashable { case title, minutes, label }
+
     @Environment(\.modelContext) private var context
-    @State private var editingTitle = false
+    @Environment(AppState.self) private var appState
+    @State private var editing = false
     @State private var titleDraft = ""
+    @State private var minutesDraft = ""
     @State private var editingLabel = false
     @State private var labelDraft = ""
-    @FocusState private var titleFocused: Bool
-    @FocusState private var labelFocused: Bool
+    @State private var expanded = false
+    @State private var bodyHeight: CGFloat = 0
+    @FocusState private var focus: Field?
+
+    private var hasBody: Bool { !(card.bodyText ?? "").isEmpty }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if card.isNew {
-                        Circle()
-                            .fill(ThingsColor.accent)
-                            .frame(width: 7, height: 7)
-                            .accessibilityLabel("Nieuw")
-                    }
-                    if editingTitle {
-                        TextField("Titel", text: $titleDraft, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .thingsFont(.todoTitle)
-                            .foregroundStyle(ThingsColor.textPrimary)
-                            .focused($titleFocused)
-                            .onSubmit(commitTitle)
-                            #if os(macOS)
-                            .onExitCommand(perform: cancelEditing)
-                            #endif
-                            .onChange(of: titleFocused) { _, focused in
-                                if !focused && editingTitle { commitTitle() }
-                            }
-                    } else {
-                        Text(card.title)
-                            .thingsFont(.todoTitle)
-                            .foregroundStyle(ThingsColor.textPrimary)
-                            .lineLimit(3)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { if isEditable { startEditingTitle() } }
-                    }
-                }
-
-                if card.logoDomain != nil || card.clientLabel != nil {
-                    HStack(spacing: 6) {
-                        if let domain = card.logoDomain {
-                            LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 16)
-                        }
-                        if editingLabel {
-                            TextField("Klant", text: $labelDraft)
-                                .textFieldStyle(.plain)
-                                .thingsFont(.tag)
-                                .frame(minWidth: 60, maxWidth: 160)
-                                .focused($labelFocused)
-                                .onSubmit(commitLabel)
-                                #if os(macOS)
-                                .onExitCommand(perform: cancelEditing)
-                                #endif
-                                .onChange(of: labelFocused) { _, focused in
-                                    if !focused && editingLabel { commitLabel() }
-                                }
-                        } else if let label = card.clientLabel {
-                            TagPill(name: label)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { if isEditable { startEditingLabel() } }
-                        }
-                    }
-                }
-
+                titleRow
+                if editing { minutesRow }
+                labelRow
                 if let sender = card.senderLine {
                     Text(sender)
                         .thingsFont(.metadata)
                         .foregroundStyle(ThingsColor.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if hasBody { toggleExpanded() } }
                 }
+                if expanded, let text = card.bodyText, !text.isEmpty { bodyView(text) }
             }
             Spacer(minLength: 4)
-            TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+            VStack(spacing: 0) {
+                TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+                if hasBody {
+                    Button(action: toggleExpanded) {
+                        Image(systemName: expanded ? "chevron.up" : "text.alignleft")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(ThingsColor.textSecondary)
+                            .frame(width: 22, height: 22)
+                            .frame(width: ThingsMetrics.minTapTarget * 0.6, height: ThingsMetrics.minTapTarget * 0.6)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(expanded ? "Verberg de tekst" : "Toon de tekst van de mail")
+                    .accessibilityLabel(expanded ? "Verberg de tekst" : "Toon de tekst")
+                }
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,31 +66,168 @@ struct CardView: View {
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: expanded)
+        .onAppear {
+            // Een nieuwe kaart (mail gesleept, plusknop) opent direct in bewerkmodus.
+            if isEditable, InlineEditing.pendingEditID == card.id {
+                InlineEditing.pendingEditID = nil
+                startEditing()
+            }
+        }
         .onDisappear { finishEditing() }
     }
 
+    // MARK: Onderdelen
+
+    private var titleRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if card.isNew {
+                Circle()
+                    .fill(ThingsColor.accent)
+                    .frame(width: 7, height: 7)
+                    .accessibilityLabel("Nieuw")
+            }
+            if editing {
+                TextField("Titel", text: $titleDraft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .thingsFont(.todoTitle)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .focused($focus, equals: .title)
+                    .onSubmit(commitEditing)
+                    #if os(macOS)
+                    .onExitCommand(perform: cancelEditing)
+                    #endif
+            } else {
+                Text(card.title.isEmpty ? "Nieuwe taak" : card.title)
+                    .thingsFont(.todoTitle)
+                    .foregroundStyle(card.title.isEmpty ? ThingsColor.textTertiary : ThingsColor.textPrimary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { if isEditable { startEditing() } }
+            }
+        }
+        .onChange(of: focus) { _, new in
+            // Focus weg uit alle velden = klaar met bewerken.
+            if new == nil && editing { commitEditing() }
+            if new == nil && editingLabel { commitLabel() }
+        }
+    }
+
+    /// Tijd die al aan deze taak besteed is voordat de kaart er was (bijv. een gesprek over de mail).
+    private var minutesRow: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "clock")
+                .foregroundStyle(ThingsColor.textSecondary)
+            Text("Reeds besteed")
+                .foregroundStyle(ThingsColor.textSecondary)
+            TextField("", text: $minutesDraft, prompt: Text("0"))
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+                .frame(width: 34)
+                .focused($focus, equals: .minutes)
+                .onSubmit(commitEditing)
+                #if os(macOS)
+                .onExitCommand(perform: cancelEditing)
+                #endif
+                .onChange(of: minutesDraft) { _, new in
+                    let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
+                    if digits != new { minutesDraft = digits }
+                }
+            Text("min").foregroundStyle(ThingsColor.textSecondary)
+        }
+        .thingsFont(.metadata)
+    }
+
+    @ViewBuilder private var labelRow: some View {
+        if card.logoDomain != nil || card.clientLabel != nil || editingLabel {
+            HStack(spacing: 6) {
+                if let domain = card.logoDomain {
+                    LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 16)
+                }
+                if editingLabel {
+                    TextField("Klant", text: $labelDraft)
+                        .textFieldStyle(.plain)
+                        .thingsFont(.tag)
+                        .frame(minWidth: 60, maxWidth: 160)
+                        .focused($focus, equals: .label)
+                        .onSubmit(commitLabel)
+                        #if os(macOS)
+                        .onExitCommand(perform: cancelEditing)
+                        #endif
+                } else if let label = card.clientLabel {
+                    TagPill(name: label)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) { if isEditable { startEditingLabel() } }
+                }
+            }
+        }
+    }
+
+    /// De tekst van de mail, klein en binnen de kaart; lange teksten scrollen.
+    private func bodyView(_ text: String) -> some View {
+        ScrollView {
+            Text(text)
+                .font(.system(size: 10.5))
+                .foregroundStyle(ThingsColor.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.onAppear { bodyHeight = geo.size.height }
+                            .onChange(of: geo.size.height) { _, new in bodyHeight = new }
+                    }
+                )
+        }
+        .frame(height: min(max(bodyHeight, 20), 150) + 12)
+        .padding(6)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.tagBackground))
+        .transition(.opacity)
+    }
+
+    private func toggleExpanded() { expanded.toggle() }
+
     // MARK: Bewerken ter plekke
 
-    private func startEditingTitle() {
+    private func startEditing() {
         titleDraft = card.title
-        editingTitle = true
+        minutesDraft = ""
+        editing = true
         InlineEditing.cardID = card.id
-        Task { @MainActor in titleFocused = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            focus = .title
+        }
     }
 
     private func startEditingLabel() {
         labelDraft = card.clientLabel ?? ""
         editingLabel = true
         InlineEditing.cardID = card.id
-        Task { @MainActor in labelFocused = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            focus = .label
+        }
     }
 
-    private func commitTitle() {
-        guard editingTitle else { return }
+    /// Bewaart titel en eventueel al bestede tijd. Een nieuwe kaart die leeg blijft, wordt weer verwijderd.
+    private func commitEditing() {
+        guard editing else { return }
         let text = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let minutes = Int(minutesDraft) ?? 0
         finishEditing()
-        guard !text.isEmpty, text != card.title else { return }
-        card.title = text
+
+        if text.isEmpty && card.title.isEmpty {
+            BoardService.delete(card, in: context)
+            return
+        }
+        if !text.isEmpty && text != card.title { card.title = text }
+        if minutes > 0 {
+            TimerService.logPriorTime(for: card, minutes: minutes, in: context)
+            appState.showToast("\(minutes) min gelogd op \"\(card.title)\"")
+        }
         try? context.save()
     }
 
@@ -133,19 +240,25 @@ struct CardView: View {
         BoardService.update(card, title: card.title, label: text, logoDomain: card.logoDomain ?? "", in: context)
     }
 
-    private func cancelEditing() { finishEditing() }
+    private func cancelEditing() {
+        let wasEmptyNewCard = editing && card.title.isEmpty
+        finishEditing()
+        if wasEmptyNewCard { BoardService.delete(card, in: context) }
+    }
 
     private func finishEditing() {
-        editingTitle = false
+        editing = false
         editingLabel = false
         if InlineEditing.cardID == card.id { InlineEditing.cardID = nil }
     }
 }
 
-/// Houdt bij welke kaart ter plekke bewerkt wordt, zodat het board tijdens tekstselectie geen kaart gaat slepen.
+/// Houdt bij welke kaart ter plekke bewerkt wordt (het board sleept dan geen kaart tijdens tekstselectie) en
+/// welke kaart direct in bewerkmodus moet openen (net aangemaakt).
 @MainActor
 enum InlineEditing {
     static var cardID: UUID?
+    static var pendingEditID: UUID?
 }
 
 /// Startknop voor de timer van een kaart.

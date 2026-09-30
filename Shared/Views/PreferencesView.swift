@@ -86,6 +86,7 @@ private struct CalendarsPreferences: View {
 
 private struct DisplayPreferences: View {
     @AppStorage(SettingsKey.appearance) private var appearance = AppearanceSetting.system.rawValue
+    @AppStorage(SettingsKey.miniTimerSize) private var miniTimerSize = MiniTimerSize.small.rawValue
     @AppStorage(SettingsKey.agendaMode) private var agendaMode = "week"
     @AppStorage(SettingsKey.workDays) private var workDays = "1,2,3,4,5"
     @AppStorage(SettingsKey.startHour) private var startHour = 8
@@ -103,6 +104,21 @@ private struct DisplayPreferences: View {
                 }
                 .pickerStyle(.segmented)
             }
+
+            #if os(macOS)
+            Section {
+                Picker("Grootte", selection: $miniTimerSize) {
+                    ForEach(MiniTimerSize.allCases) { option in
+                        Text(option.title).tag(option.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Minitimer")
+            } footer: {
+                Text("Zwevend venster bovenin het scherm met de lopende tijd, pauze en stop. Sleep het naar een andere plek.")
+            }
+            #endif
 
             Section("Agenda") {
                 Picker("Weergave", selection: $agendaMode) {

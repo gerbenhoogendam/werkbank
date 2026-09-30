@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Geometrie-voorkeuren
 
@@ -47,10 +48,13 @@ private enum ColumnItem: Identifiable {
 struct BoardView: View {
     @Environment(\.modelContext) private var context
     @Environment(DragCoordinator.self) private var drag
+    @Environment(AppState.self) private var appState
     @Query(sort: \TodoCard.sortOrder) private var cards: [TodoCard]
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
     @State private var editing: TodoCard?
+    /// Kolom waar op dit moment een bestand/mail boven gehouden wordt.
+    @State private var dropTargetColumn: BoardColumn?
     @GestureState private var gestureActive = false
 
     private var runningTodoID: UUID? { running.first?.todoID }
@@ -139,25 +143,43 @@ struct BoardView: View {
 
     private func columnView(_ column: BoardColumn) -> some View {
         let columnCards = cards(in: column)
-        let isTarget = drag.region == .board && drag.target?.column == column && drag.isDragging
+        let isTarget = (drag.region == .board && drag.target?.column == column && drag.isDragging)
+            || dropTargetColumn == column
 
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: column.symbol)
-                    .foregroundStyle(column.color)
-                Text(column.title)
-                    .foregroundStyle(ThingsColor.textPrimary)
-                Spacer()
-                Text("\(columnCards.count)")
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .monospacedDigit()
+                HStack(spacing: 6) {
+                    Image(systemName: column.symbol)
+                        .foregroundStyle(column.color)
+                    Text(column.title)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    Spacer()
+                    Text("\(columnCards.count)")
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .monospacedDigit()
+                }
+                .thingsFont(.heading)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(column.title), \(columnCards.count) kaarten")
+
+                // Nieuwe kaart direct in deze kolom; de titel staat meteen in bewerkmodus.
+                Button {
+                    let card = BoardService.addCard(title: "", column: column, in: context)
+                    InlineEditing.pendingEditID = card.id
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(ThingsColor.accent)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Nieuwe kaart in \(column.title)")
+                .accessibilityLabel("Nieuwe kaart in \(column.title)")
             }
-            .thingsFont(.heading)
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 6)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(column.title), \(columnCards.count) kaarten")
 
             Rectangle().fill(ThingsColor.separator).frame(height: 1).padding(.horizontal, 12)
 
@@ -205,6 +227,16 @@ struct BoardView: View {
                 Color.clear.preference(key: ColumnFrameKey.self, value: [column: geo.frame(in: .main)])
             }
         )
+        // Een mail (.eml) op een kolom slepen zet de kaart in die kolom.
+        .onDrop(of: [.emailMessage, .fileURL], isTargeted: Binding(
+            get: { dropTargetColumn == column },
+            set: { targeted in
+                if targeted { dropTargetColumn = column }
+                else if dropTargetColumn == column { dropTargetColumn = nil }
+            }
+        )) { providers in
+            MailImporter.handle(providers: providers, column: column, context: context, appState: appState)
+        }
     }
 
     // MARK: Kaart

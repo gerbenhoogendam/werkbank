@@ -51,6 +51,8 @@ final class TodoCard {
     var logoDomain: String?
     /// "Naam · adres@domein.nl" bij kaarten die uit een mail komen.
     var senderLine: String?
+    /// Alleen de tekst van de mail, om in de kaart te kunnen lezen.
+    var bodyText: String?
     var columnRaw: String = BoardColumn.inbox.rawValue
     var sortOrder: Double = 0
     /// Blauwe stip tot de kaart uit de Inbox is gesleept.

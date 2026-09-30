@@ -11,13 +11,15 @@ enum BoardService {
         (try? context.fetch(FetchDescriptor<TodoCard>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
     }
 
-    /// Nieuwe kaart bovenaan de Inbox.
+    /// Nieuwe kaart bovenaan een kolom (standaard de Inbox).
     @discardableResult
-    static func addToInbox(title: String, label: String? = nil, logoDomain: String? = nil,
-                           sender: String? = nil, in context: ModelContext) -> TodoCard {
-        let top = allCards(in: context).filter { $0.column == .inbox }.map(\.sortOrder).min() ?? 0
+    static func addCard(title: String, column: BoardColumn = .inbox, label: String? = nil,
+                        logoDomain: String? = nil, sender: String? = nil, body: String? = nil,
+                        in context: ModelContext) -> TodoCard {
+        let top = allCards(in: context).filter { $0.column == column }.map(\.sortOrder).min() ?? 0
         let card = TodoCard(title: title, clientLabel: label, logoDomain: logoDomain, senderLine: sender,
-                            column: .inbox, sortOrder: top - 1, isNew: true)
+                            column: column, sortOrder: top - 1, isNew: column == .inbox)
+        card.bodyText = body
         context.insert(card)
         try? context.save()
         return card
@@ -25,10 +27,10 @@ enum BoardService {
 
     /// Snelle invoer: `#woord` wordt het klantlabel.
     @discardableResult
-    static func addQuickEntry(_ input: String, in context: ModelContext) -> TodoCard? {
+    static func addQuickEntry(_ input: String, column: BoardColumn = .inbox, in context: ModelContext) -> TodoCard? {
         let parsed = QuickEntryParser.parse(input)
         guard !parsed.title.isEmpty else { return nil }
-        return addToInbox(title: parsed.title, label: parsed.label, in: context)
+        return addCard(title: parsed.title, column: column, label: parsed.label, in: context)
     }
 
     /// Verplaatst een kaart naar `column` op positie `index` binnen de andere kaarten van die kolom.
@@ -92,11 +94,11 @@ enum BoardService {
     // MARK: Mail
 
     @discardableResult
-    static func addMail(_ mail: ParsedMail, in context: ModelContext) -> TodoCard {
+    static func addMail(_ mail: ParsedMail, column: BoardColumn = .inbox, in context: ModelContext) -> TodoCard {
         let resolution = ClientNaming.resolve(displayName: mail.fromName, address: mail.fromAddress,
                                               mapping: mappingTable(in: context))
-        return addToInbox(title: mail.subject, label: resolution?.name,
-                          logoDomain: resolution?.logoDomain, sender: mail.senderLine, in: context)
+        return addCard(title: mail.subject, column: column, label: resolution?.name,
+                       logoDomain: resolution?.logoDomain, sender: mail.senderLine, body: mail.bodyText, in: context)
     }
 }
 
@@ -110,51 +112,56 @@ enum MailImporter {
 
     static func isEML(_ url: URL) -> Bool { url.pathExtension.lowercased() == "eml" }
 
+    /// - Parameter column: kolom waar de kaarten in komen (bij slepen op een kolom; anders de Inbox).
     /// - Returns: `true` als er iets te verwerken lijkt (voor `onDrop`).
-    static func handle(providers: [NSItemProvider], context: ModelContext, appState: AppState) -> Bool {
+    static func handle(providers: [NSItemProvider], column: BoardColumn = .inbox,
+                       context: ModelContext, appState: AppState) -> Bool {
         guard !providers.isEmpty else { return false }
         Task { @MainActor in
             var imported: [TodoCard] = []
             var unsupported = 0
             for provider in providers {
                 if let data = await loadData(provider, type: .emailMessage) {
-                    imported.append(BoardService.addMail(EMLParser.parse(data), in: context))
+                    imported.append(BoardService.addMail(EMLParser.parse(data), column: column, in: context))
                 } else if let url = await loadFileURL(provider) {
-                    if let card = importFile(url, context: context) { imported.append(card) } else { unsupported += 1 }
+                    if let card = importFile(url, column: column, context: context) { imported.append(card) } else { unsupported += 1 }
                 } else {
                     unsupported += 1
                 }
             }
-            report(imported: imported, unsupported: unsupported, appState: appState)
+            report(imported: imported, unsupported: unsupported, column: column, appState: appState)
         }
         return true
     }
 
-    static func handle(urls: [URL], context: ModelContext, appState: AppState) {
+    static func handle(urls: [URL], column: BoardColumn = .inbox, context: ModelContext, appState: AppState) {
         var imported: [TodoCard] = []
         var unsupported = 0
         for url in urls {
-            if let card = importFile(url, context: context) { imported.append(card) } else { unsupported += 1 }
+            if let card = importFile(url, column: column, context: context) { imported.append(card) } else { unsupported += 1 }
         }
-        report(imported: imported, unsupported: unsupported, appState: appState)
+        report(imported: imported, unsupported: unsupported, column: column, appState: appState)
     }
 
-    private static func importFile(_ url: URL, context: ModelContext) -> TodoCard? {
+    private static func importFile(_ url: URL, column: BoardColumn, context: ModelContext) -> TodoCard? {
         guard isEML(url) else { return nil }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return BoardService.addMail(EMLParser.parse(data), in: context)
+        return BoardService.addMail(EMLParser.parse(data), column: column, in: context)
     }
 
-    private static func report(imported: [TodoCard], unsupported: Int, appState: AppState) {
+    private static func report(imported: [TodoCard], unsupported: Int, column: BoardColumn, appState: AppState) {
         if imported.count == 1, let card = imported.first {
-            appState.showToast("Mail van \(card.clientLabel ?? "onbekende afzender") toegevoegd aan Inbox")
+            appState.showToast("Mail van \(card.clientLabel ?? "onbekende afzender") toegevoegd aan \(column.title)")
         } else if imported.count > 1 {
-            appState.showToast("\(imported.count) mails toegevoegd aan Inbox")
+            appState.showToast("\(imported.count) mails toegevoegd aan \(column.title)")
         } else if unsupported > 0 {
             appState.showToast(unsupportedMessage)
         }
+        // De titel van een nieuwe mailkaart wil je altijd nakijken: open hem direct om te bewerken
+        // (met de mogelijkheid om al bestede tijd in te vullen).
+        if let newest = imported.last { InlineEditing.pendingEditID = newest.id }
     }
 
     private static func loadData(_ provider: NSItemProvider, type: UTType) async -> Data? {

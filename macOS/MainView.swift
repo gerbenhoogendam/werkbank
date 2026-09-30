@@ -102,7 +102,7 @@ struct MainView: View {
             VStack(spacing: 8) {
                 Image(systemName: "tray.and.arrow.down.fill")
                     .font(.system(size: 34))
-                Text("Laat los om de mail aan de Inbox toe te voegen")
+                Text("Laat los op een kolom om de mail daar toe te voegen")
                     .thingsFont(.listTitle)
             }
             .foregroundStyle(ThingsColor.accent)

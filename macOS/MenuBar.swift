@@ -4,20 +4,15 @@ import SwiftData
 import SwiftUI
 import WerkbankCore
 
-/// Klokicoon in de menubalk; bij een lopende timer staat de verstreken tijd ernaast.
+/// Klokicoon in de menubalk. De lopende tijd staat in het zwevende minipaneel (zie MiniTimer.swift).
 struct MenuBarLabel: View {
+    @Environment(\.openWindow) private var openWindow
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
-    @State private var now = Date()
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "clock")
-            if let entry = running.first {
-                Text(Billing.formatHMS(entry.elapsed(at: now)))
-                    .monospacedDigit()
-            }
-        }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
+        Image(systemName: running.isEmpty ? "clock" : "clock.fill")
+            // Dit label leeft zolang de app draait: bewaar hier hoe het hoofdvenster geopend wordt.
+            .onAppear { WindowRouter.openMain = { openWindow(id: "main") } }
     }
 }
 

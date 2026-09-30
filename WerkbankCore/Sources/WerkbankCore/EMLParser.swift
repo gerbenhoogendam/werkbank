@@ -5,11 +5,14 @@ public struct ParsedMail: Equatable {
     public var subject: String
     public var fromName: String?
     public var fromAddress: String?
+    /// Alleen de tekst van de mail (text/plain, anders afgeleid uit HTML). `nil` als er geen tekst is.
+    public var bodyText: String?
 
-    public init(subject: String, fromName: String? = nil, fromAddress: String? = nil) {
+    public init(subject: String, fromName: String? = nil, fromAddress: String? = nil, bodyText: String? = nil) {
         self.subject = subject
         self.fromName = fromName
         self.fromAddress = fromAddress
+        self.bodyText = bodyText
     }
 
     /// "Naam · adres@domein.nl", of alleen het adres / de naam als het andere ontbreekt.
@@ -32,7 +35,9 @@ public enum EMLParser {
         let text = String(data: headerData, encoding: .utf8)
             ?? String(data: headerData, encoding: .isoLatin1)
             ?? ""
-        return parse(text)
+        var mail = parse(text)
+        mail.bodyText = MIMEBody.text(from: data)
+        return mail
     }
 
     public static func parse(_ text: String) -> ParsedMail {
@@ -205,7 +210,7 @@ public enum EMLParser {
         return Data(bytes)
     }
 
-    private static func string(from data: Data, charset rawCharset: String) -> String? {
+    static func string(from data: Data, charset rawCharset: String) -> String? {
         // RFC 2231-taalaanduiding (`utf-8*nl`) negeren.
         let charset = rawCharset.split(separator: "*").first.map(String.init)?.lowercased() ?? rawCharset.lowercased()
         let encoding: String.Encoding?

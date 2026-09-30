@@ -16,6 +16,7 @@ enum SettingsKey {
     static let googleCX         = "googleSearchEngineID"
     static let longRunMinutes   = "longRunWarningMinutes"
     static let appearance       = "appearance"         // "system" | "light" | "dark"
+    static let miniTimerSize    = "miniTimerSize"      // "small" | "medium" | "large"
 }
 
 enum AppSettings {
