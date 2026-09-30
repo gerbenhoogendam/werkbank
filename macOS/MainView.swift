@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -7,6 +8,17 @@ struct MainView: View {
     @Environment(AppState.self) private var appState
     @Environment(DragCoordinator.self) private var drag
 
+    // Verdeling van het venster; bewaard tussen sessies. Dubbelklik op een scheidingslijn zet hem terug.
+    @AppStorage("layout.boardFraction") private var boardFraction = Self.defaultBoardFraction
+    @AppStorage("layout.agendaFraction") private var agendaFraction = Self.defaultAgendaFraction
+    @State private var boardDragStart: Double?
+    @State private var agendaDragStart: Double?
+
+    private static let defaultBoardFraction = 0.45
+    private static let defaultAgendaFraction = 0.75
+    private static let boardRange = 0.18...0.72
+    private static let agendaRange = 0.35...0.85
+
     var body: some View {
         @Bindable var state = appState
 
@@ -14,12 +26,28 @@ struct MainView: View {
             GeometryReader { geo in
                 VStack(spacing: 0) {
                     BoardView()
-                        .frame(height: geo.size.height * 0.45)
-                    Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                        .frame(height: geo.size.height * clamp(boardFraction, Self.boardRange))
+                    SplitDivider(isHorizontalLine: true,
+                                 onChanged: { translation in
+                                     let start = boardDragStart ?? boardFraction
+                                     boardDragStart = start
+                                     boardFraction = clamp(start + Double(translation / geo.size.height), Self.boardRange)
+                                 },
+                                 onEnded: { boardDragStart = nil },
+                                 onReset: { boardFraction = Self.defaultBoardFraction })
+                        .zIndex(1)
                     HStack(spacing: 0) {
                         AgendaView()
-                            .frame(width: geo.size.width * 0.75)
-                        Rectangle().fill(ThingsColor.separator).frame(width: 1)
+                            .frame(width: geo.size.width * clamp(agendaFraction, Self.agendaRange))
+                        SplitDivider(isHorizontalLine: false,
+                                     onChanged: { translation in
+                                         let start = agendaDragStart ?? agendaFraction
+                                         agendaDragStart = start
+                                         agendaFraction = clamp(start + Double(translation / geo.size.width), Self.agendaRange)
+                                     },
+                                     onEnded: { agendaDragStart = nil },
+                                     onReset: { agendaFraction = Self.defaultAgendaFraction })
+                            .zIndex(1)
                         TimeListView()
                     }
                 }
@@ -81,5 +109,47 @@ struct MainView: View {
         }
         .allowsHitTesting(false)
         .transition(.opacity)
+    }
+}
+
+private func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double {
+    min(max(value, range.lowerBound), range.upperBound)
+}
+
+/// Scheidingslijn tussen twee panelen die je door te slepen kunt verschuiven.
+private struct SplitDivider: View {
+    /// `true`: een horizontale lijn (verschuift op en neer); `false`: een verticale lijn (links/rechts).
+    let isHorizontalLine: Bool
+    let onChanged: (CGFloat) -> Void
+    let onEnded: () -> Void
+    let onReset: () -> Void
+
+    var body: some View {
+        Rectangle()
+            .fill(ThingsColor.separator)
+            .frame(width: isHorizontalLine ? nil : 1, height: isHorizontalLine ? 1 : nil)
+            // Ruimer klikvlak dan de zichtbare lijn.
+            .overlay(
+                Color.clear
+                    .frame(width: isHorizontalLine ? nil : 9, height: isHorizontalLine ? 9 : nil)
+                    .contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside {
+                            (isHorizontalLine ? NSCursor.resizeUpDown : NSCursor.resizeLeftRight).set()
+                        } else {
+                            NSCursor.arrow.set()
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { value in
+                                onChanged(isHorizontalLine ? value.translation.height : value.translation.width)
+                            }
+                            .onEnded { _ in onEnded() }
+                    )
+                    .onTapGesture(count: 2, perform: onReset)
+            )
+            .accessibilityLabel(isHorizontalLine ? "Schuif de verdeling tussen board en agenda"
+                                                 : "Schuif de verdeling tussen agenda en Tijd schrijven")
     }
 }

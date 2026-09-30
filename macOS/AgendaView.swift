@@ -49,7 +49,8 @@ struct AgendaView: View {
     @AppStorage(SettingsKey.workDays) private var workDaysRaw = "1,2,3,4,5"
     @AppStorage(SettingsKey.startHour) private var startHourSetting = 8
     @AppStorage(SettingsKey.endHour) private var endHourSetting = 18
-    @AppStorage(SettingsKey.hiddenCalendars) private var hiddenRaw = ""
+    @AppStorage(SettingsKey.hiddenCalendars) private var disabledRaw = ""   // uitgezet in Voorkeuren
+    @AppStorage(SettingsKey.agendaHidden) private var headerHiddenRaw = ""  // uitgevinkt boven de agenda
 
     private let service = CalendarService.shared
     private let calendar = Calendar(identifier: .iso8601)
@@ -62,7 +63,10 @@ struct AgendaView: View {
     private var startHour: Int { min(max(startHourSetting, 0), 23) }
     private var endHour: Int { min(max(endHourSetting, startHour + 1), 24) }
     private var hours: Int { endHour - startHour }
-    private var hiddenIDs: Set<String> { AppSettings.parseHidden(hiddenRaw) }
+    private var disabledIDs: Set<String> { AppSettings.parseHidden(disabledRaw) }
+    private var headerHiddenIDs: Set<String> { AppSettings.parseHidden(headerHiddenRaw) }
+    /// Wat niet getoond wordt: uitgezet in Voorkeuren of uitgevinkt boven de agenda.
+    private var hiddenIDs: Set<String> { disabledIDs.union(headerHiddenIDs) }
     private var isDayMode: Bool { agendaMode == "day" }
 
     var body: some View {
@@ -220,7 +224,8 @@ struct AgendaView: View {
             // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(service.calendars) { calendar in
+                    // Alleen agenda's die in Voorkeuren aan staan zijn hier te kiezen.
+                    ForEach(service.calendars.filter { !disabledIDs.contains($0.id) }) { calendar in
                         calendarChip(calendar)
                     }
                 }
@@ -232,11 +237,11 @@ struct AgendaView: View {
     }
 
     private func calendarChip(_ cal: AgendaCalendar) -> some View {
-        let hidden = hiddenIDs.contains(cal.id)
+        let hidden = headerHiddenIDs.contains(cal.id)
         return Button {
-            var ids = hiddenIDs
+            var ids = headerHiddenIDs
             if hidden { ids.remove(cal.id) } else { ids.insert(cal.id) }
-            hiddenRaw = ids.sorted().joined(separator: ",")
+            headerHiddenRaw = ids.sorted().joined(separator: ",")
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: hidden ? "circle" : "checkmark.circle.fill")

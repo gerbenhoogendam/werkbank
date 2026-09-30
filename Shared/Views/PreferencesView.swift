@@ -49,7 +49,7 @@ private struct CalendarsPreferences: View {
                 } header: {
                     Text("Zichtbare agenda's")
                 } footer: {
-                    Text("Ook aan/uit te zetten boven de agenda. Verborgen agenda's verdwijnen uit de weergave; er wordt niets aan de agenda's zelf gewijzigd.")
+                    Text("Uitgevinkte agenda's zijn nergens zichtbaar. De aangevinkte agenda's kun je boven de agenda tijdelijk aan/uit zetten. Er wordt niets aan de agenda's zelf gewijzigd.")
                 }
 
                 Section("Standaard agenda") {

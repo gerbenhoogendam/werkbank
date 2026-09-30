@@ -8,7 +8,10 @@ enum SettingsKey {
     static let startHour        = "agendaStartHour"
     static let endHour          = "agendaEndHour"
     static let defaultCalendar  = "defaultCalendarID"
-    static let hiddenCalendars  = "hiddenCalendarIDs"   // komma-gescheiden
+    /// Agenda's die in Voorkeuren zijn uitgezet: nergens zichtbaar (komma-gescheiden ids).
+    static let hiddenCalendars  = "hiddenCalendarIDs"
+    /// Agenda's die boven de agenda tijdelijk zijn uitgevinkt (alleen uit te vinken uit wat Voorkeuren toestaat).
+    static let agendaHidden     = "agendaHiddenCalendarIDs"
     static let googleAPIKey     = "googleAPIKey"
     static let googleCX         = "googleSearchEngineID"
     static let longRunMinutes   = "longRunWarningMinutes"
