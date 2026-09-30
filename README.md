@@ -83,8 +83,18 @@ Het bureaubladontwerp (board + agenda + tijdlijst tegelijk, slepen tussen panele
 
 ## iCloud-synchronisatie
 
-De code is voorbereid (SwiftData met CloudKit, modellen zonder unieke velden en met standaardwaarden), maar staat
-standaard **uit**: de synchronisatie werkt alleen in een build met de compilatievlag `ICLOUD` en de iCloud-entitlements,
-en die vereisen een betaald Apple Developer-account (met een gratis persoonlijk team bouwt de app niet met iCloud).
-In Voorkeuren › Overig staat de status en een schakelaar. Gesynchroniseerd worden kaarten, tijdregels en de koppeltabel;
-voorkeuren en de agenda-keuze blijven per apparaat. Twee apparaten kunnen elk een eigen lopende timer hebben.
+Kaarten, tijdregels en de koppeltabel worden via iCloud (SwiftData + CloudKit) tussen je Mac en iPhone/iPad
+gesynchroniseerd. Voorkeuren en de agenda-keuze blijven per apparaat; twee apparaten kunnen elk een eigen lopende timer hebben.
+Status en een schakelaar staan in Voorkeuren › Overig (een wijziging geldt na herstarten).
+
+Instellen (eenmalig, betaald Apple Developer-account nodig):
+1. Zet in `project.yml` bij `BUNDLE_ID_PREFIX` je eigen prefix (bijv. `nl.gerbenhoogendam`) en je Team ID bij `DEVELOPMENT_TEAM`.
+   Het bundle-id wordt `<prefix>.werkbank`, de iCloud-container `iCloud.<prefix>.werkbank`.
+2. `xcodegen generate` en open het project. Xcode maakt bij automatische ondertekening de container en het
+   push-profiel zelf aan (Signing & Capabilities toont iCloud › CloudKit en Push Notifications).
+3. Log op elk apparaat in bij iCloud en gebruik dezelfde prefix op Mac en iOS.
+
+Let op: de eerste keer dat CloudKit draait, wordt het schema in de *Development*-omgeving aangemaakt. Voor
+TestFlight/App Store moet je het schema in het CloudKit Dashboard naar *Production* uitrollen.
+Bestaande lokale gegevens uit een build zonder iCloud worden meegenomen; lukt de migratie niet, dan bewaart de app de
+oude database als back-up (`default.store.backup-…`) en begint leeg.

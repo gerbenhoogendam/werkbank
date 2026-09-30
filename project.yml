@@ -2,7 +2,7 @@
 #   brew install xcodegen && xcodegen generate && open Werkbank.xcodeproj
 name: Werkbank
 options:
-  bundleIdPrefix: com.example      # pas aan naar je eigen prefix
+  bundleIdPrefix: com.example      # zie BUNDLE_ID_PREFIX hieronder
   createIntermediateGroups: true
   deploymentTarget:
     macOS: "14.0"
@@ -13,6 +13,9 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""           # vul je Apple Developer Team ID in
+    # Eén plek voor je eigen prefix (reverse-DNS van een domein/naam die van jou is), bijv. nl.gerbenhoogendam.
+    # Bundle-id en iCloud-container (iCloud.<prefix>.werkbank) worden hiervan afgeleid.
+    BUNDLE_ID_PREFIX: com.example
     CODE_SIGN_STYLE: Automatic
 packages:
   WerkbankCore:
@@ -34,7 +37,8 @@ targets:
     settings:
       base:
         PRODUCT_NAME: Werkbank
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.werkbank
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) ICLOUD"
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).werkbank
         ENABLE_HARDENED_RUNTIME: YES
         INFOPLIST_FILE: macOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: macOS/Werkbank.entitlements
@@ -52,6 +56,11 @@ targets:
         com.apple.security.personal-information.calendars: true
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.aps-environment: development
 
   Werkbank-iOS:
     type: application
@@ -64,9 +73,11 @@ targets:
     settings:
       base:
         PRODUCT_NAME: Werkbank
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.werkbank
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) ICLOUD"
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).werkbank
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: iOS/Werkbank.entitlements
     info:
       path: iOS/Info.plist
       properties:
@@ -74,6 +85,8 @@ targets:
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         UILaunchScreen: {}
+        UIBackgroundModes:
+          - remote-notification
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:
@@ -85,3 +98,11 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: iOS/Werkbank.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
+        com.apple.developer.icloud-services:
+          - CloudKit
+        aps-environment: development
