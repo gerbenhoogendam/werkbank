@@ -4,7 +4,17 @@ import SwiftUI
 struct CardView: View {
     let card: TodoCard
     var isTimerRunning = false
+    /// Dubbelklikken op titel of label bewerkt de tekst ter plekke.
+    var isEditable = false
     var onStartTimer: () -> Void = {}
+
+    @Environment(\.modelContext) private var context
+    @State private var editingTitle = false
+    @State private var titleDraft = ""
+    @State private var editingLabel = false
+    @State private var labelDraft = ""
+    @FocusState private var titleFocused: Bool
+    @FocusState private var labelFocused: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -16,12 +26,29 @@ struct CardView: View {
                             .frame(width: 7, height: 7)
                             .accessibilityLabel("Nieuw")
                     }
-                    Text(card.title)
-                        .thingsFont(.todoTitle)
-                        .foregroundStyle(ThingsColor.textPrimary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if editingTitle {
+                        TextField("Titel", text: $titleDraft, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .thingsFont(.todoTitle)
+                            .foregroundStyle(ThingsColor.textPrimary)
+                            .focused($titleFocused)
+                            .onSubmit(commitTitle)
+                            #if os(macOS)
+                            .onExitCommand(perform: cancelEditing)
+                            #endif
+                            .onChange(of: titleFocused) { _, focused in
+                                if !focused && editingTitle { commitTitle() }
+                            }
+                    } else {
+                        Text(card.title)
+                            .thingsFont(.todoTitle)
+                            .foregroundStyle(ThingsColor.textPrimary)
+                            .lineLimit(3)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { if isEditable { startEditingTitle() } }
+                    }
                 }
 
                 if card.logoDomain != nil || card.clientLabel != nil {
@@ -29,8 +56,23 @@ struct CardView: View {
                         if let domain = card.logoDomain {
                             LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 16)
                         }
-                        if let label = card.clientLabel {
+                        if editingLabel {
+                            TextField("Klant", text: $labelDraft)
+                                .textFieldStyle(.plain)
+                                .thingsFont(.tag)
+                                .frame(minWidth: 60, maxWidth: 160)
+                                .focused($labelFocused)
+                                .onSubmit(commitLabel)
+                                #if os(macOS)
+                                .onExitCommand(perform: cancelEditing)
+                                #endif
+                                .onChange(of: labelFocused) { _, focused in
+                                    if !focused && editingLabel { commitLabel() }
+                                }
+                        } else if let label = card.clientLabel {
                             TagPill(name: label)
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { if isEditable { startEditingLabel() } }
                         }
                     }
                 }
@@ -54,7 +96,56 @@ struct CardView: View {
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
+        .onDisappear { finishEditing() }
     }
+
+    // MARK: Bewerken ter plekke
+
+    private func startEditingTitle() {
+        titleDraft = card.title
+        editingTitle = true
+        InlineEditing.cardID = card.id
+        Task { @MainActor in titleFocused = true }
+    }
+
+    private func startEditingLabel() {
+        labelDraft = card.clientLabel ?? ""
+        editingLabel = true
+        InlineEditing.cardID = card.id
+        Task { @MainActor in labelFocused = true }
+    }
+
+    private func commitTitle() {
+        guard editingTitle else { return }
+        let text = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        finishEditing()
+        guard !text.isEmpty, text != card.title else { return }
+        card.title = text
+        try? context.save()
+    }
+
+    /// Leeg label = label verwijderen. Een gewijzigd label vult ook de koppeltabel domein → klant aan.
+    private func commitLabel() {
+        guard editingLabel else { return }
+        let text = labelDraft
+        finishEditing()
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines) != (card.clientLabel ?? "") else { return }
+        BoardService.update(card, title: card.title, label: text, logoDomain: card.logoDomain ?? "", in: context)
+    }
+
+    private func cancelEditing() { finishEditing() }
+
+    private func finishEditing() {
+        editingTitle = false
+        editingLabel = false
+        if InlineEditing.cardID == card.id { InlineEditing.cardID = nil }
+    }
+}
+
+/// Houdt bij welke kaart ter plekke bewerkt wordt, zodat het board tijdens tekstselectie geen kaart gaat slepen.
+@MainActor
+enum InlineEditing {
+    static var cardID: UUID?
 }
 
 /// Startknop voor de timer van een kaart.

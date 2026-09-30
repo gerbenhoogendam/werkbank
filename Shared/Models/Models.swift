@@ -43,18 +43,19 @@ enum BoardColumn: String, CaseIterable, Identifiable {
 
 @Model
 final class TodoCard {
-    @Attribute(.unique) var id: UUID
-    var title: String
+    // Alle velden hebben een standaardwaarde en niets is `unique`: dat is vereist voor CloudKit-synchronisatie.
+    var id: UUID = UUID()
+    var title: String = ""
     var clientLabel: String?
     /// Domein waarvoor een logo geladen wordt (nil = geen logo).
     var logoDomain: String?
     /// "Naam · adres@domein.nl" bij kaarten die uit een mail komen.
     var senderLine: String?
-    var columnRaw: String
-    var sortOrder: Double
+    var columnRaw: String = BoardColumn.inbox.rawValue
+    var sortOrder: Double = 0
     /// Blauwe stip tot de kaart uit de Inbox is gesleept.
-    var isNew: Bool
-    var createdAt: Date
+    var isNew: Bool = true
+    var createdAt: Date = Date()
 
     init(title: String,
          clientLabel: String? = nil,
@@ -100,32 +101,32 @@ enum TimerStatus: String {
 
 @Model
 final class TimeEntry {
-    @Attribute(.unique) var id: UUID
-    var title: String
-    var client: String
-    var sourceRaw: String
-    var statusRaw: String
+    var id: UUID = UUID()
+    var title: String = ""
+    var client: String = ""
+    var sourceRaw: String = TimeSource.todo.rawValue
+    var statusRaw: String = TimerStatus.notStarted.rawValue
 
     /// Gemeten tijd tot en met de laatste pauze of stop. Een lopende timer komt daar
     /// `now - runningSince` bovenop: we rekenen met tijdstempels, niet met een tikkende teller,
     /// zodat slaapstand en herstart de tijd niet beïnvloeden.
-    var accumulated: TimeInterval
+    var accumulated: TimeInterval = 0
     var runningSince: Date?
     var pausedAt: Date?
     /// Totale tijd in pauze (tussen pauze en hervatten).
-    var pausedTotal: TimeInterval
-    var interruptions: Int
+    var pausedTotal: TimeInterval = 0
+    var interruptions: Int = 0
     var firstStart: Date?
     var lastStart: Date?
     var finishedAt: Date?
 
-    var workDescription: String
+    var workDescription: String = ""
     /// Vinkje "geschreven" (in het facturatiesysteem).
-    var isWritten: Bool
+    var isWritten: Bool = false
     var todoID: UUID?
     /// Voorkomt dat dezelfde agenda-afspraak dubbel wordt toegevoegd.
     var externalID: String?
-    var createdAt: Date
+    var createdAt: Date = Date()
 
     init(title: String, client: String, source: TimeSource, todoID: UUID? = nil) {
         self.id = UUID()
@@ -161,8 +162,9 @@ final class TimeEntry {
 
 @Model
 final class ClientMapping {
-    @Attribute(.unique) var domain: String
-    var client: String
+    // Niet `unique` (CloudKit): dubbelen worden bij het opslaan via `BoardService.upsertMapping` voorkomen.
+    var domain: String = ""
+    var client: String = ""
 
     init(domain: String, client: String) {
         self.domain = domain.lowercased()
@@ -173,9 +175,57 @@ final class ClientMapping {
 // MARK: - Opslag
 
 enum Persistence {
+    static let cloudToggleKey = "iCloudSyncEnabled"
+
+    /// iCloud-synchronisatie is alleen mogelijk in een build met de iCloud-entitlements. Die build zet
+    /// de compilatievlag `ICLOUD` (zie project.yml).
+    static let isCloudBuild: Bool = {
+        #if ICLOUD
+        return true
+        #else
+        return false
+        #endif
+    }()
+
+    /// Voorkeur van de gebruiker (standaard aan). Een wijziging geldt na herstarten.
+    static var syncPreferred: Bool {
+        UserDefaults.standard.object(forKey: cloudToggleKey) as? Bool ?? true
+    }
+
+    /// Of de database bij deze start met iCloud gesynchroniseerd wordt: build met iCloud, voorkeur aan
+    /// en een ingelogd iCloud-account.
+    static let isSyncing: Bool = isCloudBuild && syncPreferred && FileManager.default.ubiquityIdentityToken != nil
+
     static let container: ModelContainer = {
+        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self])
+
+        #if ICLOUD
+        if isSyncing {
+            let cloud = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+            if let container = try? ModelContainer(for: schema, configurations: cloud) {
+                return container
+            }
+            // CloudKit niet beschikbaar (bijv. schemafout): liever lokaal verder dan een app die niet start.
+        }
+        #endif
+
+        let local = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+        if let container = try? ModelContainer(for: schema, configurations: local) {
+            return container
+        }
+
+        // Een oudere database die niet migreert (bijv. na het verwijderen van unieke velden voor iCloud):
+        // bewaar hem als back-up naast het origineel en begin met een lege database.
+        let fm = FileManager.default
+        let stamp = Int(Date().timeIntervalSince1970)
+        for suffix in ["", "-shm", "-wal"] {
+            let file = local.url.path + suffix
+            if fm.fileExists(atPath: file) {
+                try? fm.moveItem(atPath: file, toPath: file + ".backup-\(stamp)")
+            }
+        }
         do {
-            return try ModelContainer(for: TodoCard.self, TimeEntry.self, ClientMapping.self)
+            return try ModelContainer(for: schema, configurations: local)
         } catch {
             fatalError("Kan de database niet openen: \(error)")
         }

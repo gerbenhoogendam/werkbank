@@ -47,13 +47,13 @@ private struct CalendarsPreferences: View {
                         #endif
                     }
                 } header: {
-                    Text("Toon in de agenda")
+                    Text("Zichtbare agenda's")
                 } footer: {
-                    Text("Verborgen agenda's verdwijnen uit de weergave. Er wordt niets aan de agenda's zelf gewijzigd.")
+                    Text("Ook aan/uit te zetten boven de agenda. Verborgen agenda's verdwijnen uit de weergave; er wordt niets aan de agenda's zelf gewijzigd.")
                 }
 
-                Section("Inplannen") {
-                    Picker("Standaard doelagenda", selection: $defaultCalendar) {
+                Section("Standaard agenda") {
+                    Picker("Nieuwe afspraken in", selection: $defaultCalendar) {
                         Text("Automatisch (\"Werk\" of eerste)").tag("")
                         ForEach(service.writableCalendars) { calendar in
                             Text(calendar.title).tag(calendar.id)
@@ -150,6 +150,7 @@ private struct OtherPreferences: View {
     @AppStorage(SettingsKey.longRunMinutes) private var longRunMinutes = 60
     @AppStorage(SettingsKey.googleAPIKey) private var apiKey = ""
     @AppStorage(SettingsKey.googleCX) private var searchEngineID = ""
+    @AppStorage(Persistence.cloudToggleKey) private var iCloudSync = true
 
     @Environment(\.modelContext) private var context
     @Query(sort: \ClientMapping.domain) private var mappings: [ClientMapping]
@@ -163,6 +164,15 @@ private struct OtherPreferences: View {
                 KeyboardShortcuts.Recorder("Sneltoets", name: .quickEntry)
             }
             #endif
+
+            Section {
+                Toggle("Synchroniseren via iCloud", isOn: $iCloudSync)
+                    .disabled(!Persistence.isCloudBuild)
+            } header: {
+                Text("iCloud")
+            } footer: {
+                Text(iCloudStatus)
+            }
 
             Section("Facturatie") {
                 Picker("Afronden op", selection: $rounding) {
@@ -218,5 +228,19 @@ private struct OtherPreferences: View {
         try? context.save()
         newDomain = ""
         newClient = ""
+    }
+}
+
+extension OtherPreferences {
+    fileprivate var iCloudStatus: String {
+        if !Persistence.isCloudBuild {
+            return "Deze build is niet voor iCloud ingericht: de gegevens blijven alleen op dit apparaat."
+        }
+        if Persistence.isSyncing {
+            return "Kaarten en tijdregels worden via iCloud met je andere apparaten gesynchroniseerd. Voorkeuren en de agenda-keuze blijven per apparaat. Een wijziging van deze schakelaar geldt na herstarten."
+        }
+        return Persistence.syncPreferred
+            ? "Niet actief: log in bij iCloud op dit apparaat en start Werkbank opnieuw."
+            : "Uit: de gegevens blijven alleen op dit apparaat. Geldt na herstarten."
     }
 }

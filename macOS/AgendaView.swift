@@ -216,9 +216,40 @@ struct AgendaView: View {
             }
 
             Spacer(minLength: 8)
+
+            // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(service.calendars) { calendar in
+                        calendarChip(calendar)
+                    }
+                }
+            }
+            .frame(maxWidth: 460)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+    }
+
+    private func calendarChip(_ cal: AgendaCalendar) -> some View {
+        let hidden = hiddenIDs.contains(cal.id)
+        return Button {
+            var ids = hiddenIDs
+            if hidden { ids.remove(cal.id) } else { ids.insert(cal.id) }
+            hiddenRaw = ids.sorted().joined(separator: ",")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: hidden ? "circle" : "checkmark.circle.fill")
+                    .foregroundStyle(cal.color)
+                Text(cal.title)
+                    .thingsFont(.metadata)
+                    .foregroundStyle(hidden ? ThingsColor.textTertiary : ThingsColor.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Agenda \(cal.title)")
+        .accessibilityValue(hidden ? "verborgen" : "zichtbaar")
     }
 
     private func navButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {

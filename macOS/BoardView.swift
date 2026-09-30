@@ -77,7 +77,9 @@ struct BoardView: View {
                 .updating($gestureActive) { _, state, _ in state = true }
                 .onChanged { value in
                     if drag.phase == .idle {
-                        guard let card = card(at: value.startLocation),
+                        // Tijdens tekst bewerken hoort een sleep bij de tekstselectie, niet bij de kaart.
+                        guard InlineEditing.cardID == nil,
+                              let card = card(at: value.startLocation),
                               let frame = drag.cardFrames[card.id] else { return }
                         drag.begin(card: card, frame: frame, pointer: value.startLocation, order: currentOrder())
                     }
@@ -248,7 +250,7 @@ private struct BoardCardCell: View {
     @State private var highlight = false
 
     var body: some View {
-        CardView(card: card, isTimerRunning: isTimerRunning) {
+        CardView(card: card, isTimerRunning: isTimerRunning, isEditable: true) {
             onStartTimer()
             appState.showToast("Timer gestart: \(card.title)")
         }

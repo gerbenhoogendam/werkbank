@@ -80,3 +80,11 @@ Het bureaubladontwerp (board + agenda + tijdlijst tegelijk, slepen tussen panele
 - **Google API-sleutel** staat in `UserDefaults` (niet in de Keychain).
 - Geen app-icoon en geen asset-catalogus.
 - De bundle-id is een placeholder (`com.example.werkbank`).
+
+## iCloud-synchronisatie
+
+De code is voorbereid (SwiftData met CloudKit, modellen zonder unieke velden en met standaardwaarden), maar staat
+standaard **uit**: de synchronisatie werkt alleen in een build met de compilatievlag `ICLOUD` en de iCloud-entitlements,
+en die vereisen een betaald Apple Developer-account (met een gratis persoonlijk team bouwt de app niet met iCloud).
+In Voorkeuren › Overig staat de status en een schakelaar. Gesynchroniseerd worden kaarten, tijdregels en de koppeltabel;
+voorkeuren en de agenda-keuze blijven per apparaat. Twee apparaten kunnen elk een eigen lopende timer hebben.
