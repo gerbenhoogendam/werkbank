@@ -78,16 +78,6 @@ final class DragCoordinator {
     @ObservationIgnored private var lastX: CGFloat = 0
     @ObservationIgnored private var tiltReset: Task<Void, Never>?
 
-    /// Momentopname voor de tijdelijke debug-regel (alleen zichtbaar in Debug-builds).
-    var debugSummary: String {
-        func rect(_ r: CGRect) -> String { "\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))x\(Int(r.height))" }
-        func place(_ t: BoardTarget?) -> String { t.map { "\($0.column.rawValue)#\($0.index)" } ?? "nil" }
-        return "phase \(phase) region \(region) target \(place(target)) origin \(place(origin))\n"
-            + "gemeten: kolommen \(columnFrames.count) stapels \(stackFrames.count) kaarten \(cardFrames.count) dagen \(agenda.dayFrames.count)\n"
-            + "board \(rect(boardFrame)) agenda \(rect(agenda.frame))\n"
-            + "pointer \(Int(pointer.x)),\(Int(pointer.y))"
-    }
-
     // MARK: Slepen
 
     func begin(card: TodoCard, frame: CGRect, pointer: CGPoint, order: [BoardColumn: [UUID]]) {
