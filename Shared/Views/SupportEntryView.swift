@@ -16,6 +16,7 @@ struct SupportEntryView: View {
     @State private var quickMinutes = 15
     @State private var showError = false
     @FocusState private var clientFocused: Bool
+    @FocusState private var minutesFocused: Bool
 
     private static let quickChoices = [10, 15, 30, 60]
 
@@ -68,30 +69,15 @@ struct SupportEntryView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 label("Duur")
-                HStack(spacing: 6) {
-                    HStack(spacing: 3) {
-                        TextField("min", text: $customMinutes)
-                            .textFieldStyle(.plain)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 34)
-                            .monospacedDigit()
-                            #if os(iOS)
-                            .keyboardType(.numberPad)
-                            #endif
-                        Text("min").thingsFont(.metadata).foregroundStyle(ThingsColor.textSecondary)
+                // Past alles op één regel, dan zo; anders het eigen veld boven de snelkeuzes.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        customMinutesField
+                        quickChoiceChips
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(chipBackground(selected: usesCustom))
-
-                    ForEach(Self.quickChoices, id: \.self) { value in
-                        Button("\(value)m") { customMinutes = ""; quickMinutes = value }
-                            .buttonStyle(.plain)
-                            .thingsFont(.tag)
-                            .foregroundStyle(!usesCustom && quickMinutes == value ? Color.white : ThingsColor.textPrimary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(chipBackground(selected: !usesCustom && quickMinutes == value, filled: true))
+                    VStack(alignment: .leading, spacing: 6) {
+                        customMinutesField
+                        HStack(spacing: 6) { quickChoiceChips }
                     }
                 }
             }
@@ -111,6 +97,44 @@ struct SupportEntryView: View {
         }
         .onChange(of: workDescription) { _, _ in
             if showError && TimerService.validDescription(workDescription) { showError = false }
+        }
+    }
+
+    /// Eigen aantal minuten: alleen cijfers, max. 3. Krijgt een eigen focusmarkering in plaats van de systeemring.
+    private var customMinutesField: some View {
+        HStack(spacing: 4) {
+            TextField("", text: $customMinutes, prompt: Text("eigen"))
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 38)
+                .monospacedDigit()
+                .focused($minutesFocused)
+                .focusEffectDisabled()
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+            Text("min")
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textSecondary)
+                .fixedSize()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(chipBackground(selected: usesCustom || minutesFocused))
+        .fixedSize()
+        .accessibilityLabel("Eigen aantal minuten")
+    }
+
+    @ViewBuilder private var quickChoiceChips: some View {
+        ForEach(Self.quickChoices, id: \.self) { value in
+            Button("\(value)m") { customMinutes = ""; quickMinutes = value }
+                .buttonStyle(.plain)
+                .thingsFont(.tag)
+                .foregroundStyle(!usesCustom && quickMinutes == value ? Color.white : ThingsColor.textPrimary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(chipBackground(selected: !usesCustom && quickMinutes == value, filled: true))
+                .fixedSize()
         }
     }
 
