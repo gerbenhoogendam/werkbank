@@ -78,6 +78,16 @@ final class DragCoordinator {
     @ObservationIgnored private var lastX: CGFloat = 0
     @ObservationIgnored private var tiltReset: Task<Void, Never>?
 
+    /// Momentopname voor de tijdelijke debug-regel (alleen zichtbaar in Debug-builds).
+    var debugSummary: String {
+        func rect(_ r: CGRect) -> String { "\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))x\(Int(r.height))" }
+        func place(_ t: BoardTarget?) -> String { t.map { "\($0.column.rawValue)#\($0.index)" } ?? "nil" }
+        return "phase \(phase) region \(region) target \(place(target)) origin \(place(origin))\n"
+            + "gemeten: kolommen \(columnFrames.count) stapels \(stackFrames.count) kaarten \(cardFrames.count) dagen \(agenda.dayFrames.count)\n"
+            + "board \(rect(boardFrame)) agenda \(rect(agenda.frame))\n"
+            + "pointer \(Int(pointer.x)),\(Int(pointer.y))"
+    }
+
     // MARK: Slepen
 
     func begin(card: TodoCard, frame: CGRect, pointer: CGPoint, order: [BoardColumn: [UUID]]) {
@@ -120,8 +130,8 @@ final class DragCoordinator {
 
         switch newRegion {
         case .board:
-            let t = boardTarget(for: pointer)
-            if t != target { target = t }
+            // Bij een mislukte berekening de vorige doelplek houden in plaats van het doel te wissen.
+            if let t = boardTarget(for: pointer), t != target { target = t }
             if agendaSlot != nil { agendaSlot = nil }
         case .agenda:
             if target != origin { target = origin }
@@ -224,18 +234,33 @@ final class DragCoordinator {
 
     // MARK: Board-berekeningen
 
+    /// Het boardgebied: het gemeten boardframe, anders de samenvoeging van de kolomframes.
+    private var boardArea: CGRect? {
+        if boardFrame.width > 1 { return boardFrame }
+        guard let first = columnFrames.values.first else { return nil }
+        return columnFrames.values.dropFirst().reduce(first) { $0.union($1) }
+    }
+
     private func region(at point: CGPoint) -> Region {
-        if agenda.frame.contains(point) { return .agenda }
-        // Alles boven de onderrand van het board telt als board (ook de marge eromheen).
-        if point.y <= boardFrame.maxY && boardFrame.minX...boardFrame.maxX ~= point.x { return .board }
-        return .outside
+        if agenda.frame.width > 1, agenda.frame.contains(point) { return .agenda }
+        // Zonder gemeten geometrie liever board dan niets: de kaart kan dan tenminste van kolom wisselen.
+        guard let area = boardArea else { return .board }
+        return area.insetBy(dx: -24, dy: -24).contains(point) ? .board : .outside
+    }
+
+    /// Frame van de kaartenstapel in een kolom; terugval op het kolomframe onder de kop als de
+    /// stapel zelf niet gemeten is.
+    private func stackFrame(for column: BoardColumn) -> CGRect? {
+        if let stack = stackFrames[column] { return stack }
+        guard let frame = columnFrames[column] else { return nil }
+        return CGRect(x: frame.minX + 10, y: frame.minY + 44, width: frame.width - 20, height: 0)
     }
 
     /// Dichtstbijzijnde kolom op x-positie; index op de verticale middens van de kaarten.
     /// Berekend uit de gemeten kaarthoogtes (niet uit verschuivende frames), zodat de placeholder niet flikkert.
     private func boardTarget(for point: CGPoint) -> BoardTarget? {
         guard let column = columnFrames.min(by: { abs($0.value.midX - point.x) < abs($1.value.midX - point.x) })?.key,
-              let stack = stackFrames[column], let card else { return nil }
+              let stack = stackFrame(for: column), let card else { return nil }
 
         let draggedCenterY = point.y - grab.height + cardSize.height / 2
         var top = stack.minY
@@ -249,7 +274,7 @@ final class DragCoordinator {
     }
 
     private func slotRect(for target: BoardTarget, excluding id: UUID) -> CGRect? {
-        guard let stack = stackFrames[target.column] else { return nil }
+        guard let stack = stackFrame(for: target.column) else { return nil }
         var y = stack.minY
         for other in (order[target.column] ?? []).filter({ $0 != id }).prefix(target.index) {
             y += (cardFrames[other]?.height ?? cardSize.height) + Self.cardSpacing
