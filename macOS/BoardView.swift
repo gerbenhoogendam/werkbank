@@ -51,6 +51,7 @@ struct BoardView: View {
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
     @State private var editing: TodoCard?
+    @GestureState private var gestureActive = false
 
     private var runningTodoID: UUID? { running.first?.todoID }
 
@@ -68,6 +69,32 @@ struct BoardView: View {
                 Color.clear.preference(key: BoardFrameKey.self, value: geo.frame(in: .main))
             }
         )
+        // Eén sleepgebaar voor het hele board (niet per kaart): het blijft bestaan terwijl kaarten
+        // tijdens het slepen worden verwijderd, verplaatst en opnieuw opgebouwd.
+        // Slepen start na ca. 5 px beweging; korter telt als klik.
+        .gesture(
+            DragGesture(minimumDistance: 5, coordinateSpace: .main)
+                .updating($gestureActive) { _, state, _ in state = true }
+                .onChanged { value in
+                    if drag.phase == .idle {
+                        guard let card = card(at: value.startLocation),
+                              let frame = drag.cardFrames[card.id] else { return }
+                        drag.begin(card: card, frame: frame, pointer: value.startLocation, order: currentOrder())
+                    }
+                    drag.update(pointer: value.location)
+                }
+                .onEnded { value in drag.end(pointer: value.location) }
+        )
+        // Gebaar verdwenen zonder onEnded (focusverlies e.d.): kaart terugzetten, niet blijven hangen.
+        .onChange(of: gestureActive) { _, active in
+            guard !active else { return }
+            // Een gewoon einde zet de fase eerst op .landing; pas als die na een korte wachttijd nog op
+            // .dragging staat is het gebaar zonder onEnded verdwenen.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(120))
+                if drag.phase == .dragging { drag.cancel() }
+            }
+        }
         .onPreferenceChange(CardFrameKey.self) { drag.cardFrames = $0 }
         .onPreferenceChange(ColumnFrameKey.self) { drag.columnFrames = $0 }
         .onPreferenceChange(StackFrameKey.self) { drag.stackFrames = $0 }
@@ -96,10 +123,7 @@ struct BoardView: View {
         var seen = 0
         var inserted = false
         for card in columnCards {
-            if card.id == drag.card?.id {
-                result.append(.card(card))      // blijft in de boom (zero height) zodat de sleep doorloopt
-                continue
-            }
+            if card.id == drag.card?.id { continue }   // wordt door DragOverlay getekend
             if seen == target.index && !inserted {
                 result.append(.placeholder)
                 inserted = true
@@ -184,26 +208,22 @@ struct BoardView: View {
     // MARK: Kaart
 
     private func cell(_ card: TodoCard, in column: BoardColumn) -> some View {
-        let isDragged = drag.card?.id == card.id && drag.isDragging
-        return BoardCardCell(
+        BoardCardCell(
             card: card,
             isTimerRunning: runningTodoID == card.id,
-            isDragged: isDragged,
-            onStartTimer: {
-                TimerService.startTimer(for: card, in: context)
-                // Toast via AppState gebeurt in de cel zelf.
-            },
-            onDragChanged: { value in
-                if drag.card?.id != card.id {
-                    guard let frame = drag.cardFrames[card.id] else { return }
-                    drag.begin(card: card, frame: frame, pointer: value.startLocation, order: currentOrder())
-                }
-                drag.update(pointer: value.location)
-            },
-            onDragEnded: { value in drag.end(pointer: value.location) },
+            onStartTimer: { TimerService.startTimer(for: card, in: context) },
             onEdit: { editing = card },
             onDelete: { BoardService.delete(card, in: context) }
         )
+    }
+
+    /// De kaart onder een punt (in "main"-coördinaten), alleen binnen het zichtbare deel van zijn kolom.
+    private func card(at point: CGPoint) -> TodoCard? {
+        cards.first { card in
+            guard let frame = drag.cardFrames[card.id], frame.contains(point),
+                  let column = drag.columnFrames[card.column] else { return false }
+            return column.contains(point)
+        }
     }
 
     private func currentOrder() -> [BoardColumn: [UUID]] {
@@ -218,10 +238,7 @@ struct BoardView: View {
 private struct BoardCardCell: View {
     let card: TodoCard
     let isTimerRunning: Bool
-    let isDragged: Bool
     let onStartTimer: () -> Void
-    let onDragChanged: (DragGesture.Value) -> Void
-    let onDragEnded: (DragGesture.Value) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
 
@@ -229,7 +246,6 @@ private struct BoardCardCell: View {
     @Environment(AppState.self) private var appState
     @State private var popScale: CGFloat = 1
     @State private var highlight = false
-    @GestureState private var gestureActive = false
 
     var body: some View {
         CardView(card: card, isTimerRunning: isTimerRunning) {
@@ -249,23 +265,9 @@ private struct BoardCardCell: View {
         .scaleEffect(popScale)
         .padding(.bottom, DragCoordinator.cardSpacing)
         .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
-        // De cel blijft tijdens het slepen in de boom (anders stopt het gebaar), maar neemt geen ruimte in.
-        .frame(height: isDragged ? 0 : nil, alignment: .top)
-        .opacity(isDragged ? 0 : 1)
-        // Slepen start na ca. 5 px beweging; korter telt als klik.
-        .gesture(
-            DragGesture(minimumDistance: 5, coordinateSpace: .main)
-                .updating($gestureActive) { _, state, _ in state = true }
-                .onChanged(onDragChanged)
-                .onEnded(onDragEnded)
-        )
         .contextMenu {
             Button("Bewerken…", action: onEdit)
             Button("Verwijderen", role: .destructive, action: onDelete)
-        }
-        // Gebaar verdwenen zonder onEnded (focusverlies e.d.): niet blijven hangen.
-        .onChange(of: gestureActive) { _, active in
-            if !active && drag.phase == .dragging && drag.card?.id == card.id { drag.cancel() }
         }
         .onChange(of: drag.popID) { _, new in
             if new == card.id { runPop() }

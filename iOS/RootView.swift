@@ -10,6 +10,7 @@ struct RootView: View {
     @Environment(AppState.self) private var appState
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
+    @AppStorage(SettingsKey.appearance) private var appearanceRaw = AppearanceSetting.system.rawValue
     @State private var tab: Tab = .board
     @State private var column: BoardColumn = .inbox
     @State private var showSettings = false
@@ -49,6 +50,7 @@ struct RootView: View {
 
             ToastOverlay(message: appState.toast)
         }
+        .preferredColorScheme(AppearanceSetting(stored: appearanceRaw).colorScheme)
         .sheet(isPresented: $showQuickAdd) { QuickAddSheet(column: column) }
         .sheet(isPresented: $showSupport) {
             NavigationStack {
@@ -62,8 +64,8 @@ struct RootView: View {
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
-                SettingsView()
-                    .navigationTitle("Instellingen")
+                PreferencesView()
+                    .navigationTitle("Voorkeuren")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Klaar") { showSettings = false } } }
             }

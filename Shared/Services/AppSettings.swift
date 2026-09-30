@@ -12,6 +12,7 @@ enum SettingsKey {
     static let googleAPIKey     = "googleAPIKey"
     static let googleCX         = "googleSearchEngineID"
     static let longRunMinutes   = "longRunWarningMinutes"
+    static let appearance       = "appearance"         // "system" | "light" | "dark"
 }
 
 enum AppSettings {

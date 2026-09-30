@@ -46,28 +46,6 @@ struct DayAgendaView: View {
             .padding(.horizontal, ThingsMetrics.contentPadding)
             .padding(.top, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(service.calendars) { cal in
-                        let hidden = hiddenIDs.contains(cal.id)
-                        Button {
-                            var ids = hiddenIDs
-                            if hidden { ids.remove(cal.id) } else { ids.insert(cal.id) }
-                            hiddenRaw = ids.sorted().joined(separator: ",")
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: hidden ? "circle" : "checkmark.circle.fill").foregroundStyle(cal.color)
-                                Text(cal.title).thingsFont(.metadata)
-                                    .foregroundStyle(hidden ? ThingsColor.textTertiary : ThingsColor.textSecondary)
-                            }
-                            .frame(minHeight: 36)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, ThingsMetrics.contentPadding)
-            }
-
             if events.isEmpty {
                 ThingsEmptyStateSymbol(symbol: "calendar")
             } else {

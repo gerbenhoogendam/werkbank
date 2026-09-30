@@ -4,6 +4,8 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppearanceSetting.applyStored()
+
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
         KeyboardShortcuts.onKeyUp(for: .quickEntry) {
             Task { @MainActor in QuickEntryController.shared.toggle() }
@@ -41,7 +43,7 @@ struct WerkbankApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView()
+            PreferencesView()
                 .modelContainer(Persistence.container)
         }
     }

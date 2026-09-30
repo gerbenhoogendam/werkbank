@@ -49,6 +49,12 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                SettingsLink {
+                    Label("Voorkeuren", systemImage: "gearshape")
+                }
+                .help("Voorkeuren (⌘,)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     QuickEntryController.shared.show()
                 } label: {

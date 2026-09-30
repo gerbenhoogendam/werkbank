@@ -216,15 +216,6 @@ struct AgendaView: View {
             }
 
             Spacer(minLength: 8)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(service.calendars) { calendar in
-                        calendarChip(calendar)
-                    }
-                }
-            }
-            .frame(maxWidth: 420)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -240,27 +231,6 @@ struct AgendaView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
-    }
-
-    private func calendarChip(_ cal: AgendaCalendar) -> some View {
-        let hidden = hiddenIDs.contains(cal.id)
-        return Button {
-            var ids = hiddenIDs
-            if hidden { ids.remove(cal.id) } else { ids.insert(cal.id) }
-            hiddenRaw = ids.sorted().joined(separator: ",")
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: hidden ? "circle" : "checkmark.circle.fill")
-                    .foregroundStyle(cal.color)
-                Text(cal.title)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(hidden ? ThingsColor.textTertiary : ThingsColor.textSecondary)
-                    .lineLimit(1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Agenda \(cal.title)")
-        .accessibilityValue(hidden ? "verborgen" : "zichtbaar")
     }
 
     private func dayHeaderRow(_ days: [Date]) -> some View {

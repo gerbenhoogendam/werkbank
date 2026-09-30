@@ -55,7 +55,7 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 - `.eml` op het venster slepen → kaarten in de Inbox, klantnaam uit domein/koppeltabel/freemail, logo via Google Custom Search met favicon-terugval.
 - Tijd schrijven: één lopende timer, pauze/hervat/stop, verplichte omschrijving, eindtijdcontrole, afronding, "geschreven"-vinkje, CSV-export (`BillingExporter`-protocol).
 - Menubalkknop met lopende tijd, bestaande to-do starten, snelle support (starten of direct loggen).
-- Instellingen: sneltoets, afronding, agenda, koppeltabel, Google-sleutel, waarschuwingsdrempel.
+- Voorkeuren (⌘,), een eigen venster met tabs: **Agenda's** (welke agenda's zichtbaar zijn, standaard doelagenda), **Weergave** (thema automatisch/licht/donker, werkweek of dag, werkdagen, uren) en **Overig** (sneltoets, afronding, waarschuwingsdrempel, koppeltabel, Google-sleutel).
 
 ## iOS: bewust anders
 
