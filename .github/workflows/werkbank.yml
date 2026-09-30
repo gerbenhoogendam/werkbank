@@ -1,0 +1,69 @@
+name: Werkbank
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, "claude/**"]
+
+jobs:
+  core-tests:
+    name: WerkbankCore tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        working-directory: WerkbankCore
+        run: swift test
+
+  build:
+    name: Build ${{ matrix.scheme }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: Werkbank-macOS
+            destination: "platform=macOS"
+          - scheme: Werkbank-iOS
+            destination: "generic/platform=iOS Simulator"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode-versie
+        run: xcodebuild -version
+      - name: XcodeGen installeren
+        run: brew install xcodegen
+      - name: Project genereren
+        run: xcodegen generate
+      - name: Bouwen
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Werkbank.xcodeproj \
+            -scheme "${{ matrix.scheme }}" \
+            -destination "${{ matrix.destination }}" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+      - name: App inpakken
+        run: |
+          mkdir -p dist
+          APP=$(find build/DerivedData/Build/Products -maxdepth 2 -name Werkbank.app | head -1)
+          ditto -c -k --keepParent "$APP" "dist/${{ matrix.scheme }}.app.zip"
+      - name: Screenshot van de gestarte macOS-app (best effort)
+        if: matrix.scheme == 'Werkbank-macOS'
+        continue-on-error: true
+        run: |
+          APP=$(find build/DerivedData/Build/Products -maxdepth 2 -name Werkbank.app | head -1)
+          open "$APP"
+          sleep 12
+          screencapture -x dist/macos-screenshot.png
+          pkill Werkbank || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.scheme }}
+          path: dist/
+          if-no-files-found: warn
+      - name: Fouten samenvatten
+        if: failure()
+        run: grep -E "error:" build.log | sort -u | head -100 || true

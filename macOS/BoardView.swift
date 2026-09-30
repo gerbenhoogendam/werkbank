@@ -1,0 +1,330 @@
+import SwiftData
+import SwiftUI
+
+// MARK: - Geometrie-voorkeuren
+
+private struct CardFrameKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+private struct ColumnFrameKey: PreferenceKey {
+    static var defaultValue: [BoardColumn: CGRect] = [:]
+    static func reduce(value: inout [BoardColumn: CGRect], nextValue: () -> [BoardColumn: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+private struct StackFrameKey: PreferenceKey {
+    static var defaultValue: [BoardColumn: CGRect] = [:]
+    static func reduce(value: inout [BoardColumn: CGRect], nextValue: () -> [BoardColumn: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+private struct BoardFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
+private enum ColumnItem: Identifiable {
+    case card(TodoCard)
+    case placeholder
+
+    var id: String {
+        switch self {
+        case .card(let card): return card.id.uuidString
+        case .placeholder:    return "placeholder"
+        }
+    }
+}
+
+// MARK: - Board
+
+/// Kanban-board over de volle breedte: Inbox, Te doen, Bezig, Wacht op klant, Klaar.
+struct BoardView: View {
+    @Environment(\.modelContext) private var context
+    @Environment(DragCoordinator.self) private var drag
+    @Query(sort: \TodoCard.sortOrder) private var cards: [TodoCard]
+    @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
+
+    @State private var editing: TodoCard?
+
+    private var runningTodoID: UUID? { running.first?.todoID }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            ForEach(BoardColumn.allCases) { column in
+                columnView(column)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(ThingsColor.backgroundContent)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: BoardFrameKey.self, value: geo.frame(in: .main))
+            }
+        )
+        .onPreferenceChange(CardFrameKey.self) { drag.cardFrames = $0 }
+        .onPreferenceChange(ColumnFrameKey.self) { drag.columnFrames = $0 }
+        .onPreferenceChange(StackFrameKey.self) { drag.stackFrames = $0 }
+        .onPreferenceChange(BoardFrameKey.self) { drag.boardFrame = $0 }
+        .onAppear {
+            drag.onBoardDrop = { card, column, index in
+                BoardService.move(card, to: column, index: index, in: context)
+            }
+        }
+        .sheet(item: $editing) { CardEditSheet(card: $0) }
+    }
+
+    // MARK: Kolom
+
+    private func cards(in column: BoardColumn) -> [TodoCard] {
+        // In de view sorteren, zodat de volgorde direct meebeweegt met de model-wijziging na het neerzetten.
+        cards.filter { $0.column == column }.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func items(for column: BoardColumn) -> [ColumnItem] {
+        let columnCards = cards(in: column)
+        guard drag.isDragging, let target = drag.target, target.column == column else {
+            return columnCards.map { .card($0) }
+        }
+        var result: [ColumnItem] = []
+        var seen = 0
+        var inserted = false
+        for card in columnCards {
+            if card.id == drag.card?.id {
+                result.append(.card(card))      // blijft in de boom (zero height) zodat de sleep doorloopt
+                continue
+            }
+            if seen == target.index && !inserted {
+                result.append(.placeholder)
+                inserted = true
+            }
+            result.append(.card(card))
+            seen += 1
+        }
+        if !inserted { result.append(.placeholder) }
+        return result
+    }
+
+    private func columnView(_ column: BoardColumn) -> some View {
+        let columnCards = cards(in: column)
+        let isTarget = drag.region == .board && drag.target?.column == column && drag.isDragging
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: column.symbol)
+                    .foregroundStyle(column.color)
+                Text(column.title)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                Spacer()
+                Text("\(columnCards.count)")
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .monospacedDigit()
+            }
+            .thingsFont(.heading)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(column.title), \(columnCards.count) kaarten")
+
+            Rectangle().fill(ThingsColor.separator).frame(height: 1).padding(.horizontal, 12)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(items(for: column)) { item in
+                        switch item {
+                        case .card(let card):
+                            cell(card, in: column)
+                        case .placeholder:
+                            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                                .strokeBorder(ThingsColor.accent.opacity(0.55),
+                                              style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                                .background(
+                                    RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                                        .fill(ThingsColor.accent.opacity(0.06))
+                                )
+                                .frame(height: drag.cardSize.height)
+                                .padding(.bottom, DragCoordinator.cardSpacing)
+                                .transition(.opacity)
+                        }
+                    }
+                }
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: StackFrameKey.self, value: [column: geo.frame(in: .main)])
+                    }
+                )
+                .animation(ThingsMotion.reorder, value: drag.target)
+                .animation(ThingsMotion.reorder, value: items(for: column).map(\.id))
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                .fill(isTarget ? column.color.opacity(0.10) : ThingsColor.backgroundSidebar)
+                .animation(.easeOut(duration: 0.15), value: isTarget)
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: ColumnFrameKey.self, value: [column: geo.frame(in: .main)])
+            }
+        )
+    }
+
+    // MARK: Kaart
+
+    private func cell(_ card: TodoCard, in column: BoardColumn) -> some View {
+        let isDragged = drag.card?.id == card.id && drag.isDragging
+        return BoardCardCell(
+            card: card,
+            isTimerRunning: runningTodoID == card.id,
+            isDragged: isDragged,
+            onStartTimer: {
+                TimerService.startTimer(for: card, in: context)
+                // Toast via AppState gebeurt in de cel zelf.
+            },
+            onDragChanged: { value in
+                if drag.card?.id != card.id {
+                    guard let frame = drag.cardFrames[card.id] else { return }
+                    drag.begin(card: card, frame: frame, pointer: value.startLocation, order: currentOrder())
+                }
+                drag.update(pointer: value.location)
+            },
+            onDragEnded: { value in drag.end(pointer: value.location) },
+            onEdit: { editing = card },
+            onDelete: { BoardService.delete(card, in: context) }
+        )
+    }
+
+    private func currentOrder() -> [BoardColumn: [UUID]] {
+        Dictionary(uniqueKeysWithValues: BoardColumn.allCases.map { column in
+            (column, cards(in: column).map(\.id))
+        })
+    }
+}
+
+// MARK: - Kaartcel met sleepgebaar
+
+private struct BoardCardCell: View {
+    let card: TodoCard
+    let isTimerRunning: Bool
+    let isDragged: Bool
+    let onStartTimer: () -> Void
+    let onDragChanged: (DragGesture.Value) -> Void
+    let onDragEnded: (DragGesture.Value) -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    @Environment(DragCoordinator.self) private var drag
+    @Environment(AppState.self) private var appState
+    @State private var popScale: CGFloat = 1
+    @State private var highlight = false
+    @GestureState private var gestureActive = false
+
+    var body: some View {
+        CardView(card: card, isTimerRunning: isTimerRunning) {
+            onStartTimer()
+            appState.showToast("Timer gestart: \(card.title)")
+        }
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: CardFrameKey.self, value: [card.id: geo.frame(in: .main)])
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                .fill(ThingsColor.accent.opacity(highlight ? 0.22 : 0))
+                .allowsHitTesting(false)
+        )
+        .scaleEffect(popScale)
+        .padding(.bottom, DragCoordinator.cardSpacing)
+        .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+        // De cel blijft tijdens het slepen in de boom (anders stopt het gebaar), maar neemt geen ruimte in.
+        .frame(height: isDragged ? 0 : nil, alignment: .top)
+        .opacity(isDragged ? 0 : 1)
+        // Slepen start na ca. 5 px beweging; korter telt als klik.
+        .gesture(
+            DragGesture(minimumDistance: 5, coordinateSpace: .main)
+                .updating($gestureActive) { _, state, _ in state = true }
+                .onChanged(onDragChanged)
+                .onEnded(onDragEnded)
+        )
+        .contextMenu {
+            Button("Bewerken…", action: onEdit)
+            Button("Verwijderen", role: .destructive, action: onDelete)
+        }
+        // Gebaar verdwenen zonder onEnded (focusverlies e.d.): niet blijven hangen.
+        .onChange(of: gestureActive) { _, active in
+            if !active && drag.phase == .dragging && drag.card?.id == card.id { drag.cancel() }
+        }
+        .onChange(of: drag.popID) { _, new in
+            if new == card.id { runPop() }
+        }
+        .onAppear {
+            if drag.popID == card.id { runPop() }
+            // Nieuwe kaart (snelle invoer of mail): korte highlight na het inschuiven.
+            if Date().timeIntervalSince(card.createdAt) < 1.5 {
+                highlight = true
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(80))
+                    withAnimation(.easeOut(duration: 1.0)) { highlight = false }
+                }
+            }
+        }
+    }
+
+    /// Kleine "pop" na het neerzetten: schaal 1,03 → 0,97 → 1.
+    private func runPop() {
+        Task { @MainActor in
+            withAnimation(.easeOut(duration: 0.08)) { popScale = 1.03 }
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.easeInOut(duration: 0.08)) { popScale = 0.97 }
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { popScale = 1 }
+            if drag.popID == card.id { drag.popID = nil }
+        }
+    }
+}
+
+// MARK: - Zwevende kaart
+
+/// De gesleepte kaart, boven alle panelen getekend.
+struct DragOverlay: View {
+    @Environment(DragCoordinator.self) private var drag
+
+    private var landingAnimation: Animation? {
+        guard drag.phase == .landing else { return nil }
+        // Naar de agenda: kleiner wordend erin; naar het board: licht doorverend naar de placeholder.
+        return drag.region == .agenda ? .easeIn(duration: 0.2) : .spring(response: 0.22, dampingFraction: 0.72)
+    }
+
+    var body: some View {
+        if drag.isDragging, let card = drag.card {
+            CardView(card: card)
+                .frame(width: drag.cardSize.width)
+                .shadow(color: .black.opacity(0.28), radius: 16, x: 0, y: 10)
+                .scaleEffect(drag.overlayScale)
+                .animation(.easeOut(duration: 0.15), value: drag.overlayScale)
+                .rotationEffect(.degrees(drag.tilt))
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: drag.tilt)
+                .opacity(drag.overlayOpacity)
+                .animation(.easeIn(duration: 0.2), value: drag.overlayOpacity)
+                .offset(x: drag.overlayOrigin.x, y: drag.overlayOrigin.y)
+                // Tijdens het slepen volgt de kaart de cursor exact; alleen bij het landen animeren.
+                .animation(landingAnimation, value: drag.overlayOrigin)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}

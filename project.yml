@@ -1,0 +1,87 @@
+# Xcode-project voor Werkbank (macOS + iOS). Genereren met XcodeGen:
+#   brew install xcodegen && xcodegen generate && open Werkbank.xcodeproj
+name: Werkbank
+options:
+  bundleIdPrefix: com.example      # pas aan naar je eigen prefix
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""           # vul je Apple Developer Team ID in
+    CODE_SIGN_STYLE: Automatic
+packages:
+  WerkbankCore:
+    path: WerkbankCore
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
+
+targets:
+  Werkbank-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - Shared
+      - macOS
+    dependencies:
+      - package: WerkbankCore
+      - package: KeyboardShortcuts
+    settings:
+      base:
+        PRODUCT_NAME: Werkbank
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.werkbank
+        ENABLE_HARDENED_RUNTIME: YES
+        INFOPLIST_FILE: macOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: macOS/Werkbank.entitlements
+    info:
+      path: macOS/Info.plist
+      properties:
+        CFBundleDisplayName: Werkbank
+        LSApplicationCategoryType: public.app-category.productivity
+        NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
+        NSCalendarsUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
+    entitlements:
+      path: macOS/Werkbank.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.personal-information.calendars: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+
+  Werkbank-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - Shared
+      - iOS
+    dependencies:
+      - package: WerkbankCore
+    settings:
+      base:
+        PRODUCT_NAME: Werkbank
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.werkbank
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: iOS/Info.plist
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Werkbank
+        NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
+        NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight

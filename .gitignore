@@ -1,0 +1,8 @@
+Werkbank.xcodeproj/
+*/Info.plist
+*.entitlements
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+.DS_Store
