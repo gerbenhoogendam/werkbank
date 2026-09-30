@@ -11,6 +11,9 @@ Functionele specificatie: [`Werkbank-Specificatie.md`](Werkbank-Specificatie.md)
 
 ## Bouwen
 
+Snel: `./Scripts/update.sh` haalt de nieuwste versie op, maakt het project opnieuw en opent het in Xcode.
+Handmatig:
+
 Vereist Xcode 16 of nieuwer (macOS 14+ / iOS 17+ als doelplatform) en [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
