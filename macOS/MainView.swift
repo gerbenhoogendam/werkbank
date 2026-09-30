@@ -124,31 +124,37 @@ private struct SplitDivider: View {
     let onEnded: () -> Void
     let onReset: () -> Void
 
+    @State private var isHovering = false
+
+    private static let thickness: CGFloat = 7
+
     var body: some View {
-        Rectangle()
-            .fill(ThingsColor.separator)
-            .frame(width: isHorizontalLine ? nil : 1, height: isHorizontalLine ? 1 : nil)
-            // Ruimer klikvlak dan de zichtbare lijn.
-            .overlay(
-                Color.clear
-                    .frame(width: isHorizontalLine ? nil : 9, height: isHorizontalLine ? 9 : nil)
-                    .contentShape(Rectangle())
-                    .onHover { inside in
-                        if inside {
-                            (isHorizontalLine ? NSCursor.resizeUpDown : NSCursor.resizeLeftRight).set()
-                        } else {
-                            NSCursor.arrow.set()
-                        }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                            .onChanged { value in
-                                onChanged(isHorizontalLine ? value.translation.height : value.translation.width)
-                            }
-                            .onEnded { _ in onEnded() }
-                    )
-                    .onTapGesture(count: 2, perform: onReset)
-            )
+        // Een echt klikvlak van 7 pt (geen overlay buiten de eigen afmetingen), met de zichtbare lijn in het midden.
+        ZStack {
+            Rectangle().fill(ThingsColor.backgroundContent)
+            Rectangle()
+                .fill(isHovering ? ThingsColor.accent : ThingsColor.separator)
+                .frame(width: isHorizontalLine ? nil : (isHovering ? 2 : 1),
+                       height: isHorizontalLine ? (isHovering ? 2 : 1) : nil)
+        }
+        .frame(width: isHorizontalLine ? nil : Self.thickness, height: isHorizontalLine ? Self.thickness : nil)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            isHovering = inside
+            if inside {
+                (isHorizontalLine ? NSCursor.resizeUpDown : NSCursor.resizeLeftRight).set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { onReset() })
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    onChanged(isHorizontalLine ? value.translation.height : value.translation.width)
+                }
+                .onEnded { _ in onEnded() }
+        )
             .accessibilityLabel(isHorizontalLine ? "Schuif de verdeling tussen board en agenda"
                                                  : "Schuif de verdeling tussen agenda en Tijd schrijven")
     }
