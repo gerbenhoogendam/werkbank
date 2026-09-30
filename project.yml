@@ -25,6 +25,25 @@ packages:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: 2.0.0
 
+# Beide schema's expliciet, zodat Werkbank-iOS altijd in het schemamenu van Xcode staat.
+schemes:
+  Werkbank-macOS:
+    build:
+      targets:
+        Werkbank-macOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  Werkbank-iOS:
+    build:
+      targets:
+        Werkbank-iOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
 targets:
   Werkbank-macOS:
     type: application
