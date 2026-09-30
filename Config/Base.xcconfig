@@ -1,0 +1,5 @@
+// Standaardwaarden. Eigen waarden zet je in Config/Local.xcconfig (staat in .gitignore).
+APP_BUNDLE_ID = com.example.werkbank
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

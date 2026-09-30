@@ -88,11 +88,12 @@ gesynchroniseerd. Voorkeuren en de agenda-keuze blijven per apparaat; twee appar
 Status en een schakelaar staan in Voorkeuren › Overig (een wijziging geldt na herstarten).
 
 Instellen (eenmalig, betaald Apple Developer-account nodig):
-1. Zet in `project.yml` bij `BUNDLE_ID_PREFIX` je eigen prefix (bijv. `nl.gerbenhoogendam`) en je Team ID bij `DEVELOPMENT_TEAM`.
-   Het bundle-id wordt `<prefix>.werkbank`, de iCloud-container `iCloud.<prefix>.werkbank`.
-2. `xcodegen generate` en open het project. Xcode maakt bij automatische ondertekening de container en het
+1. `cp Config/Local.xcconfig.example Config/Local.xcconfig` en vul `APP_BUNDLE_ID` (jouw unieke bundle-id, bijv.
+   `nl.itgwerkbank.werkbank`) en `DEVELOPMENT_TEAM` (Team ID) in. Dit bestand wordt niet gecommit en blijft
+   dus staan bij elke `xcodegen generate`. De iCloud-container wordt `iCloud.<APP_BUNDLE_ID>`.
+2. `xcodegen generate` en open het project. Xcode maakt bij automatische ondertekening de App ID, de container en het
    push-profiel zelf aan (Signing & Capabilities toont iCloud › CloudKit en Push Notifications).
-3. Log op elk apparaat in bij iCloud en gebruik dezelfde prefix op Mac en iOS.
+3. Log op elk apparaat in bij iCloud en gebruik op Mac en iOS hetzelfde bundle-id.
 
 Let op: de eerste keer dat CloudKit draait, wordt het schema in de *Development*-omgeving aangemaakt. Voor
 TestFlight/App Store moet je het schema in het CloudKit Dashboard naar *Production* uitrollen.

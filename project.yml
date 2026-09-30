@@ -2,20 +2,21 @@
 #   brew install xcodegen && xcodegen generate && open Werkbank.xcodeproj
 name: Werkbank
 options:
-  bundleIdPrefix: com.example      # zie BUNDLE_ID_PREFIX hieronder
+  bundleIdPrefix: com.example      # alleen een terugval; het echte bundle-id komt uit Config/Base.xcconfig
   createIntermediateGroups: true
   deploymentTarget:
     macOS: "14.0"
     iOS: "17.0"
+# Bundle-id (APP_BUNDLE_ID) en Team (DEVELOPMENT_TEAM) komen uit Config/Base.xcconfig, dat een eigen,
+# niet-gecommit Config/Local.xcconfig inleest. Zo blijven ze staan bij elke `xcodegen generate`.
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
 settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""           # vul je Apple Developer Team ID in
-    # Eén plek voor je eigen prefix (reverse-DNS van een domein/naam die van jou is), bijv. nl.gerbenhoogendam.
-    # Bundle-id en iCloud-container (iCloud.<prefix>.werkbank) worden hiervan afgeleid.
-    BUNDLE_ID_PREFIX: com.example
     CODE_SIGN_STYLE: Automatic
 packages:
   WerkbankCore:
@@ -38,7 +39,7 @@ targets:
       base:
         PRODUCT_NAME: Werkbank
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) ICLOUD"
-        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).werkbank
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         ENABLE_HARDENED_RUNTIME: YES
         INFOPLIST_FILE: macOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: macOS/Werkbank.entitlements
@@ -74,7 +75,7 @@ targets:
       base:
         PRODUCT_NAME: Werkbank
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) ICLOUD"
-        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).werkbank
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: iOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: iOS/Werkbank.entitlements

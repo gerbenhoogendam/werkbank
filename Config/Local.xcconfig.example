@@ -1,0 +1,5 @@
+// Kopieer naar Config/Local.xcconfig en vul in. Dat bestand wordt niet gecommit.
+// Bundle-id: uniek, van jou; ook de iCloud-container wordt hiervan afgeleid (iCloud.<bundle-id>).
+APP_BUNDLE_ID = nl.itgwerkbank.werkbank
+// Team ID (10 tekens) van je betaalde account, te vinden op developer.apple.com > Account > Membership details.
+DEVELOPMENT_TEAM = ABCDE12345

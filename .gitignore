@@ -6,3 +6,4 @@ Werkbank.xcodeproj/
 xcuserdata/
 DerivedData/
 .DS_Store
+Config/Local.xcconfig
