@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
+import WerkbankCore
 
 // MARK: - Geometrie-voorkeuren
 
@@ -56,6 +57,13 @@ struct BoardView: View {
 
     @State private var editing: TodoCard?
     @State private var columnRequest: ColumnRequest?
+    // Een kolom verplaatsen door aan de kolomkop te slepen.
+    @State private var movingColumn: String?
+    @State private var moveTranslation: CGFloat = 0
+    @State private var moveTarget = 0
+    /// Kolomframes bij het begin van het slepen: de kolommen schuiven pas na het loslaten.
+    @State private var moveFrames: [String: CGRect] = [:]
+    @GestureState private var columnGestureActive = false
     /// Kolom waar op dit moment een bestand/mail boven gehouden wordt.
     @State private var dropTargetColumn: BoardColumn?
     @GestureState private var gestureActive = false
@@ -67,6 +75,19 @@ struct BoardView: View {
         HStack(alignment: .top, spacing: 10) {
             ForEach(columns) { column in
                 columnView(column)
+                    .offset(x: movingColumn == column.id ? moveTranslation : 0)
+                    .opacity(movingColumn == column.id ? 0.85 : 1)
+                    .shadow(color: .black.opacity(movingColumn == column.id ? 0.18 : 0), radius: 10, y: 4)
+                    .zIndex(movingColumn == column.id ? 1 : 0)
+                    .overlay(alignment: insertionEdge(for: column) == .trailing ? .trailing : .leading) {
+                        if insertionEdge(for: column) != nil {
+                            Capsule()
+                                .fill(ThingsColor.accent)
+                                .frame(width: 3)
+                                .offset(x: insertionEdge(for: column) == .trailing ? 6.5 : -6.5)
+                                .allowsHitTesting(false)
+                        }
+                    }
             }
             addColumnButton
         }
@@ -110,6 +131,15 @@ struct BoardView: View {
         .onPreferenceChange(ColumnFrameKey.self) { drag.columnFrames = $0 }
         .onPreferenceChange(StackFrameKey.self) { drag.stackFrames = $0 }
         .onPreferenceChange(BoardFrameKey.self) { drag.boardFrame = $0 }
+        .animation(ThingsMotion.reorder, value: columns.map(\.id))
+        // Kolom-sleepgebaar verdwenen zonder onEnded (focusverlies e.d.): terugzetten.
+        .onChange(of: columnGestureActive) { _, active in
+            guard !active else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(120))
+                if movingColumn != nil && !columnGestureActive { resetColumnMove() }
+            }
+        }
         .onAppear {
             BoardService.ensureColumns(in: context)
             drag.onBoardDrop = { card, column, index in
@@ -191,6 +221,9 @@ struct BoardView: View {
                 .thingsFont(.heading)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(column.title), \(columnCards.count) kaarten")
+                .contentShape(Rectangle())
+                .gesture(columnMoveGesture(for: column))
+                .help("Sleep om de kolom te verplaatsen")
 
                 // Nieuwe kaart direct in deze kolom; de titel staat meteen in bewerkmodus.
                 Button {
@@ -209,6 +242,12 @@ struct BoardView: View {
 
                 Menu {
                     Button("Naam wijzigen…") { columnRequest = .rename(column.id) }
+                    Divider()
+                    Button("Naar links") { moveColumn(column, by: -1) }
+                        .disabled(columns.first == column)
+                    Button("Naar rechts") { moveColumn(column, by: 1) }
+                        .disabled(columns.last == column)
+                    Divider()
                     Button("Kolom verwijderen…", role: .destructive) { columnRequest = .delete(column.id) }
                         .disabled(columnRecords.count <= 1)
                 } label: {
@@ -287,6 +326,63 @@ struct BoardView: View {
             }
             return MailImporter.handle(providers: providers, column: column, context: context, appState: appState)
         }
+    }
+
+    // MARK: Kolom verplaatsen
+
+    private func columnMoveGesture(for column: BoardColumn) -> some Gesture {
+        DragGesture(minimumDistance: 5, coordinateSpace: .main)
+            .updating($columnGestureActive) { _, state, _ in state = true }
+            .onChanged { value in
+                if movingColumn == nil {
+                    // Niet tijdens het slepen van een kaart of het bewerken van tekst.
+                    guard !drag.isDragging, InlineEditing.cardID == nil else { return }
+                    moveFrames = Dictionary(uniqueKeysWithValues: drag.columnFrames.map { ($0.key.id, $0.value) })
+                    guard moveFrames[column.id] != nil else { return }
+                    movingColumn = column.id
+                }
+                guard movingColumn == column.id else { return }
+                moveTranslation = value.translation.width
+                moveTarget = targetIndex(for: column)
+            }
+            .onEnded { _ in
+                guard movingColumn == column.id else { return }
+                let target = moveTarget
+                withAnimation(ThingsMotion.reorder) {
+                    BoardService.moveColumn(key: column.id, toIndex: target, in: context)
+                    resetColumnMove()
+                }
+            }
+    }
+
+    /// Positie onder de overige kolommen, uit het midden van de gesleepte kolom en de oorspronkelijke middens.
+    private func targetIndex(for column: BoardColumn) -> Int {
+        guard let own = moveFrames[column.id] else { return 0 }
+        let others = columns.filter { $0.id != column.id }.compactMap { moveFrames[$0.id]?.midX }
+        return ColumnOrdering.insertionIndex(draggedMidX: Double(own.midX + moveTranslation),
+                                             otherMidXs: others.map(Double.init))
+    }
+
+    private func resetColumnMove() {
+        movingColumn = nil
+        moveTranslation = 0
+        moveTarget = 0
+        moveFrames = [:]
+    }
+
+    /// Aan welke kant van `column` de invoegmarkering staat tijdens het verplaatsen van een andere kolom.
+    private func insertionEdge(for column: BoardColumn) -> HorizontalEdge? {
+        guard let moving = movingColumn, moving != column.id,
+              let from = columns.firstIndex(where: { $0.id == moving }), moveTarget != from else { return nil }
+        let others = columns.filter { $0.id != moving }
+        if moveTarget < others.count { return others[moveTarget].id == column.id ? .leading : nil }
+        return others.last?.id == column.id ? .trailing : nil
+    }
+
+    /// Eén plek opschuiven via het menu (voor wie niet kan slepen).
+    private func moveColumn(_ column: BoardColumn, by offset: Int) {
+        guard let index = columns.firstIndex(of: column) else { return }
+        BoardService.moveColumn(key: column.id, toIndex: index + offset, in: context)
     }
 
     // MARK: Kaart

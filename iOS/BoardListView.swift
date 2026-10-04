@@ -17,9 +17,23 @@ struct CardReference: Codable, Transferable {
     }
 }
 
+extension UTType {
+    /// Zie `UTExportedTypeDeclarations` in project.yml.
+    static let werkbankColumn = UTType(exportedAs: "nl.itgwerkbank.column")
+}
+
+/// Wat bij het slepen van een kolom meegaat (alleen binnen de app).
+struct ColumnReference: Codable, Transferable {
+    var key: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .werkbankColumn)
+    }
+}
+
 /// Board op iPhone en iPad: alle kolommen naast elkaar, horizontaal te scrollen. Houd een kaart ingedrukt om hem op
 /// te pakken en naar een andere kolom (of een andere plek in dezelfde kolom) te slepen. Kolommen hernoem, voeg toe
-/// en verwijder je via het menu in de kolomkop. Inplannen gaat via een blad (slepen naar de agenda past niet op een telefoon).
+/// en verwijder je via het menu in de kolomkop; door aan de kolomkop te slepen verplaats je een kolom. Inplannen gaat via een blad (slepen naar de agenda past niet op een telefoon).
 struct BoardListView: View {
     /// Sleutel van de kolom die het meest in beeld is; de Magic Plus voegt daar een kaart toe.
     @Binding var columnID: String?
@@ -35,6 +49,8 @@ struct BoardListView: View {
     @State private var columnRequest: ColumnRequest?
     /// Kolom waar op dit moment een kaart boven gehouden wordt.
     @State private var targetedColumn: String?
+    /// Kolom waar op dit moment een andere kolom boven gehouden wordt.
+    @State private var columnDropTarget: String?
 
     private var columns: [BoardColumn] { columnRecords.map(\.column) }
     private var runningTodoID: UUID? { running.first?.todoID }
@@ -45,12 +61,20 @@ struct BoardListView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(columns) { column in
-                        columnView(column)
+                        columnView(column, width: width)
                             .frame(width: width)
                             .id(column.id)
                     }
                     addColumnTile
                         .frame(width: min(width, 150))
+                        // Een kolom hier loslaten zet hem helemaal rechts.
+                        .dropDestination(for: ColumnReference.self) { items, _ in
+                            guard let reference = items.first else { return false }
+                            withAnimation(ThingsMotion.reorder) {
+                                BoardService.moveColumn(key: reference.key, toIndex: columns.count, in: context)
+                            }
+                            return true
+                        }
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 16)
@@ -81,12 +105,14 @@ struct BoardListView: View {
         cards.filter { $0.column == column }.sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    private func columnView(_ column: BoardColumn) -> some View {
+    private func columnView(_ column: BoardColumn, width: CGFloat) -> some View {
         let columnCards = cards(in: column)
         let isTargeted = targetedColumn == column.id
 
         return VStack(spacing: 0) {
             columnHeader(column, count: columnCards.count)
+                // Aan de kop vasthouden pakt de hele kolom op.
+                .draggable(ColumnReference(key: column.id))
 
             List {
                 ForEach(columnCards) { card in
@@ -138,6 +164,19 @@ struct BoardListView: View {
                 .fill(isTargeted ? column.color.opacity(0.12) : ThingsColor.backgroundSidebar)
         )
         .animation(.easeOut(duration: 0.15), value: isTargeted)
+        .overlay(
+            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                .strokeBorder(ThingsColor.accent, lineWidth: 2)
+                .opacity(columnDropTarget == column.id ? 1 : 0)
+                .allowsHitTesting(false)
+        )
+        // Een kolom loslaten op de linker helft zet hem ervoor, op de rechter helft erachter.
+        .dropDestination(for: ColumnReference.self) { items, location in
+            dropColumn(items, on: column, atX: location.x, width: width)
+        } isTargeted: { targeted in
+            if targeted { columnDropTarget = column.id }
+            else if columnDropTarget == column.id { columnDropTarget = nil }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(column.title)
     }
@@ -155,6 +194,10 @@ struct BoardListView: View {
             Spacer()
             Menu {
                 Button { columnRequest = .rename(column.id) } label: { Label("Naam wijzigen…", systemImage: "pencil") }
+                Button { shiftColumn(column, by: -1) } label: { Label("Naar links", systemImage: "arrow.left") }
+                    .disabled(columns.first == column)
+                Button { shiftColumn(column, by: 1) } label: { Label("Naar rechts", systemImage: "arrow.right") }
+                    .disabled(columns.last == column)
                 Button(role: .destructive) { columnRequest = .delete(column.id) } label: {
                     Label("Kolom verwijderen…", systemImage: "trash")
                 }
@@ -205,6 +248,24 @@ struct BoardListView: View {
         let index = target.flatMap { target in others.firstIndex { $0.id == target.id } } ?? others.count
         withAnimation(ThingsMotion.reorder) {
             BoardService.move(card, to: column, index: index, in: context)
+        }
+        return true
+    }
+
+    private func shiftColumn(_ column: BoardColumn, by offset: Int) {
+        guard let index = columns.firstIndex(of: column) else { return }
+        withAnimation(ThingsMotion.reorder) {
+            BoardService.moveColumn(key: column.id, toIndex: index + offset, in: context)
+        }
+    }
+
+    private func dropColumn(_ items: [ColumnReference], on target: BoardColumn, atX x: CGFloat, width: CGFloat) -> Bool {
+        guard let reference = items.first else { return false }
+        if reference.key == target.id { return true }
+        let others = columns.filter { $0.id != reference.key }
+        guard let position = others.firstIndex(of: target) else { return false }
+        withAnimation(ThingsMotion.reorder) {
+            BoardService.moveColumn(key: reference.key, toIndex: x > width / 2 ? position + 1 : position, in: context)
         }
         return true
     }

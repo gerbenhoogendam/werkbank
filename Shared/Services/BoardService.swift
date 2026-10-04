@@ -167,6 +167,17 @@ enum BoardService {
         try? context.save()
     }
 
+    /// Zet een kolom op positie `index` onder de overige kolommen en nummert de volgorde opnieuw.
+    static func moveColumn(key: String, toIndex index: Int, in context: ModelContext) {
+        let records = columnRecords(in: context)
+        let order = ColumnOrdering.moving(records.map(\.key), key: key, toIndex: index)
+        guard order != records.map(\.key) else { return }
+        for (position, key) in order.enumerated() {
+            records.first { $0.key == key }?.sortOrder = Double(position)
+        }
+        try? context.save()
+    }
+
     /// Verwijdert een kolom; de kaarten gaan onderaan de eerste andere kolom. De laatste kolom blijft altijd staan.
     /// - Returns: de kolom waar de kaarten heen zijn gegaan en hoeveel het er waren, of `nil` als verwijderen niet kan.
     @discardableResult
