@@ -36,6 +36,7 @@ struct WerkbankApp: App {
 
         MenuBarExtra {
             MenuBarPanel()
+                .scrollIndicators(.hidden)
                 .environment(appState)
                 .modelContainer(Persistence.container)
         } label: {
@@ -46,6 +47,7 @@ struct WerkbankApp: App {
 
         Settings {
             PreferencesView()
+                .scrollIndicators(.hidden)
                 .environment(appState)
                 .modelContainer(Persistence.container)
         }

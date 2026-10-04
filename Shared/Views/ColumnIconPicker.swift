@@ -104,6 +104,7 @@ struct ColumnIconPicker: View {
             .padding(12)
         }
         .background(ThingsColor.backgroundContent)
+        .scrollIndicators(.hidden)
         #if os(macOS)
         .frame(minWidth: 440, idealWidth: 460, minHeight: 540)
         #endif

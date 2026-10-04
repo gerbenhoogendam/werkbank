@@ -59,6 +59,7 @@ struct RootView: View {
             ToastOverlay(message: appState.toast)
         }
         .preferredColorScheme(AppearanceSetting(stored: appearanceRaw).colorScheme)
+        .scrollIndicators(.hidden)
         .sheet(isPresented: $showQuickAdd) { QuickAddSheet(column: currentColumn) }
         .sheet(isPresented: $showSupport) {
             NavigationStack {

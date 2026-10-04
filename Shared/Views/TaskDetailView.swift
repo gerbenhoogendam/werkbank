@@ -74,6 +74,7 @@ struct TaskDetailView: View {
             .padding(12)
         }
         .background(ThingsColor.backgroundContent)
+        .scrollIndicators(.hidden)
         #if os(macOS)
         .frame(minWidth: 480, idealWidth: 520, minHeight: 560)
         #endif

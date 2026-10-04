@@ -90,6 +90,8 @@ struct MainView: View {
                 .accessibilityHidden(true)
         }
         .coordinateSpace(.named("main"))
+        // Nergens scrollbalken: ze nemen alleen maar ruimte in.
+        .scrollIndicators(.hidden)
         .background(ThingsColor.backgroundContent)
         .onDrop(of: [.emailMessage, .fileURL, .gmailMessage], isTargeted: $state.isDropTargeted) { providers in
             if GmailDrop.accepts(providers) {
