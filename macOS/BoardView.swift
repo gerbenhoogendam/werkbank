@@ -89,7 +89,6 @@ struct BoardView: View {
                         }
                     }
             }
-            addColumnButton
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -150,27 +149,6 @@ struct BoardView: View {
         .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
         .sheet(item: $editing) { TaskDetailView(card: $0) }
         .columnManagement($columnRequest)
-    }
-
-    /// Smalle knop rechts van de laatste kolom.
-    private var addColumnButton: some View {
-        Button {
-            columnRequest = .add
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(ThingsColor.textSecondary)
-                .frame(width: 34)
-                .frame(maxHeight: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
-                        .strokeBorder(ThingsColor.separator, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Nieuwe kolom")
-        .accessibilityLabel("Nieuwe kolom")
     }
 
     // MARK: Kolom

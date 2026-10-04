@@ -46,6 +46,7 @@ struct WerkbankApp: App {
 
         Settings {
             PreferencesView()
+                .environment(appState)
                 .modelContainer(Persistence.container)
         }
     }

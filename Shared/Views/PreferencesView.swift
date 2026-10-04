@@ -4,7 +4,7 @@ import SwiftUI
 import KeyboardShortcuts
 #endif
 
-/// Voorkeuren met drie tabs: Agenda's, Weergave en Overig.
+/// Voorkeuren met vier tabs: Agenda's, Weergave, Kolommen en Overig.
 /// macOS: eigen venster (⌘,). iOS: als blad vanuit het tandwiel.
 struct PreferencesView: View {
     var body: some View {
@@ -13,6 +13,8 @@ struct PreferencesView: View {
                 .tabItem { Label("Agenda's", systemImage: "calendar") }
             DisplayPreferences()
                 .tabItem { Label("Weergave", systemImage: "paintbrush") }
+            ColumnsPreferences()
+                .tabItem { Label("Kolommen", systemImage: "rectangle.3.group") }
             OtherPreferences()
                 .tabItem { Label("Overig", systemImage: "gearshape") }
         }
@@ -156,6 +158,58 @@ private struct DisplayPreferences: View {
                 workDays = days.sorted().map(String.init).joined(separator: ",")
             }
         )
+    }
+}
+
+// MARK: - Kolommen
+
+/// Kolommen van het board beheren: toevoegen, hernoemen, icoon en kleur, verwijderen.
+private struct ColumnsPreferences: View {
+    @Query(sort: \ColumnRecord.sortOrder) private var records: [ColumnRecord]
+    @State private var request: ColumnRequest?
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(records) { record in
+                    HStack(spacing: 10) {
+                        Button {
+                            request = .icon(record.key)
+                        } label: {
+                            ColumnIcon(symbol: record.symbol, color: record.column.color)
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Icoon en kleur kiezen")
+                        .accessibilityLabel("Icoon en kleur van \(record.title) kiezen")
+
+                        Text(record.title)
+                        Spacer()
+
+                        Button { request = .rename(record.key) } label: { Image(systemName: "pencil") }
+                            .buttonStyle(.borderless)
+                            .help("Naam wijzigen")
+                            .accessibilityLabel("Wijzig de naam van \(record.title)")
+                        Button { request = .delete(record.key) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .disabled(records.count <= 1)
+                            .help(records.count <= 1 ? "De laatste kolom blijft altijd staan" : "Kolom verwijderen")
+                            .accessibilityLabel("Verwijder \(record.title)")
+                    }
+                }
+            } header: {
+                Text("Kolommen van het board")
+            } footer: {
+                Text("Een kolom verplaats je op het board door aan de kop te slepen. Bij verwijderen gaan de kaarten naar de eerste andere kolom.")
+            }
+
+            Section {
+                Button("Kolom toevoegen…") { request = .add }
+            }
+        }
+        .formStyle(.grouped)
+        .columnManagement($request)
     }
 }
 
