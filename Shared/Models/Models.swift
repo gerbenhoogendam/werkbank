@@ -244,16 +244,40 @@ enum Persistence {
     /// en een ingelogd iCloud-account.
     static let isSyncing: Bool = isCloudBuild && syncPreferred && FileManager.default.ubiquityIdentityToken != nil
 
+    /// Of de database nu echt met iCloud synchroniseert (en niet stilletjes lokaal is teruggevallen).
+    /// Pas na het aanmaken van `container` betrouwbaar; lees het via `cloudState`.
+    private(set) static var cloudActive = false
+    /// De reden als CloudKit niet kon starten terwijl de voorwaarden wel klopten.
+    private(set) static var cloudFailure: String?
+
+    enum CloudState: Equatable {
+        case notCloudBuild, switchedOff, noAccount, active, failed(String)
+    }
+
+    static var cloudState: CloudState {
+        _ = container   // zorgt dat de poging om CloudKit te starten gedaan is
+        if !isCloudBuild { return .notCloudBuild }
+        if !syncPreferred { return .switchedOff }
+        if FileManager.default.ubiquityIdentityToken == nil { return .noAccount }
+        if cloudActive { return .active }
+        return .failed(cloudFailure ?? "onbekende reden")
+    }
+
     static let container: ModelContainer = {
         let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self, Subtask.self])
 
         #if ICLOUD
         if isSyncing {
             let cloud = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
-            if let container = try? ModelContainer(for: schema, configurations: cloud) {
+            do {
+                let container = try ModelContainer(for: schema, configurations: cloud)
+                cloudActive = true
                 return container
+            } catch {
+                // CloudKit niet beschikbaar (bijv. schemafout): liever lokaal verder dan een app die niet start.
+                // De reden blijft bewaard en staat in Voorkeuren › Overig.
+                cloudFailure = String(describing: error)
             }
-            // CloudKit niet beschikbaar (bijv. schemafout): liever lokaal verder dan een app die niet start.
         }
         #endif
 

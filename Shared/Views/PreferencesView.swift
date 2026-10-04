@@ -249,14 +249,17 @@ private struct OtherPreferences: View {
 
 extension OtherPreferences {
     fileprivate var iCloudStatus: String {
-        if !Persistence.isCloudBuild {
+        switch Persistence.cloudState {
+        case .notCloudBuild:
             return "Deze build is niet voor iCloud ingericht: de gegevens blijven alleen op dit apparaat."
+        case .active:
+            return "Actief: kaarten, kolommen, subtaken en tijdregels worden via iCloud met je andere apparaten gesynchroniseerd. Voorkeuren, de agenda-keuze, de indeling van het venster en de Gmail-login blijven per apparaat. Een wijziging van deze schakelaar geldt na herstarten."
+        case .switchedOff:
+            return "Uit: de gegevens blijven alleen op dit apparaat. Geldt na herstarten."
+        case .noAccount:
+            return "Niet actief: log in bij iCloud op dit apparaat en start Werkbank opnieuw."
+        case .failed(let reason):
+            return "iCloud kon niet starten, de gegevens staan nu alleen op dit apparaat. Reden: \(reason)"
         }
-        if Persistence.isSyncing {
-            return "Kaarten en tijdregels worden via iCloud met je andere apparaten gesynchroniseerd. Voorkeuren en de agenda-keuze blijven per apparaat. Een wijziging van deze schakelaar geldt na herstarten."
-        }
-        return Persistence.syncPreferred
-            ? "Niet actief: log in bij iCloud op dit apparaat en start Werkbank opnieuw."
-            : "Uit: de gegevens blijven alleen op dit apparaat. Geldt na herstarten."
     }
 }

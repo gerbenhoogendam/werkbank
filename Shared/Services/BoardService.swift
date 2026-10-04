@@ -123,8 +123,8 @@ enum BoardService {
         columnRecords(in: context).map(\.column)
     }
 
-    /// Zorgt dat er kolommen zijn: maakt de standaardkolommen aan op een lege database, ruimt dubbele kolommen
-    /// (zelfde sleutel) op en zet kaarten waarvan de kolom niet meer bestaat in de eerste kolom.
+    /// Zorgt dat er kolommen zijn: maakt de standaardkolommen aan op een lege database en ruimt dubbele kolommen
+    /// (zelfde sleutel) en de oude kolom Klaar op.
     static func ensureColumns(in context: ModelContext) {
         var kept: [ColumnRecord] = []
         var seen = Set<String>()
@@ -145,13 +145,16 @@ enum BoardService {
             }
         }
 
-        let keys = Set(records.map(\.key))
-        if let first = records.first {
-            for card in allCards(in: context) where !keys.contains(card.columnRaw) && card.columnRaw != BoardColumn.doneID {
-                card.columnRaw = first.key
-            }
-        }
         try? context.save()
+    }
+
+    /// Hoort de kaart bij deze kolom? Een kaart waarvan de kolom (nog) niet bestaat, bijvoorbeeld omdat die kolom via
+    /// iCloud pas na de kaart binnenkomt, wordt in de eerste kolom getoond zonder dat de kaart wordt aangepast.
+    /// (Verplaatsen in de database zou zo'n tijdelijke toestand via iCloud naar alle apparaten doorsturen.)
+    static func belongs(_ card: TodoCard, to column: BoardColumn, in columns: [BoardColumn]) -> Bool {
+        if card.columnRaw == column.id { return true }
+        guard card.columnRaw != BoardColumn.doneID, columns.first == column else { return false }
+        return !columns.contains { $0.id == card.columnRaw }
     }
 
     /// De kolom zelf als die bestaat; anders de eerste kolom (bijv. als de Inbox is verwijderd).

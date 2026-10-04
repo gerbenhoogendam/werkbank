@@ -177,7 +177,7 @@ struct BoardView: View {
 
     private func cards(in column: BoardColumn) -> [TodoCard] {
         // In de view sorteren, zodat de volgorde direct meebeweegt met de model-wijziging na het neerzetten.
-        cards.filter { $0.column == column }.sorted { $0.sortOrder < $1.sortOrder }
+        cards.filter { BoardService.belongs($0, to: column, in: columns) }.sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private func items(for column: BoardColumn) -> [ColumnItem] {

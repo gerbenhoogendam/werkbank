@@ -103,7 +103,7 @@ struct BoardListView: View {
     // MARK: Kolom
 
     private func cards(in column: BoardColumn) -> [TodoCard] {
-        cards.filter { $0.column == column }.sorted { $0.sortOrder < $1.sortOrder }
+        cards.filter { BoardService.belongs($0, to: column, in: columns) }.sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private func columnView(_ column: BoardColumn, width: CGFloat) -> some View {
