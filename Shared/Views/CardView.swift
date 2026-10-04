@@ -1,25 +1,44 @@
+import SwiftData
 import SwiftUI
 
-/// Kaart op het board: titel, optioneel klantlabel en -logo, afzenderregel, uitklapbare mailtekst en een timerknop.
+/// Kaart op het board: titel, optioneel klantlabel en -logo, afzenderregel, uitklapbare mailtekst, subtaken en een
+/// timerknop. Klikken op de kaart opent de taak (notities en subtaken); een nieuwe kaart opent direct in bewerkmodus.
 struct CardView: View {
     let card: TodoCard
     var isTimerRunning = false
-    /// Dubbelklikken op titel of label bewerkt de tekst ter plekke.
+    /// Nieuwe kaarten openen in bewerkmodus; op macOS kun je onderaan een subtaak toevoegen.
     var isEditable = false
     var onStartTimer: () -> Void = {}
+    /// Klik op de kaart (niet op een knop of veld).
+    var onOpen: () -> Void = {}
 
-    private enum Field: Hashable { case title, minutes, label }
+    private enum Field: Hashable { case title, minutes, subtask }
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
+    @Query private var subtasks: [Subtask]
     @State private var editing = false
     @State private var titleDraft = ""
     @State private var minutesDraft = ""
-    @State private var editingLabel = false
-    @State private var labelDraft = ""
     @State private var expanded = false
     @State private var bodyHeight: CGFloat = 0
+    @State private var isHovering = false
+    @State private var addingSubtask = false
+    @State private var subtaskDraft = ""
+    /// Tussen twee subtaken door verliest het veld heel even de focus; dat telt dan niet als "klaar".
+    @State private var ignoreFocusLoss = false
     @FocusState private var focus: Field?
+
+    init(card: TodoCard, isTimerRunning: Bool = false, isEditable: Bool = false,
+         onStartTimer: @escaping () -> Void = {}, onOpen: @escaping () -> Void = {}) {
+        self.card = card
+        self.isTimerRunning = isTimerRunning
+        self.isEditable = isEditable
+        self.onStartTimer = onStartTimer
+        self.onOpen = onOpen
+        let id = card.id
+        _subtasks = Query(filter: #Predicate<Subtask> { $0.cardID == id }, sort: \Subtask.sortOrder)
+    }
 
     private var hasBody: Bool { !(card.bodyText ?? "").isEmpty }
 
@@ -36,9 +55,13 @@ struct CardView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .contentShape(Rectangle())
-                        .onTapGesture { if hasBody { toggleExpanded() } }
+                        .onTapGesture { if hasBody { toggleExpanded() } else { open() } }
                 }
                 if expanded, let text = card.bodyText, !text.isEmpty { bodyView(text) }
+                subtaskList
+                #if os(macOS)
+                if isEditable { addSubtaskRow }
+                #endif
             }
             Spacer(minLength: 4)
             VStack(spacing: 0) {
@@ -58,7 +81,9 @@ struct CardView: View {
                 }
             }
         }
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, isEditable ? 4 : 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
@@ -66,6 +91,8 @@ struct CardView: View {
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
+        .onTapGesture { open() }
+        .onHover { isHovering = $0 }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: expanded)
         .onAppear {
             // Een nieuwe kaart (mail gesleept, plusknop) opent direct in bewerkmodus.
@@ -74,7 +101,18 @@ struct CardView: View {
                 startEditing()
             }
         }
-        .onDisappear { finishEditing() }
+        .onDisappear {
+            finishEditing()
+            endAddingSubtask()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "Open de taak") { open() }
+    }
+
+    /// Klik op de kaart opent de taak, behalve tijdens bewerken ter plekke.
+    private func open() {
+        guard !editing, !addingSubtask else { return }
+        onOpen()
     }
 
     // MARK: Onderdelen
@@ -104,14 +142,12 @@ struct CardView: View {
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { if isEditable { startEditing() } }
             }
         }
         .onChange(of: focus) { _, new in
             // Focus weg uit alle velden = klaar met bewerken.
             if new == nil && editing { commitEditing() }
-            if new == nil && editingLabel { commitLabel() }
+            if new == nil && addingSubtask && !ignoreFocusLoss { commitSubtask(keepAdding: false) }
         }
     }
 
@@ -142,25 +178,13 @@ struct CardView: View {
     }
 
     @ViewBuilder private var labelRow: some View {
-        if card.logoDomain != nil || card.clientLabel != nil || editingLabel {
+        if card.logoDomain != nil || card.clientLabel != nil {
             HStack(spacing: 6) {
                 if let domain = card.logoDomain {
                     LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 16)
                 }
-                if editingLabel {
-                    TextField("Klant", text: $labelDraft)
-                        .textFieldStyle(.plain)
-                        .thingsFont(.tag)
-                        .frame(minWidth: 60, maxWidth: 160)
-                        .focused($focus, equals: .label)
-                        .onSubmit(commitLabel)
-                        #if os(macOS)
-                        .onExitCommand(perform: cancelEditing)
-                        #endif
-                } else if let label = card.clientLabel {
+                if let label = card.clientLabel {
                     TagPill(name: label)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) { if isEditable { startEditingLabel() } }
                 }
             }
         }
@@ -189,7 +213,103 @@ struct CardView: View {
 
     private func toggleExpanded() { expanded.toggle() }
 
-    // MARK: Bewerken ter plekke
+    // MARK: Subtaken
+
+    @ViewBuilder private var subtaskList: some View {
+        if !subtasks.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(subtasks) { subtask in
+                    HStack(alignment: .center, spacing: 4) {
+                        SubtaskCheckbox(isDone: subtask.isDone) { BoardService.toggle(subtask, in: context) }
+                        Text(subtask.title)
+                            .thingsFont(.notes)
+                            .strikethrough(subtask.isDone)
+                            .foregroundStyle(subtask.isDone ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    #if os(macOS)
+    /// Onderaan de kaart: zodra je erboven zweeft verschijnt "Subtaak toevoegen". De ruimte is altijd gereserveerd,
+    /// zodat de kaart niet verspringt.
+    @ViewBuilder private var addSubtaskRow: some View {
+        if addingSubtask {
+            HStack(spacing: 4) {
+                Circle()
+                    .strokeBorder(ThingsColor.checkboxStroke, lineWidth: 1.2)
+                    .frame(width: 12, height: 12)
+                    .frame(width: 22, height: 22)
+                TextField("Nieuwe subtaak", text: $subtaskDraft)
+                    .textFieldStyle(.plain)
+                    .thingsFont(.notes)
+                    .focused($focus, equals: .subtask)
+                    .onSubmit { commitSubtask(keepAdding: true) }
+                    .onExitCommand(perform: endAddingSubtask)
+            }
+        } else {
+            Button(action: startAddingSubtask) {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Subtaak toevoegen")
+                        .thingsFont(.metadata)
+                }
+                .foregroundStyle(ThingsColor.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovering ? 1 : 0)
+            .allowsHitTesting(isHovering)
+            .accessibilityLabel("Subtaak toevoegen aan \(card.title)")
+        }
+    }
+    #endif
+
+    private func startAddingSubtask() {
+        subtaskDraft = ""
+        addingSubtask = true
+        InlineEditing.cardID = card.id
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            focus = .subtask
+        }
+    }
+
+    /// Bewaart de subtaak. Return gaat direct door met de volgende; een leeg veld (of focus kwijt) sluit het toevoegen.
+    private func commitSubtask(keepAdding: Bool) {
+        guard addingSubtask else { return }
+        let text = subtaskDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        subtaskDraft = ""
+        guard !text.isEmpty else {
+            endAddingSubtask()
+            return
+        }
+        BoardService.addSubtask(to: card, title: text, in: context)
+        if keepAdding {
+            ignoreFocusLoss = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(120))
+                focus = .subtask
+                ignoreFocusLoss = false
+            }
+        } else {
+            endAddingSubtask()
+        }
+    }
+
+    private func endAddingSubtask() {
+        addingSubtask = false
+        subtaskDraft = ""
+        if InlineEditing.cardID == card.id && !editing { InlineEditing.cardID = nil }
+    }
+
+    // MARK: Bewerken ter plekke (nieuwe kaart)
 
     private func startEditing() {
         titleDraft = card.title
@@ -199,16 +319,6 @@ struct CardView: View {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
             focus = .title
-        }
-    }
-
-    private func startEditingLabel() {
-        labelDraft = card.clientLabel ?? ""
-        editingLabel = true
-        InlineEditing.cardID = card.id
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(100))
-            focus = .label
         }
     }
 
@@ -231,15 +341,6 @@ struct CardView: View {
         try? context.save()
     }
 
-    /// Leeg label = label verwijderen. Een gewijzigd label vult ook de koppeltabel domein → klant aan.
-    private func commitLabel() {
-        guard editingLabel else { return }
-        let text = labelDraft
-        finishEditing()
-        guard text.trimmingCharacters(in: .whitespacesAndNewlines) != (card.clientLabel ?? "") else { return }
-        BoardService.update(card, title: card.title, label: text, logoDomain: card.logoDomain ?? "", in: context)
-    }
-
     private func cancelEditing() {
         let wasEmptyNewCard = editing && card.title.isEmpty
         finishEditing()
@@ -248,8 +349,7 @@ struct CardView: View {
 
     private func finishEditing() {
         editing = false
-        editingLabel = false
-        if InlineEditing.cardID == card.id { InlineEditing.cardID = nil }
+        if InlineEditing.cardID == card.id && !addingSubtask { InlineEditing.cardID = nil }
     }
 }
 
@@ -280,65 +380,5 @@ struct TimerButton: View {
         .disabled(isRunning)
         .help(isRunning ? "Timer loopt" : "Start timer")
         .accessibilityLabel(isRunning ? "Timer loopt" : "Start timer")
-    }
-}
-
-/// Bewerken van titel, klantlabel en logodomein van een kaart.
-struct CardEditSheet: View {
-    let card: TodoCard
-    @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var title = ""
-    @State private var label = ""
-    @State private var logoDomain = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Kaart bewerken")
-                .thingsFont(.listTitle)
-                .foregroundStyle(ThingsColor.textPrimary)
-
-            field("Titel", text: $title)
-            field("Klantlabel", text: $label)
-            VStack(alignment: .leading, spacing: 4) {
-                field("Logo van domein", text: $logoDomain, prompt: "bijv. studio-noord.nl")
-                Text("Leeg laten voor geen logo. Wijzig je het label van een kaart met logodomein, dan onthoudt Werkbank die koppeling voor volgende mails.")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack {
-                Spacer()
-                Button("Annuleer") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Bewaar") {
-                    BoardService.update(card, title: title, label: label, logoDomain: logoDomain, in: context)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(20)
-        #if os(macOS)
-        .frame(minWidth: 360)
-        #endif
-        .background(ThingsColor.backgroundContent)
-        .onAppear {
-            title = card.title
-            label = card.clientLabel ?? ""
-            logoDomain = card.logoDomain ?? ""
-        }
-    }
-
-    private func field(_ title: String, text: Binding<String>, prompt: String = "") -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).thingsFont(.metadata).foregroundStyle(ThingsColor.textSecondary)
-            TextField("", text: text, prompt: Text(prompt))
-                .textFieldStyle(.roundedBorder)
-        }
     }
 }

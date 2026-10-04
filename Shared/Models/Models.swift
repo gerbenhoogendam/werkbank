@@ -68,6 +68,8 @@ final class TodoCard {
     var senderLine: String?
     /// Alleen de tekst van de mail, om in de kaart te kunnen lezen.
     var bodyText: String?
+    /// Eigen notities bij de taak (los van de mailtekst).
+    var notes: String = ""
     /// Sleutel van de kolom (`ColumnRecord.key`).
     var columnRaw: String = BoardColumn.inboxID
     var sortOrder: Double = 0
@@ -97,6 +99,29 @@ final class TodoCard {
         // Alleen de sleutel: titel en kleur komen uit `ColumnRecord` (zie `BoardService.columns`).
         get { BoardColumn(id: columnRaw) }
         set { columnRaw = newValue.id }
+    }
+}
+
+// MARK: - Subtaken
+
+/// Een subtaak van een kaart. Verwijst met `cardID` naar de kaart (zoals `TimeEntry.todoID`); bij het verwijderen
+/// van een kaart ruimt `BoardService.delete` de subtaken op.
+@Model
+final class Subtask {
+    var id: UUID = UUID()
+    var cardID: UUID = UUID()
+    var title: String = ""
+    var isDone: Bool = false
+    var sortOrder: Double = 0
+    var createdAt: Date = Date()
+
+    init(cardID: UUID, title: String, sortOrder: Double) {
+        self.id = UUID()
+        self.cardID = cardID
+        self.title = title
+        self.isDone = false
+        self.sortOrder = sortOrder
+        self.createdAt = .now
     }
 }
 
@@ -218,7 +243,7 @@ enum Persistence {
     static let isSyncing: Bool = isCloudBuild && syncPreferred && FileManager.default.ubiquityIdentityToken != nil
 
     static let container: ModelContainer = {
-        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self])
+        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self, Subtask.self])
 
         #if ICLOUD
         if isSyncing {

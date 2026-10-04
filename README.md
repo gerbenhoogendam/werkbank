@@ -54,6 +54,7 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 - Hoofdvenster: board boven (45%), agenda linksonder (¾), Tijd schrijven rechtsonder (¼).
 - Board met kolommen (standaard Inbox, Te doen, Bezig, Wacht op klant, Klaar) die je kunt hernoemen, toevoegen en verwijderen (menu ⋯ in de kolomkop, knop + rechts van de laatste kolom); bij verwijderen gaan de kaarten naar de eerste andere kolom; eigen sleepgebaar (start na 5 px, 105% schaal, kanteling ±14°, placeholder, vlucht naar de plek met "pop").
 - Kaarten naar de agenda slepen: starttijd (kwartieren) → eindtijd (greep) → popover met `GH: vdm|ndm|<tijd> <titel>` → echt `EKEvent`.
+- Taken openen met één klik (Mac) of tik (iOS): titel, klant, notities en subtaken. Subtaken staan ook op de kaart (afvinken); op de Mac verschijnt "Subtaak toevoegen" onderaan de kaart zodra je erboven zweeft, Return voegt toe en gaat door met de volgende. Op iOS voeg je subtaken toe in het geopende venster.
 - Snelle invoer met globale sneltoets (standaard ⌥⌘T), `#klant` wordt label.
 - `.eml` op het venster slepen → kaarten in de Inbox, klantnaam uit domein/koppeltabel/freemail, logo via Google Custom Search met favicon-terugval.
 - Gmail-paneel links (⌥⌘G): inloggen met Google, inbox bekijken, een mail naar een kolom slepen. De mail wordt een kaart (titel, afzender, tekst) en wordt daarna in Gmail gearchiveerd. Zie "Gmail koppelen".
@@ -83,6 +84,7 @@ Het bureaubladontwerp (board + agenda + tijdlijst tegelijk, slepen tussen panele
 - **Voor 08:00** is de standaardprefix `vdm` (de spec zegt daar niets over).
 - **Google API-sleutel** staat in `UserDefaults` (niet in de Keychain).
 - **Kolommen en slepen op iOS**: kolombeheer (`ColumnRecord`, `BoardService`) en slepen met `draggable`/`dropDestination` zijn niet uitgevoerd op een apparaat. Of het scherm tijdens het slepen vanzelf horizontaal naar de volgende kolom schuift is niet getest. De volgorde van kolommen is niet aanpasbaar (nieuwe kolommen komen rechts). Maakt een tweede apparaat de standaardkolommen aan vóórdat iCloud een verwijdering heeft binnengehaald, dan kan een verwijderde standaardkolom terugkomen.
+- **Taak openen met één klik** vervangt het dubbelklikken op titel of klant op de kaart (dat kon niet naast een enkele klik). Nieuwe kaarten openen nog wel direct in bewerkmodus; titel en klant pas je daarna aan in het geopende venster. Of klikken op de kaart het slepen op het Mac-board niet hindert is niet getest.
 - **Gmail-paneel**: compileert, maar is nooit uitgevoerd tegen een echt Google-account. Archiveren haalt het label INBOX van het hele gesprek (zoals de knop Archiveren in Gmail), niet alleen van het gesleepte bericht.
 - De bundle-id is een placeholder (`com.example.werkbank`).
 

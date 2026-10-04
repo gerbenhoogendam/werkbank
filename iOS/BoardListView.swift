@@ -65,7 +65,7 @@ struct BoardListView: View {
         .onAppear { BoardService.ensureColumns(in: context) }
         // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen, zwevende kaarten onderbrengen.
         .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
-        .sheet(item: $editing) { CardEditSheet(card: $0).presentationDetents([.medium]) }
+        .sheet(item: $editing) { TaskDetailView(card: $0).presentationDetents([.medium, .large]) }
         .sheet(item: $scheduling) { ScheduleSheet(card: $0) }
         .columnManagement($columnRequest)
     }
@@ -90,11 +90,12 @@ struct BoardListView: View {
 
             List {
                 ForEach(columnCards) { card in
-                    CardView(card: card, isTimerRunning: runningTodoID == card.id) {
-                        TimerService.startTimer(for: card, in: context)
-                        appState.showToast("Timer gestart: \(card.title)")
-                    }
-                    .onTapGesture { editing = card }
+                    CardView(card: card, isTimerRunning: runningTodoID == card.id,
+                             onStartTimer: {
+                                 TimerService.startTimer(for: card, in: context)
+                                 appState.showToast("Timer gestart: \(card.title)")
+                             },
+                             onOpen: { editing = card })
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
@@ -211,7 +212,7 @@ struct BoardListView: View {
     // MARK: Contextmenu
 
     @ViewBuilder private func menu(for card: TodoCard) -> some View {
-        Button { editing = card } label: { Label("Bewerken…", systemImage: "pencil") }
+        Button { editing = card } label: { Label("Openen…", systemImage: "square.and.pencil") }
         Button { scheduling = card } label: { Label("Inplannen…", systemImage: "calendar.badge.plus") }
         // Naast slepen: de weg zonder slepen (VoiceOver, Schakelbediening).
         Menu {

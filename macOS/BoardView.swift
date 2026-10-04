@@ -118,7 +118,7 @@ struct BoardView: View {
         }
         // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen, zwevende kaarten onderbrengen.
         .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
-        .sheet(item: $editing) { CardEditSheet(card: $0) }
+        .sheet(item: $editing) { TaskDetailView(card: $0) }
         .columnManagement($columnRequest)
     }
 
@@ -332,10 +332,12 @@ private struct BoardCardCell: View {
     @State private var highlight = false
 
     var body: some View {
-        CardView(card: card, isTimerRunning: isTimerRunning, isEditable: true) {
-            onStartTimer()
-            appState.showToast("Timer gestart: \(card.title)")
-        }
+        CardView(card: card, isTimerRunning: isTimerRunning, isEditable: true,
+                 onStartTimer: {
+                     onStartTimer()
+                     appState.showToast("Timer gestart: \(card.title)")
+                 },
+                 onOpen: onEdit)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: CardFrameKey.self, value: [card.id: geo.frame(in: .main)])
@@ -350,7 +352,7 @@ private struct BoardCardCell: View {
         .padding(.bottom, DragCoordinator.cardSpacing)
         .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
         .contextMenu {
-            Button("Bewerken…", action: onEdit)
+            Button("Openen…", action: onEdit)
             Button("Verwijderen", role: .destructive, action: onDelete)
         }
         .onChange(of: drag.popID) { _, new in

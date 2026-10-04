@@ -52,7 +52,39 @@ enum BoardService {
     }
 
     static func delete(_ card: TodoCard, in context: ModelContext) {
+        for subtask in subtasks(of: card, in: context) { context.delete(subtask) }
         context.delete(card)
+        try? context.save()
+    }
+
+    // MARK: Subtaken
+
+    static func subtasks(of card: TodoCard, in context: ModelContext) -> [Subtask] {
+        let id = card.id
+        let descriptor = FetchDescriptor<Subtask>(predicate: #Predicate { $0.cardID == id },
+                                                  sortBy: [SortDescriptor(\.sortOrder)])
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Nieuwe subtaak onderaan; een lege titel geeft `nil`.
+    @discardableResult
+    static func addSubtask(to card: TodoCard, title: String, in context: ModelContext) -> Subtask? {
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let last = subtasks(of: card, in: context).map(\.sortOrder).max() ?? -1
+        let subtask = Subtask(cardID: card.id, title: name, sortOrder: last + 1)
+        context.insert(subtask)
+        try? context.save()
+        return subtask
+    }
+
+    static func toggle(_ subtask: Subtask, in context: ModelContext) {
+        subtask.isDone.toggle()
+        try? context.save()
+    }
+
+    static func delete(_ subtask: Subtask, in context: ModelContext) {
+        context.delete(subtask)
         try? context.save()
     }
 
