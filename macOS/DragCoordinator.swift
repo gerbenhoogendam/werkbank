@@ -78,21 +78,6 @@ final class DragCoordinator {
     @ObservationIgnored private var lastX: CGFloat = 0
     @ObservationIgnored private var tiltReset: Task<Void, Never>?
 
-    /// Momentopname voor de tijdelijke debug-regel (alleen zichtbaar in Debug-builds).
-    var debugSummary: String {
-        func rect(_ r: CGRect) -> String { "\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))x\(Int(r.height))" }
-        func place(_ t: BoardTarget?) -> String { t.map { "\($0.column.rawValue)#\($0.index)" } ?? "nil" }
-        let slotText = agendaSlot.map { "\(DutchDate.weekdayShort($0.day)) \(DutchDate.time($0.start))" } ?? "nil"
-        let draftText = draft.map { "\(DutchDate.time($0.start))-\(DutchDate.time($0.end)) \($0.step)" } ?? "nil"
-        let areaText = agendaArea.map(rect) ?? "nil"
-        return "phase \(phase) region \(region) target \(place(target)) origin \(place(origin))\n"
-            + "board \(rect(boardFrame)) kolommen \(columnFrames.count) stapels \(stackFrames.count)\n"
-            + "agenda \(rect(agenda.frame)) gebied \(areaText) viewport \(rect(agenda.scrollViewport)) dagen \(agenda.dayFrames.count) uurhoogte \(Int(agenda.hourHeight)) "
-            + "uren \(agenda.startHour)-\(agenda.endHour) top \(Int(agenda.timelineTop))\n"
-            + "slot \(slotText) draft \(draftText)\n"
-            + "pointer \(Int(pointer.x)),\(Int(pointer.y))"
-    }
-
     // MARK: Slepen
 
     func begin(card: TodoCard, frame: CGRect, pointer: CGPoint, order: [BoardColumn: [UUID]]) {

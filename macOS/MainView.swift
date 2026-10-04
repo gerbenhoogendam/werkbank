@@ -80,9 +80,6 @@ struct MainView: View {
 
             DragOverlay()
             ToastOverlay(message: appState.toast)
-            #if DEBUG
-            DragDebugHUD()
-            #endif
 
             // Esc: annuleert een lopend concept op de agenda.
             Button("") { drag.draft = nil }
@@ -198,23 +195,3 @@ private struct SplitDivider: View {
                                                            : "Schuif de verdeling tussen agenda en Tijd schrijven"))
     }
 }
-
-#if DEBUG
-/// Tijdelijke diagnose van het slepen; verdwijnt zodra het slepen naar de agenda bevestigd werkt.
-private struct DragDebugHUD: View {
-    @Environment(DragCoordinator.self) private var drag
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.1)) { _ in
-            Text(drag.debugSummary)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.white)
-                .padding(6)
-                .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 6))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .padding(8)
-                .allowsHitTesting(false)
-        }
-    }
-}
-#endif
