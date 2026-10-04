@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 import WerkbankCore
 
@@ -5,6 +6,7 @@ import WerkbankCore
 struct GmailPanel: View {
     private let gmail = GmailSession.shared
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var context
     /// De mail die openstaat in de lijst (één tegelijk).
     @State private var expandedID: String?
 
@@ -162,6 +164,13 @@ struct GmailPanel: View {
                                      onArchive: {
                                          if expandedID == message.id { expandedID = nil }
                                          Task { await gmail.archiveMessage(message, appState: appState) }
+                                     },
+                                     onCreateTask: { title, minutes, column in
+                                         if expandedID == message.id { expandedID = nil }
+                                         Task {
+                                             await gmail.createTask(from: message, title: title, minutes: minutes,
+                                                                    column: column, context: context, appState: appState)
+                                         }
                                      })
                             Rectangle().fill(ThingsColor.separator).frame(height: 1)
                         }
@@ -183,6 +192,7 @@ private struct GmailRow: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let onArchive: () -> Void
+    let onCreateTask: (String, Int, BoardColumn) -> Void
 
     private enum BodyState {
         case loading
@@ -190,8 +200,13 @@ private struct GmailRow: View {
         case failed(String)
     }
 
+    @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
     @State private var isHovering = false
     @State private var bodyState: BodyState = .loading
+    // Taak maken: titel (standaard het onderwerp), al bestede minuten en de kolom.
+    @State private var taskTitle = ""
+    @State private var minutesText = ""
+    @State private var targetColumnID = BoardColumn.inboxID
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -292,15 +307,72 @@ private struct GmailRow: View {
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.deadline)
             }
-            Button(action: onArchive) {
-                Label("Archiveren", systemImage: "archivebox")
-            }
-            .disabled(isBusy)
+            taskSection
         }
         .padding(.leading, 25)
         .padding(.trailing, 12)
         .padding(.bottom, 10)
-        .task(id: message.id) { await loadBody() }
+        .task(id: message.id) {
+            if taskTitle.isEmpty { taskTitle = message.subject }
+            await loadBody()
+        }
+    }
+
+    // MARK: Taak maken
+
+    private var minutes: Int { Int(minutesText.trimmingCharacters(in: .whitespaces)) ?? 0 }
+
+    private var taskSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            Text("Taak maken")
+                .thingsFont(.heading)
+                .foregroundStyle(ThingsColor.textPrimary)
+            TextField("Titel van de taak", text: $taskTitle)
+                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 6) {
+                Text("Al besteed")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textSecondary)
+                TextField("0", text: $minutesText)
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 52)
+                Text("min")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textSecondary)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 6) {
+                Text("In kolom")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textSecondary)
+                Picker("In kolom", selection: $targetColumnID) {
+                    ForEach(columnRecords) { record in
+                        Text(record.title).tag(record.key)
+                    }
+                }
+                .labelsHidden()
+            }
+            HStack(spacing: 8) {
+                Button {
+                    let column = columnRecords.first { $0.key == targetColumnID }?.column ?? .inbox
+                    onCreateTask(taskTitle, minutes, column)
+                } label: {
+                    Text("Maak taak")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isBusy || taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button(action: onArchive) {
+                    Label("Alleen archiveren", systemImage: "archivebox")
+                }
+                .disabled(isBusy)
+            }
+            Text("Beide archiveren de mail in Gmail.")
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textTertiary)
+        }
     }
 
     private func loadBody() async {

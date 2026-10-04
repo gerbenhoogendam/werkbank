@@ -119,5 +119,5 @@ Eenmalig instellen (gratis Google-account volstaat):
 4. *Credentials › OAuth-client-ID aanmaken*, type **iOS**, bundle-id = jouw `APP_BUNDLE_ID`. Kopieer de client-id (eindigt op `.apps.googleusercontent.com`).
 5. Zet in `Config/Local.xcconfig`: `GOOGLE_CLIENT_ID = <client-id>`, draai `xcodegen generate` en bouw opnieuw.
 
-Gebruik: ⌥⌘G of de knop linksboven in de werkbalk opent het paneel; *Inloggen met Google*. Klik een mail om hem in de lijst open te klappen (alleen de tekst, geen opmaak of bijlagen); de archiefknop staat in de rij (bij aanwijzen) en onder de opengeklapte mail en archiveert zonder kaart. Sleep een mail naar een kolom. Eerst wordt de kaart gemaakt,
+Gebruik: ⌥⌘G of de knop linksboven in de werkbalk opent het paneel; *Inloggen met Google*. Klik een mail om hem in de lijst open te klappen (alleen de tekst, geen opmaak of bijlagen); de archiefknop staat in de rij (bij aanwijzen) en onder de opengeklapte mail en archiveert zonder kaart. Onder de tekst kun je ook meteen een taak maken: titel (standaard het onderwerp), al bestede minuten en kolom; daarna wordt de mail gearchiveerd. Sleep een mail naar een kolom. Eerst wordt de kaart gemaakt,
 daarna wordt de mail in Gmail gearchiveerd. Mislukt archiveren, dan blijft de kaart staan, blijft de mail in de inbox en krijg je een melding.

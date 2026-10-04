@@ -369,6 +369,42 @@ final class GmailSession {
         }
     }
 
+    /// Maakt van een geopende mail een taak (met eigen titel en eventueel al bestede tijd) en archiveert hem daarna.
+    /// Zelfde volgorde als bij slepen: eerst de kaart, dan archiveren; mislukt dat, dan blijft de kaart staan.
+    func createTask(from message: GmailMessageSummary, title: String, minutes: Int, column: BoardColumn,
+                    context: ModelContext, appState: AppState) async {
+        guard !busyMessageIDs.contains(message.id) else { return }
+        busyMessageIDs.insert(message.id)
+        defer { busyMessageIDs.remove(message.id) }
+
+        let text: String
+        do {
+            text = try await body(forMessageID: message.id)
+        } catch {
+            appState.showToast("Mail ophalen uit Gmail mislukt: \(error.localizedDescription)", seconds: 5)
+            return
+        }
+
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let mail = ParsedMail(subject: name.isEmpty ? message.subject : name,
+                              fromName: message.fromName, fromAddress: message.fromAddress,
+                              bodyText: text.isEmpty ? nil : text)
+        let card = BoardService.addMail(mail, column: column, in: context)
+        let logged = max(0, min(minutes, 24 * 60))
+        if logged > 0 { TimerService.logPriorTime(for: card, minutes: logged, in: context) }
+
+        let columnTitle = BoardService.title(of: BoardService.resolve(column, in: context), in: context)
+        let timeNote = logged > 0 ? ", \(logged) min gelogd" : ""
+        do {
+            try await archive(threadID: message.threadID)
+            messages.removeAll { $0.threadID == message.threadID }
+            bodyCache[message.id] = nil
+            appState.showToast("Taak gemaakt in \(columnTitle)\(timeNote); mail gearchiveerd in Gmail", seconds: 3)
+        } catch {
+            appState.showToast("Taak gemaakt\(timeNote), maar archiveren in Gmail mislukte: \(error.localizedDescription)", seconds: 6)
+        }
+    }
+
     // MARK: Naar het board slepen
 
     /// Maakt van een gesleepte Gmail-mail een kaart in `column` en archiveert hem daarna in Gmail.
