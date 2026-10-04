@@ -209,8 +209,7 @@ struct BoardView: View {
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 HStack(spacing: 6) {
-                    Image(systemName: column.symbol)
-                        .foregroundStyle(column.color)
+                    ColumnIcon(symbol: column.symbol, color: column.color)
                     Text(column.title)
                         .foregroundStyle(ThingsColor.textPrimary)
                     Spacer()
@@ -242,6 +241,7 @@ struct BoardView: View {
 
                 Menu {
                     Button("Naam wijzigen…") { columnRequest = .rename(column.id) }
+                    Button("Icoon en kleur…") { columnRequest = .icon(column.id) }
                     Divider()
                     Button("Naar links") { moveColumn(column, by: -1) }
                         .disabled(columns.first == column)

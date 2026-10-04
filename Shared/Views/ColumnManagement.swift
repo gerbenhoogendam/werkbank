@@ -6,9 +6,10 @@ enum ColumnRequest: Equatable {
     case add
     case rename(String)
     case delete(String)
+    case icon(String)
 }
 
-/// Dialogen om een kolom toe te voegen, te hernoemen en te verwijderen. Gedeeld door macOS en iOS:
+/// Dialogen om een kolom toe te voegen, te hernoemen, te verwijderen en van icoon en kleur te veranderen. Gedeeld door macOS en iOS:
 /// de view zet een `ColumnRequest`, deze modifier toont het bijbehorende dialoog en voert het uit.
 struct ColumnManagement: ViewModifier {
     @Binding var request: ColumnRequest?
@@ -30,8 +31,16 @@ struct ColumnManagement: ViewModifier {
                     name = ""
                 case .rename(let key):
                     name = record(for: key)?.title ?? ""
-                case .delete:
+                case .delete, .icon:
                     break
+                }
+            }
+            .sheet(isPresented: iconSheetBinding) {
+                if case .icon(let key)? = request, let record = record(for: key) {
+                    ColumnIconPicker(record: record)
+                    #if os(iOS)
+                        .presentationDetents([.large])
+                    #endif
                 }
             }
             .alert(isAddRequest ? "Nieuwe kolom" : "Kolom hernoemen", isPresented: nameAlertBinding) {
@@ -65,6 +74,16 @@ struct ColumnManagement: ViewModifier {
         Binding(
             get: {
                 if case .delete? = request { return true }
+                return false
+            },
+            set: { if !$0 { request = nil } }
+        )
+    }
+
+    private var iconSheetBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .icon? = request { return true }
                 return false
             },
             set: { if !$0 { request = nil } }

@@ -187,6 +187,18 @@ enum BoardService {
         try? context.save()
     }
 
+    /// Icoon (SF Symbol-naam of emoji) van een kolom.
+    static func setIcon(_ record: ColumnRecord, symbol: String, in context: ModelContext) {
+        guard !symbol.isEmpty else { return }
+        record.symbol = symbol
+        try? context.save()
+    }
+
+    static func setColor(_ record: ColumnRecord, index: Int, in context: ModelContext) {
+        record.colorIndex = index
+        try? context.save()
+    }
+
     /// Zet een kolom op positie `index` onder de overige kolommen en nummert de volgorde opnieuw.
     static func moveColumn(key: String, toIndex index: Int, in context: ModelContext) {
         let records = columnRecords(in: context)

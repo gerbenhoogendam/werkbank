@@ -2,6 +2,7 @@ import CoreTransferable
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
+import WerkbankCore
 
 extension UTType {
     /// Zie `UTExportedTypeDeclarations` in project.yml.
@@ -149,7 +150,7 @@ struct BoardListView: View {
             .scrollContentBackground(.hidden)
             .contentMargins(.bottom, 72, for: .scrollContent)   // ruimte voor de Magic Plus
             .overlay {
-                if columnCards.isEmpty { ThingsEmptyStateSymbol(symbol: column.symbol) }
+                if columnCards.isEmpty { ThingsEmptyStateSymbol(symbol: column.symbolName) }
             }
             // Loslaten onder de kaarten of in een lege kolom zet de kaart onderaan.
             .dropDestination(for: CardReference.self) { items, _ in
@@ -183,8 +184,7 @@ struct BoardListView: View {
 
     private func columnHeader(_ column: BoardColumn, count: Int) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: column.symbol)
-                .foregroundStyle(column.color)
+            ColumnIcon(symbol: column.symbol, color: column.color)
             Text(column.title)
                 .foregroundStyle(ThingsColor.textPrimary)
                 .lineLimit(1)
@@ -194,6 +194,7 @@ struct BoardListView: View {
             Spacer()
             Menu {
                 Button { columnRequest = .rename(column.id) } label: { Label("Naam wijzigen…", systemImage: "pencil") }
+                Button { columnRequest = .icon(column.id) } label: { Label("Icoon en kleur…", systemImage: "face.smiling") }
                 Button { shiftColumn(column, by: -1) } label: { Label("Naar links", systemImage: "arrow.left") }
                     .disabled(columns.first == column)
                 Button { shiftColumn(column, by: 1) } label: { Label("Naar rechts", systemImage: "arrow.right") }
@@ -284,7 +285,14 @@ struct BoardListView: View {
             ForEach(columns.filter { $0 != card.column }) { target in
                 Button {
                     BoardService.move(card, to: target, index: 0, in: context)
-                } label: { Label(target.title, systemImage: target.symbol) }
+                } label: {
+                    // Een emoji kan niet als menu-icoon: dan staat hij voor de naam.
+                    if IconName.isEmoji(target.symbol) {
+                        Label("\(target.symbol) \(target.title)", systemImage: "arrow.right")
+                    } else {
+                        Label(target.title, systemImage: target.symbol)
+                    }
+                }
             }
         } label: { Label("Verplaats naar", systemImage: "arrow.right.circle") }
     }
