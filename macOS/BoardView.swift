@@ -422,6 +422,7 @@ private struct BoardCardCell: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @Environment(\.modelContext) private var context
     @Environment(DragCoordinator.self) private var drag
     @Environment(AppState.self) private var appState
     @State private var popScale: CGFloat = 1
@@ -449,6 +450,10 @@ private struct BoardCardCell: View {
         .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
         .contextMenu {
             Button("Openen…", action: onEdit)
+            Button("Afronden") {
+                BoardService.complete(card, in: context)
+                appState.showToast("\"\(card.title)\" afgerond; te vinden in het archief")
+            }
             Button("Verwijderen", role: .destructive, action: onDelete)
         }
         .onChange(of: drag.popID) { _, new in

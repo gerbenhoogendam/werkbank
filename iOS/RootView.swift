@@ -16,6 +16,7 @@ struct RootView: View {
     /// Kolom die het meest in beeld is (voor de Magic Plus).
     @State private var columnID: String? = BoardColumn.inboxID
     @State private var showSettings = false
+    @State private var showArchive = false
     @State private var showQuickAdd = false
     @State private var showSupport = false
     @State private var isImporting = false
@@ -69,6 +70,14 @@ struct RootView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showArchive) {
+            NavigationStack {
+                ArchiveView()
+                    .navigationTitle("Archief")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Klaar") { showArchive = false } } }
+            }
+        }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 PreferencesView()
@@ -121,6 +130,10 @@ struct RootView: View {
         ToolbarItem(placement: .topBarLeading) {
             Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 .accessibilityLabel("Instellingen")
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { showArchive = true } label: { Image(systemName: "archivebox") }
+                .accessibilityLabel("Archief")
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {

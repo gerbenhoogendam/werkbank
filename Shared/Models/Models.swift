@@ -9,7 +9,7 @@ import SwiftUI
 struct BoardColumn: Hashable, Identifiable {
     /// De Inbox heeft een vaste sleutel: daar komen nieuwe mails en snelle invoer terecht.
     static let inboxID = "inbox"
-    /// De standaardkolom "Klaar": kaarten daarin tellen niet mee als openstaand (menubalk).
+    /// Afgeronde taken: geen kolom van het board meer, maar het archief (knop in de werkbalk).
     static let doneID = "done"
     static let inbox = BoardColumn(id: inboxID, title: "Inbox", color: ThingsColor.inbox, symbol: "tray.fill")
 
@@ -70,6 +70,8 @@ final class TodoCard {
     var bodyText: String?
     /// Eigen notities bij de taak (los van de mailtekst).
     var notes: String = ""
+    /// Wanneer de taak is afgerond; afgeronde taken staan in het archief (`columnRaw == BoardColumn.doneID`).
+    var completedAt: Date?
     /// Sleutel van de kolom (`ColumnRecord.key`).
     var columnRaw: String = BoardColumn.inboxID
     var sortOrder: Double = 0

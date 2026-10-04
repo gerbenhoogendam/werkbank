@@ -51,6 +51,22 @@ enum BoardService {
         try? context.save()
     }
 
+    // MARK: Archief (afgeronde taken)
+
+    /// Rondt een taak af: hij verdwijnt van het board en staat in het archief.
+    static func complete(_ card: TodoCard, in context: ModelContext) {
+        card.columnRaw = BoardColumn.doneID
+        card.completedAt = .now
+        card.isNew = false
+        try? context.save()
+    }
+
+    /// Zet een afgeronde taak terug bovenaan de Inbox (of de eerste kolom).
+    static func reopen(_ card: TodoCard, in context: ModelContext) {
+        card.completedAt = nil
+        move(card, to: resolve(.inbox, in: context), index: 0, in: context)
+    }
+
     static func delete(_ card: TodoCard, in context: ModelContext) {
         for subtask in subtasks(of: card, in: context) { context.delete(subtask) }
         context.delete(card)
@@ -97,7 +113,6 @@ enum BoardService {
         ("todo", "Te doen", "square.stack.3d.up.fill"),
         ("doing", "Bezig", "star.fill"),
         ("waiting", "Wacht op klant", "hourglass"),
-        ("done", "Klaar", "checkmark.square.fill"),
     ]
 
     static func columnRecords(in context: ModelContext) -> [ColumnRecord] {
@@ -116,7 +131,10 @@ enum BoardService {
         for record in columnRecords(in: context).sorted(by: { $0.createdAt < $1.createdAt }) {
             if seen.insert(record.key).inserted { kept.append(record) } else { context.delete(record) }
         }
-        var records = kept.sorted { $0.sortOrder < $1.sortOrder }
+        // "Klaar" is geen kolom meer maar het archief: de oude kolom verdwijnt, de kaarten erin blijven staan
+        // (columnRaw "done") en zijn nu afgeronde taken.
+        for record in kept where record.key == BoardColumn.doneID { context.delete(record) }
+        var records = kept.filter { $0.key != BoardColumn.doneID }.sorted { $0.sortOrder < $1.sortOrder }
 
         if records.isEmpty {
             for (index, column) in defaultColumns.enumerated() {
@@ -129,7 +147,9 @@ enum BoardService {
 
         let keys = Set(records.map(\.key))
         if let first = records.first {
-            for card in allCards(in: context) where !keys.contains(card.columnRaw) { card.columnRaw = first.key }
+            for card in allCards(in: context) where !keys.contains(card.columnRaw) && card.columnRaw != BoardColumn.doneID {
+                card.columnRaw = first.key
+            }
         }
         try? context.save()
     }

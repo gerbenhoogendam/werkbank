@@ -274,6 +274,10 @@ struct BoardListView: View {
 
     @ViewBuilder private func menu(for card: TodoCard) -> some View {
         Button { editing = card } label: { Label("Openen…", systemImage: "square.and.pencil") }
+        Button {
+            BoardService.complete(card, in: context)
+            appState.showToast("\"\(card.title)\" afgerond; te vinden in het archief")
+        } label: { Label("Afronden", systemImage: "checkmark.circle") }
         Button { scheduling = card } label: { Label("Inplannen…", systemImage: "calendar.badge.plus") }
         // Naast slepen: de weg zonder slepen (VoiceOver, Schakelbediening).
         Menu {

@@ -23,6 +23,8 @@ struct CardView: View {
     @State private var expanded = false
     @State private var bodyHeight: CGFloat = 0
     @State private var isHovering = false
+    /// Het vinkje is gezet; de taak gaat even later naar het archief.
+    @State private var completing = false
     @State private var addingSubtask = false
     @State private var subtaskDraft = ""
     /// Tussen twee subtaken door verliest het veld heel even de focus; dat telt dan niet als "klaar".
@@ -119,6 +121,7 @@ struct CardView: View {
 
     private var titleRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if !editing { completeButton }
             if card.isNew {
                 Circle()
                     .fill(ThingsColor.accent)
@@ -148,6 +151,42 @@ struct CardView: View {
             // Focus weg uit alle velden = klaar met bewerken.
             if new == nil && editing { commitEditing() }
             if new == nil && addingSubtask && !ignoreFocusLoss { commitSubtask(keepAdding: false) }
+        }
+    }
+
+    /// Rond vakje links van de titel: aanklikken rondt de taak af en zet hem in het archief.
+    private var completeButton: some View {
+        Button(action: complete) {
+            ZStack {
+                RoundedRectangle(cornerRadius: ThingsMetrics.checkboxRadius, style: .continuous)
+                    .fill(completing ? ThingsColor.accent : Color.clear)
+                RoundedRectangle(cornerRadius: ThingsMetrics.checkboxRadius, style: .continuous)
+                    .strokeBorder(completing ? Color.clear : ThingsColor.checkboxStroke, lineWidth: 1.5)
+                if completing {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(width: ThingsMetrics.checkboxSize, height: ThingsMetrics.checkboxSize)
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+        .help("Taak afronden")
+        .accessibilityLabel("Taak afronden: \(card.title)")
+    }
+
+    private func complete() {
+        guard !completing else { return }
+        withAnimation(.easeOut(duration: 0.15)) { completing = true }
+        let title = card.title
+        Task { @MainActor in
+            // Het vinkje is even te zien voordat de kaart van het board verdwijnt.
+            try? await Task.sleep(for: .milliseconds(350))
+            BoardService.complete(card, in: context)
+            appState.showToast("\"\(title)\" afgerond; te vinden in het archief")
         }
     }
 

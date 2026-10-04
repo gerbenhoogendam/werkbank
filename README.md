@@ -52,9 +52,10 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 ## Wat er is (macOS)
 
 - Hoofdvenster: board boven (45%), agenda linksonder (¾), Tijd schrijven rechtsonder (¼).
-- Board met kolommen (standaard Inbox, Te doen, Bezig, Wacht op klant, Klaar) die je kunt hernoemen, toevoegen en verwijderen (menu ⋯ in de kolomkop, knop + rechts van de laatste kolom); een kolom verplaats je door aan de kolomkop te slepen (of via het menu: Naar links/rechts); bij verwijderen gaan de kaarten naar de eerste andere kolom; eigen sleepgebaar (start na 5 px, 105% schaal, kanteling ±14°, placeholder, vlucht naar de plek met "pop").
+- Board met kolommen (standaard Inbox, Te doen, Bezig, Wacht op klant) die je kunt hernoemen, toevoegen en verwijderen (menu ⋯ in de kolomkop, knop + rechts van de laatste kolom); een kolom verplaats je door aan de kolomkop te slepen (of via het menu: Naar links/rechts); bij verwijderen gaan de kaarten naar de eerste andere kolom; eigen sleepgebaar (start na 5 px, 105% schaal, kanteling ±14°, placeholder, vlucht naar de plek met "pop").
 - Kaarten naar de agenda slepen: starttijd (kwartieren) → eindtijd (greep) → popover met `GH: vdm|ndm|<tijd> <titel>` → echt `EKEvent`.
 - Taken openen met één klik (Mac) of tik (iOS): titel, klant, notities en subtaken. Subtaken staan ook op de kaart (afvinken); op de Mac verschijnt "Subtaak toevoegen" onderaan de kaart zodra je erboven zweeft, Return voegt toe en gaat door met de volgende. Op iOS voeg je subtaken toe in het geopende venster.
+- Afronden: het ronde vakje links van de titel (of Afronden in het contextmenu) haalt een taak van het board; afgeronde taken staan in het archief (knop met archiefdoosje in de werkbalk naast Voorkeuren, op iOS in de balk van het board) met Terugzetten en Verwijderen. 'Klaar' is dus geen kolom meer; kaarten uit een oude Klaar-kolom staan na de update in het archief (zonder afrondingsdatum).
 - Snelle invoer met globale sneltoets (standaard ⌥⌘T), `#klant` wordt label.
 - `.eml` op het venster slepen → kaarten in de Inbox, klantnaam uit domein/koppeltabel/freemail, logo via Google Custom Search met favicon-terugval.
 - Gmail-paneel links (⌥⌘G): inloggen met Google, inbox bekijken, een mail naar een kolom slepen. De mail wordt een kaart (titel, afzender, tekst) en wordt daarna in Gmail gearchiveerd. Zie "Gmail koppelen".

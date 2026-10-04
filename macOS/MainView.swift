@@ -17,6 +17,7 @@ struct MainView: View {
     @State private var boardDragStart: Double?
     @State private var agendaDragStart: Double?
     @State private var gmailDragStart: Double?
+    @State private var showArchive = false
 
     private static let defaultGmailWidth = 300.0
     private static let gmailRange = 240.0...480.0
@@ -110,6 +111,18 @@ struct MainView: View {
                 }
                 .keyboardShortcut("g", modifiers: [.command, .option])
                 .help("Gmail-paneel tonen of verbergen (⌥⌘G)")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showArchive.toggle()
+                } label: {
+                    Label("Archief", systemImage: "archivebox")
+                }
+                .help("Archief: afgeronde taken")
+                .popover(isPresented: $showArchive, arrowEdge: .bottom) {
+                    ArchiveView()
+                        .frame(width: 400, height: 460)
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 SettingsLink {
