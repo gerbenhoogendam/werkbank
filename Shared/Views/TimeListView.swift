@@ -20,12 +20,19 @@ struct TimeListView: View {
     @Environment(AppState.self) private var appState
     @Query(sort: \TimeEntry.createdAt, order: .reverse) private var entries: [TimeEntry]
 
+    /// "Al geschreven" is standaard ingeklapt; de keuze blijft bewaard.
+    @AppStorage("timeList.writtenExpanded") private var showWritten = false
     @State private var showSupport = false
     @State private var exportDocument = CSVDocument(data: Data())
     @State private var isExporting = false
 
     private var running: TimeEntry? { entries.first { $0.status == .running } }
     private var others: [TimeEntry] { entries.filter { $0.status != .running } }
+    /// Nog te schrijven: bovenaan. Afgevinkte regels gaan naar "Al geschreven" onderaan.
+    private var toWrite: [TimeEntry] { others.filter { !$0.isWritten } }
+    private var written: [TimeEntry] {
+        others.filter(\.isWritten).sorted { ($0.finishedAt ?? $0.createdAt) > ($1.finishedAt ?? $1.createdAt) }
+    }
     private var outstanding: Double { TimerService.outstandingHours(entries) }
 
     var body: some View {
@@ -42,10 +49,20 @@ struct TimeListView: View {
                             RunningTimerRow(entry: running)
                                 .padding(.bottom, 6)
                         }
-                        ForEach(others) { entry in
+                        ForEach(toWrite) { entry in
                             TimeEntryRow(entry: entry)
                         }
+                        if !written.isEmpty {
+                            writtenHeader
+                            if showWritten {
+                                ForEach(written) { entry in
+                                    TimeEntryRow(entry: entry)
+                                }
+                            }
+                        }
                     }
+                    .animation(ThingsMotion.reorder, value: toWrite.map(\.id))
+                    .animation(ThingsMotion.reorder, value: written.map(\.id))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
@@ -56,6 +73,31 @@ struct TimeListView: View {
                       contentType: .commaSeparatedText, defaultFilename: "Werkbank-tijd") { result in
             if case .success = result { appState.showToast("Export bewaard") }
         }
+    }
+
+    /// Uitklapbare kop onder de regels die nog geschreven moeten worden.
+    private var writtenHeader: some View {
+        Button {
+            withAnimation(ThingsMotion.reorder) { showWritten.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .rotationEffect(.degrees(showWritten ? 90 : 0))
+                Text("Al geschreven")
+                    .thingsFont(.heading)
+                Text("\(written.count)")
+                    .thingsFont(.metadata)
+                    .monospacedDigit()
+                Spacer()
+            }
+            .foregroundStyle(ThingsColor.textSecondary)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
+        .accessibilityLabel("Al geschreven, \(written.count) regels, \(showWritten ? "uitgeklapt" : "ingeklapt")")
     }
 
     private var header: some View {

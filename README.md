@@ -59,7 +59,7 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 - Snelle invoer met globale sneltoets (standaard ⌥⌘T), `#klant` wordt label.
 - `.eml` op het venster slepen → kaarten in de Inbox, klantnaam uit domein/koppeltabel/freemail, logo via Google Custom Search met favicon-terugval.
 - Gmail-paneel links (⌥⌘G): inloggen met Google, inbox bekijken, een mail naar een kolom slepen. De mail wordt een kaart (titel, afzender, tekst) en wordt daarna in Gmail gearchiveerd. Zie "Gmail koppelen".
-- Tijd schrijven: één lopende timer, pauze/hervat/stop, verplichte omschrijving, eindtijdcontrole, afronding, "geschreven"-vinkje, CSV-export (`BillingExporter`-protocol).
+- Tijd schrijven: één lopende timer, pauze/hervat/stop, verplichte omschrijving, eindtijdcontrole, afronding, "geschreven"-vinkje (een afgevinkte regel gaat naar het uitklapbare onderdeel "Al geschreven" onderaan), CSV-export (`BillingExporter`-protocol).
 - Menubalkknop met lopende tijd, bestaande to-do starten, snelle support (starten of direct loggen).
 - Voorkeuren (⌘,), een eigen venster met tabs: **Agenda's** (welke agenda's zichtbaar zijn, standaard doelagenda), **Weergave** (thema automatisch/licht/donker, werkweek of dag, werkdagen, uren), **Kolommen** (toevoegen, hernoemen, icoon, verwijderen) en **Overig** (sneltoets, afronding, waarschuwingsdrempel, koppeltabel, Google-sleutel).
 
