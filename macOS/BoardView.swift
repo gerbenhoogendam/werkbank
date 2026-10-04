@@ -208,8 +208,20 @@ struct BoardView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
-                HStack(spacing: 6) {
+                // Op het icoon klikken opent de keuze van icoon en kleur.
+                Button {
+                    columnRequest = .icon(column.id)
+                } label: {
                     ColumnIcon(symbol: column.symbol, color: column.color)
+                        .thingsFont(.heading)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Icoon en kleur kiezen")
+                .accessibilityLabel("Icoon en kleur van \(column.title) kiezen")
+
+                HStack(spacing: 6) {
                     Text(column.title)
                         .foregroundStyle(ThingsColor.textPrimary)
                     Spacer()

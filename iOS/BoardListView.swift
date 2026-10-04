@@ -184,7 +184,16 @@ struct BoardListView: View {
 
     private func columnHeader(_ column: BoardColumn, count: Int) -> some View {
         HStack(spacing: 6) {
-            ColumnIcon(symbol: column.symbol, color: column.color)
+            // Op het icoon tikken opent de keuze van icoon en kleur.
+            Button {
+                columnRequest = .icon(column.id)
+            } label: {
+                ColumnIcon(symbol: column.symbol, color: column.color)
+                    .frame(width: 30, height: ThingsMetrics.minTapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Icoon en kleur van \(column.title) kiezen")
             Text(column.title)
                 .foregroundStyle(ThingsColor.textPrimary)
                 .lineLimit(1)
