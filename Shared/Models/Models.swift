@@ -268,6 +268,7 @@ enum Persistence {
 
         #if ICLOUD
         if isSyncing {
+            SyncMonitor.shared.start()
             let cloud = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
             do {
                 let container = try ModelContainer(for: schema, configurations: cloud)

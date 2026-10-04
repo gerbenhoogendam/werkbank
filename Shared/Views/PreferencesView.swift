@@ -170,6 +170,10 @@ private struct OtherPreferences: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \ClientMapping.domain) private var mappings: [ClientMapping]
+    @Query private var allCards: [TodoCard]
+    @Query(sort: \ColumnRecord.sortOrder) private var allColumns: [ColumnRecord]
+    @Query private var allSubtasks: [Subtask]
+    @Query private var allEntries: [TimeEntry]
     @State private var newDomain = ""
     @State private var newClient = ""
 
@@ -189,6 +193,8 @@ private struct OtherPreferences: View {
             } footer: {
                 Text(iCloudStatus)
             }
+
+            if Persistence.isCloudBuild { Section("Synchronisatie-details") { syncDetails } }
 
             Section("Facturatie") {
                 Picker("Afronden op", selection: $rounding) {
@@ -260,6 +266,45 @@ extension OtherPreferences {
             return "Niet actief: log in bij iCloud op dit apparaat en start Werkbank opnieuw."
         case .failed(let reason):
             return "iCloud kon niet starten, de gegevens staan nu alleen op dit apparaat. Reden: \(reason)"
+        }
+    }
+}
+
+extension OtherPreferences {
+    /// Wat dit apparaat nu heeft en wanneer iCloud voor het laatst iets deed: vergelijk dit op je Mac en iPhone.
+    @ViewBuilder fileprivate var syncDetails: some View {
+        let monitor = SyncMonitor.shared
+        syncRow("Laatste import (binnenhalen)", monitor.imported)
+        syncRow("Laatste export (wegschrijven)", monitor.exported)
+        if let setup = monitor.setup, !setup.succeeded { syncRow("Start van de koppeling", setup) }
+
+        let done = allCards.filter { $0.columnRaw == BoardColumn.doneID }.count
+        LabeledContent("Taken op het board", value: "\(allCards.count - done)")
+        LabeledContent("Afgeronde taken", value: "\(done)")
+        LabeledContent("Subtaken", value: "\(allSubtasks.count)")
+        LabeledContent("Tijdregels", value: "\(allEntries.count)")
+        LabeledContent("Kolommen", value: "\(allColumns.count)")
+        Text(allColumns.map { "\($0.title) (\($0.key.prefix(8)))" }.joined(separator: ", "))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+        Text("Een eerste synchronisatie kan enkele minuten duren. Staan de aantallen na een paar minuten op beide apparaten niet gelijk, noteer dan wat er verschilt.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private func syncRow(_ title: String, _ entry: SyncMonitor.Entry?) -> some View {
+        LabeledContent(title) {
+            if let entry {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text((entry.succeeded ? "gelukt " : "mislukt ") + entry.date.formatted(date: .abbreviated, time: .standard))
+                    if let error = entry.error {
+                        Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                    }
+                }
+            } else {
+                Text("nog niet sinds het starten")
+            }
         }
     }
 }
