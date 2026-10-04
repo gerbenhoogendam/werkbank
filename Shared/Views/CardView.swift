@@ -1,8 +1,8 @@
 import SwiftData
 import SwiftUI
 
-/// Kaart op het board: titel, optioneel klantlabel en -logo, afzenderregel, uitklapbare mailtekst, subtaken en een
-/// timerknop. Klikken op de kaart opent de taak (notities en subtaken); een nieuwe kaart opent direct in bewerkmodus.
+/// Kaart op het board: titel, optioneel klantlabel en -logo, afzenderregel, uitklapbare mailtekst, subtaken en
+/// onderaan een rij met afronden, timer en mail lezen. Klikken op de kaart opent de taak (notities en subtaken); een nieuwe kaart opent direct in bewerkmodus.
 struct CardView: View {
     let card: TodoCard
     var isTimerRunning = false
@@ -45,47 +45,29 @@ struct CardView: View {
     private var hasBody: Bool { !(card.bodyText ?? "").isEmpty }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 5) {
-                titleRow
-                if editing { minutesRow }
-                labelRow
-                if let sender = card.senderLine {
-                    Text(sender)
-                        .thingsFont(.metadata)
-                        .foregroundStyle(ThingsColor.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .contentShape(Rectangle())
-                        .onTapGesture { if hasBody { toggleExpanded() } else { open() } }
-                }
-                if expanded, let text = card.bodyText, !text.isEmpty { bodyView(text) }
-                subtaskList
-                #if os(macOS)
-                if isEditable { addSubtaskRow }
-                #endif
+        VStack(alignment: .leading, spacing: 5) {
+            titleRow
+            if editing { minutesRow }
+            labelRow
+            if let sender = card.senderLine {
+                Text(sender)
+                    .cardFont(.meta)
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if hasBody { toggleExpanded() } else { open() } }
             }
-            Spacer(minLength: 4)
-            VStack(spacing: 0) {
-                TimerButton(isRunning: isTimerRunning, action: onStartTimer)
-                if hasBody {
-                    Button(action: toggleExpanded) {
-                        Image(systemName: expanded ? "chevron.up" : "text.alignleft")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(ThingsColor.textSecondary)
-                            .frame(width: 22, height: 22)
-                            .frame(width: ThingsMetrics.minTapTarget * 0.6, height: ThingsMetrics.minTapTarget * 0.6)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(expanded ? "Verberg de tekst" : "Toon de tekst van de mail")
-                    .accessibilityLabel(expanded ? "Verberg de tekst" : "Toon de tekst")
-                }
-            }
+            if expanded, let text = card.bodyText, !text.isEmpty { bodyView(text) }
+            subtaskList
+            #if os(macOS)
+            if isEditable && addingSubtask { subtaskField }
+            #endif
+            actionRow
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)
-        .padding(.bottom, isEditable ? 4 : 10)
+        .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
@@ -121,7 +103,6 @@ struct CardView: View {
 
     private var titleRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if !editing { completeButton }
             if card.isNew {
                 Circle()
                     .fill(ThingsColor.accent)
@@ -131,7 +112,7 @@ struct CardView: View {
             if editing {
                 TextField("Titel", text: $titleDraft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .thingsFont(.todoTitle)
+                    .cardFont(.title)
                     .foregroundStyle(ThingsColor.textPrimary)
                     .focused($focus, equals: .title)
                     .onSubmit(commitEditing)
@@ -140,7 +121,7 @@ struct CardView: View {
                     #endif
             } else {
                 Text(card.title.isEmpty ? "Nieuwe taak" : card.title)
-                    .thingsFont(.todoTitle)
+                    .cardFont(.title)
                     .foregroundStyle(card.title.isEmpty ? ThingsColor.textTertiary : ThingsColor.textPrimary)
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
@@ -173,7 +154,6 @@ struct CardView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
         .help("Taak afronden")
         .accessibilityLabel("Taak afronden: \(card.title)")
     }
@@ -213,7 +193,7 @@ struct CardView: View {
                 }
             Text("min").foregroundStyle(ThingsColor.textSecondary)
         }
-        .thingsFont(.metadata)
+        .cardFont(.meta)
     }
 
     @ViewBuilder private var labelRow: some View {
@@ -261,7 +241,7 @@ struct CardView: View {
                     HStack(alignment: .center, spacing: 4) {
                         SubtaskCheckbox(isDone: subtask.isDone) { BoardService.toggle(subtask, in: context) }
                         Text(subtask.title)
-                            .thingsFont(.notes)
+                            .cardFont(.subtask)
                             .strikethrough(subtask.isDone)
                             .foregroundStyle(subtask.isDone ? ThingsColor.textSecondary : ThingsColor.textPrimary)
                             .lineLimit(2)
@@ -273,39 +253,67 @@ struct CardView: View {
         }
     }
 
-    #if os(macOS)
-    /// Onderaan de kaart: zodra je erboven zweeft verschijnt "Subtaak toevoegen". De ruimte is altijd gereserveerd,
-    /// zodat de kaart niet verspringt.
-    @ViewBuilder private var addSubtaskRow: some View {
-        if addingSubtask {
-            HStack(spacing: 4) {
-                Circle()
-                    .strokeBorder(ThingsColor.checkboxStroke, lineWidth: 1.2)
-                    .frame(width: 12, height: 12)
-                    .frame(width: 22, height: 22)
-                TextField("Nieuwe subtaak", text: $subtaskDraft)
-                    .textFieldStyle(.plain)
-                    .thingsFont(.notes)
-                    .focused($focus, equals: .subtask)
-                    .onSubmit { commitSubtask(keepAdding: true) }
-                    .onExitCommand(perform: endAddingSubtask)
-            }
-        } else {
-            Button(action: startAddingSubtask) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 9, weight: .semibold))
-                    Text("Subtaak toevoegen")
-                        .thingsFont(.metadata)
-                }
-                .foregroundStyle(ThingsColor.textSecondary)
-                .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+    /// Onderste rij: afronden, timer en (bij een mail) de mailtekst lezen. Op de Mac verschijnt rechts
+    /// "Subtaak" zodra je boven de kaart zweeft.
+    private var actionRow: some View {
+        HStack(spacing: 2) {
+            if !editing { completeButton }
+            TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+            if hasBody { mailButton }
+            Spacer(minLength: 4)
+            #if os(macOS)
+            if isEditable && !addingSubtask { addSubtaskButton }
+            #endif
+        }
+    }
+
+    private var mailButton: some View {
+        Button(action: toggleExpanded) {
+            Image(systemName: expanded ? "envelope.open" : "envelope")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(expanded ? ThingsColor.accent : ThingsColor.textSecondary)
+                .frame(width: 24, height: 24)
+                .frame(width: ThingsMetrics.minTapTarget * 0.6, height: ThingsMetrics.minTapTarget * 0.6)
                 .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(expanded ? "Verberg de mailtekst" : "Lees de mail")
+        .accessibilityLabel(expanded ? "Verberg de mailtekst" : "Lees de mail")
+    }
+
+    #if os(macOS)
+    private var addSubtaskButton: some View {
+        Button(action: startAddingSubtask) {
+            HStack(spacing: 3) {
+                Image(systemName: "plus")
+                    .font(.system(size: 9, weight: .semibold))
+                Text("Subtaak")
+                    .cardFont(.meta)
             }
-            .buttonStyle(.plain)
-            .opacity(isHovering ? 1 : 0)
-            .allowsHitTesting(isHovering)
-            .accessibilityLabel("Subtaak toevoegen aan \(card.title)")
+            .foregroundStyle(ThingsColor.textSecondary)
+            .padding(.horizontal, 4)
+            .frame(height: ThingsMetrics.minTapTarget * 0.6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(isHovering ? 1 : 0)
+        .allowsHitTesting(isHovering)
+        .help("Subtaak toevoegen")
+        .accessibilityLabel("Subtaak toevoegen aan \(card.title)")
+    }
+
+    private var subtaskField: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .strokeBorder(ThingsColor.checkboxStroke, lineWidth: 1.2)
+                .frame(width: 12, height: 12)
+                .frame(width: 22, height: 22)
+            TextField("Nieuwe subtaak", text: $subtaskDraft)
+                .textFieldStyle(.plain)
+                .cardFont(.subtask)
+                .focused($focus, equals: .subtask)
+                .onSubmit { commitSubtask(keepAdding: true) }
+                .onExitCommand(perform: endAddingSubtask)
         }
     }
     #endif
@@ -390,6 +398,45 @@ struct CardView: View {
         editing = false
         if InlineEditing.cardID == card.id && !addingSubtask { InlineEditing.cardID = nil }
     }
+}
+
+/// Tekstgroottes op de kaart. Op de Mac zijn ze kleiner, zodat de tekst ook in smalle kolommen leesbaar blijft.
+private enum CardText {
+    case title, subtask, meta
+
+    #if os(macOS)
+    var macSize: CGFloat {
+        switch self {
+        case .title:   return 12.5
+        case .subtask: return 11.5
+        case .meta:    return 10.5
+        }
+    }
+    #else
+    var style: ThingsTextStyle {
+        switch self {
+        case .title:   return .todoTitle
+        case .subtask: return .notes
+        case .meta:    return .metadata
+        }
+    }
+    #endif
+}
+
+private struct CardFont: ViewModifier {
+    let kind: CardText
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content.font(.system(size: kind.macSize))
+        #else
+        content.thingsFont(kind.style)
+        #endif
+    }
+}
+
+private extension View {
+    func cardFont(_ kind: CardText) -> some View { modifier(CardFont(kind: kind)) }
 }
 
 /// Houdt bij welke kaart ter plekke bewerkt wordt (het board sleept dan geen kaart tijdens tekstselectie) en
