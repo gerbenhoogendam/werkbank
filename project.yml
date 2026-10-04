@@ -113,6 +113,12 @@ targets:
         CFBundleDisplayName: Werkbank
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
+        # Type van een kaart die op het board naar een andere kolom wordt gesleept.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: nl.itgwerkbank.card
+            UTTypeDescription: Kaart (Werkbank)
+            UTTypeConformsTo:
+              - public.data
         UILaunchScreen: {}
         UIBackgroundModes:
           - remote-notification

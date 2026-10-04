@@ -365,11 +365,12 @@ final class GmailSession {
         // De titel van een nieuwe mailkaart wil je altijd nakijken (zelfde gedrag als bij een gesleept .eml-bestand).
         InlineEditing.pendingEditID = card.id
         let sender = card.clientLabel ?? "onbekende afzender"
+        let columnTitle = BoardService.title(of: BoardService.resolve(column, in: context), in: context)
 
         do {
             try await archive(threadID: payload.threadID)
             messages.removeAll { $0.threadID == payload.threadID }
-            appState.showToast("Mail van \(sender) toegevoegd aan \(column.title) en gearchiveerd in Gmail", seconds: 3)
+            appState.showToast("Mail van \(sender) toegevoegd aan \(columnTitle) en gearchiveerd in Gmail", seconds: 3)
         } catch {
             appState.showToast("Kaart gemaakt, maar archiveren in Gmail mislukte: \(error.localizedDescription)", seconds: 6)
         }

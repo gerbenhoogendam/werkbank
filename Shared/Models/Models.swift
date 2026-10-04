@@ -4,40 +4,53 @@ import SwiftUI
 
 // MARK: - Board
 
-enum BoardColumn: String, CaseIterable, Identifiable {
-    case inbox, todo, doing, waiting, done
+/// Verwijzing naar een kolom van het board. Gelijkheid gaat op `id`: de kolommen zelf staan in `ColumnRecord`
+/// (naam en volgorde zijn aanpasbaar); deze waarde is wat de views en het slepen doorgeven.
+struct BoardColumn: Hashable, Identifiable {
+    /// De Inbox heeft een vaste sleutel: daar komen nieuwe mails en snelle invoer terecht.
+    static let inboxID = "inbox"
+    static let inbox = BoardColumn(id: inboxID, title: "Inbox", color: ThingsColor.inbox, symbol: "tray.fill")
 
-    var id: String { rawValue }
+    let id: String
+    var title: String = ""
+    var color: Color = ThingsColor.textSecondary
+    var symbol: String = "rectangle.stack.fill"
 
-    var title: String {
-        switch self {
-        case .inbox:   return "Inbox"
-        case .todo:    return "Te doen"
-        case .doing:   return "Bezig"
-        case .waiting: return "Wacht op klant"
-        case .done:    return "Klaar"
-        }
+    static func == (lhs: BoardColumn, rhs: BoardColumn) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// Kleuren voor kolommen (Things-lijstkleuren); een nieuwe kolom krijgt de volgende in de rij.
+enum ColumnPalette {
+    static let colors: [Color] = [ThingsColor.inbox, ThingsColor.anytime, ThingsColor.today, ThingsColor.someday,
+                                  ThingsColor.logbook, ThingsColor.upcoming, ThingsColor.evening, ThingsColor.trash]
+
+    static func color(at index: Int) -> Color { colors[((index % colors.count) + colors.count) % colors.count] }
+}
+
+/// Een kolom van het board. Kaarten verwijzen ernaar via `TodoCard.columnRaw` (= `key`).
+@Model
+final class ColumnRecord {
+    // Niet `unique` (CloudKit): dubbelen (twee apparaten die tegelijk de standaardkolommen aanmaken) worden
+    // door `BoardService.ensureColumns` opgeruimd.
+    var key: String = ""
+    var title: String = ""
+    var sortOrder: Double = 0
+    var colorIndex: Int = 0
+    var symbol: String = "rectangle.stack.fill"
+    var createdAt: Date = Date()
+
+    init(key: String, title: String, sortOrder: Double, colorIndex: Int, symbol: String = "rectangle.stack.fill") {
+        self.key = key
+        self.title = title
+        self.sortOrder = sortOrder
+        self.colorIndex = colorIndex
+        self.symbol = symbol
+        self.createdAt = .now
     }
 
-    /// Kolomkleuren hergebruiken de Things-lijstkleuren (kleur = betekenis).
-    var color: Color {
-        switch self {
-        case .inbox:   return ThingsColor.inbox
-        case .todo:    return ThingsColor.anytime
-        case .doing:   return ThingsColor.today
-        case .waiting: return ThingsColor.someday
-        case .done:    return ThingsColor.logbook
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .inbox:   return "tray.fill"
-        case .todo:    return "square.stack.3d.up.fill"
-        case .doing:   return "star.fill"
-        case .waiting: return "hourglass"
-        case .done:    return "checkmark.square.fill"
-        }
+    var column: BoardColumn {
+        BoardColumn(id: key, title: title, color: ColumnPalette.color(at: colorIndex), symbol: symbol)
     }
 }
 
@@ -53,7 +66,8 @@ final class TodoCard {
     var senderLine: String?
     /// Alleen de tekst van de mail, om in de kaart te kunnen lezen.
     var bodyText: String?
-    var columnRaw: String = BoardColumn.inbox.rawValue
+    /// Sleutel van de kolom (`ColumnRecord.key`).
+    var columnRaw: String = BoardColumn.inboxID
     var sortOrder: Double = 0
     /// Blauwe stip tot de kaart uit de Inbox is gesleept.
     var isNew: Bool = true
@@ -71,15 +85,16 @@ final class TodoCard {
         self.clientLabel = clientLabel
         self.logoDomain = logoDomain
         self.senderLine = senderLine
-        self.columnRaw = column.rawValue
+        self.columnRaw = column.id
         self.sortOrder = sortOrder
         self.isNew = isNew
         self.createdAt = .now
     }
 
     var column: BoardColumn {
-        get { BoardColumn(rawValue: columnRaw) ?? .inbox }
-        set { columnRaw = newValue.rawValue }
+        // Alleen de sleutel: titel en kleur komen uit `ColumnRecord` (zie `BoardService.columns`).
+        get { BoardColumn(id: columnRaw) }
+        set { columnRaw = newValue.id }
     }
 }
 
@@ -201,7 +216,7 @@ enum Persistence {
     static let isSyncing: Bool = isCloudBuild && syncPreferred && FileManager.default.ubiquityIdentityToken != nil
 
     static let container: ModelContainer = {
-        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self])
+        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self])
 
         #if ICLOUD
         if isSyncing {

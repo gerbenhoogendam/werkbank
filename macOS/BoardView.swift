@@ -44,26 +44,31 @@ private enum ColumnItem: Identifiable {
 
 // MARK: - Board
 
-/// Kanban-board over de volle breedte: Inbox, Te doen, Bezig, Wacht op klant, Klaar.
+/// Kanban-board over de volle breedte. Standaard Inbox, Te doen, Bezig, Wacht op klant, Klaar; de kolommen zijn
+/// aan te passen (hernoemen, toevoegen, verwijderen).
 struct BoardView: View {
     @Environment(\.modelContext) private var context
     @Environment(DragCoordinator.self) private var drag
     @Environment(AppState.self) private var appState
     @Query(sort: \TodoCard.sortOrder) private var cards: [TodoCard]
+    @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
     @State private var editing: TodoCard?
+    @State private var columnRequest: ColumnRequest?
     /// Kolom waar op dit moment een bestand/mail boven gehouden wordt.
     @State private var dropTargetColumn: BoardColumn?
     @GestureState private var gestureActive = false
 
     private var runningTodoID: UUID? { running.first?.todoID }
+    private var columns: [BoardColumn] { columnRecords.map(\.column) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ForEach(BoardColumn.allCases) { column in
+            ForEach(columns) { column in
                 columnView(column)
             }
+            addColumnButton
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -106,11 +111,36 @@ struct BoardView: View {
         .onPreferenceChange(StackFrameKey.self) { drag.stackFrames = $0 }
         .onPreferenceChange(BoardFrameKey.self) { drag.boardFrame = $0 }
         .onAppear {
+            BoardService.ensureColumns(in: context)
             drag.onBoardDrop = { card, column, index in
                 BoardService.move(card, to: column, index: index, in: context)
             }
         }
+        // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen, zwevende kaarten onderbrengen.
+        .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
         .sheet(item: $editing) { CardEditSheet(card: $0) }
+        .columnManagement($columnRequest)
+    }
+
+    /// Smalle knop rechts van de laatste kolom.
+    private var addColumnButton: some View {
+        Button {
+            columnRequest = .add
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ThingsColor.textSecondary)
+                .frame(width: 34)
+                .frame(maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                        .strokeBorder(ThingsColor.separator, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Nieuwe kolom")
+        .accessibilityLabel("Nieuwe kolom")
     }
 
     // MARK: Kolom
@@ -176,6 +206,23 @@ struct BoardView: View {
                 .buttonStyle(.plain)
                 .help("Nieuwe kaart in \(column.title)")
                 .accessibilityLabel("Nieuwe kaart in \(column.title)")
+
+                Menu {
+                    Button("Naam wijzigen…") { columnRequest = .rename(column.id) }
+                    Button("Kolom verwijderen…", role: .destructive) { columnRequest = .delete(column.id) }
+                        .disabled(columnRecords.count <= 1)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Kolom hernoemen of verwijderen")
+                .accessibilityLabel("Kolomopties voor \(column.title)")
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
@@ -264,7 +311,7 @@ struct BoardView: View {
     }
 
     private func currentOrder() -> [BoardColumn: [UUID]] {
-        Dictionary(uniqueKeysWithValues: BoardColumn.allCases.map { column in
+        Dictionary(uniqueKeysWithValues: columns.map { column in
             (column, cards(in: column).map(\.id))
         })
     }

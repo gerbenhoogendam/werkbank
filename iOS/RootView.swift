@@ -9,14 +9,21 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
+    @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
 
     @AppStorage(SettingsKey.appearance) private var appearanceRaw = AppearanceSetting.system.rawValue
     @State private var tab: Tab = .board
-    @State private var column: BoardColumn = .inbox
+    /// Kolom die het meest in beeld is (voor de Magic Plus).
+    @State private var columnID: String? = BoardColumn.inboxID
     @State private var showSettings = false
     @State private var showQuickAdd = false
     @State private var showSupport = false
     @State private var isImporting = false
+
+    private var currentColumn: BoardColumn {
+        let columns = columnRecords.map(\.column)
+        return columns.first { $0.id == columnID } ?? columns.first ?? .inbox
+    }
 
     var body: some View {
         @Bindable var state = appState
@@ -24,7 +31,7 @@ struct RootView: View {
         ZStack {
             TabView(selection: $tab) {
                 NavigationStack {
-                    BoardListView(column: $column)
+                    BoardListView(columnID: $columnID)
                         .toolbar { boardToolbar }
                         .tabChrome(running: running.first, plus: { showQuickAdd = true })
                 }
@@ -51,7 +58,7 @@ struct RootView: View {
             ToastOverlay(message: appState.toast)
         }
         .preferredColorScheme(AppearanceSetting(stored: appearanceRaw).colorScheme)
-        .sheet(isPresented: $showQuickAdd) { QuickAddSheet(column: column) }
+        .sheet(isPresented: $showQuickAdd) { QuickAddSheet(column: currentColumn) }
         .sheet(isPresented: $showSupport) {
             NavigationStack {
                 SupportEntryView { showSupport = false }
@@ -114,9 +121,6 @@ struct RootView: View {
         ToolbarItem(placement: .topBarLeading) {
             Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 .accessibilityLabel("Instellingen")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            EditButton()
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {

@@ -16,6 +16,7 @@ enum BoardService {
     static func addCard(title: String, column: BoardColumn = .inbox, label: String? = nil,
                         logoDomain: String? = nil, sender: String? = nil, body: String? = nil,
                         in context: ModelContext) -> TodoCard {
+        let column = resolve(column, in: context)
         let top = allCards(in: context).filter { $0.column == column }.map(\.sortOrder).min() ?? 0
         let card = TodoCard(title: title, clientLabel: label, logoDomain: logoDomain, senderLine: sender,
                             column: column, sortOrder: top - 1, isNew: column == .inbox)
@@ -53,6 +54,106 @@ enum BoardService {
     static func delete(_ card: TodoCard, in context: ModelContext) {
         context.delete(card)
         try? context.save()
+    }
+
+    // MARK: Kolommen
+
+    /// De standaardkolommen. De sleutels zijn vast, zodat kaarten uit oudere versies er direct aan blijven hangen
+    /// en twee apparaten dezelfde kolommen aanmaken (dubbelen worden opgeruimd).
+    private static let defaultColumns: [(key: String, title: String, symbol: String)] = [
+        (BoardColumn.inboxID, "Inbox", "tray.fill"),
+        ("todo", "Te doen", "square.stack.3d.up.fill"),
+        ("doing", "Bezig", "star.fill"),
+        ("waiting", "Wacht op klant", "hourglass"),
+        ("done", "Klaar", "checkmark.square.fill"),
+    ]
+
+    static func columnRecords(in context: ModelContext) -> [ColumnRecord] {
+        (try? context.fetch(FetchDescriptor<ColumnRecord>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.createdAt)]))) ?? []
+    }
+
+    static func columns(in context: ModelContext) -> [BoardColumn] {
+        columnRecords(in: context).map(\.column)
+    }
+
+    /// Zorgt dat er kolommen zijn: maakt de standaardkolommen aan op een lege database, ruimt dubbele kolommen
+    /// (zelfde sleutel) op en zet kaarten waarvan de kolom niet meer bestaat in de eerste kolom.
+    static func ensureColumns(in context: ModelContext) {
+        var kept: [ColumnRecord] = []
+        var seen = Set<String>()
+        for record in columnRecords(in: context).sorted(by: { $0.createdAt < $1.createdAt }) {
+            if seen.insert(record.key).inserted { kept.append(record) } else { context.delete(record) }
+        }
+        var records = kept.sorted { $0.sortOrder < $1.sortOrder }
+
+        if records.isEmpty {
+            for (index, column) in defaultColumns.enumerated() {
+                let record = ColumnRecord(key: column.key, title: column.title, sortOrder: Double(index),
+                                          colorIndex: index, symbol: column.symbol)
+                context.insert(record)
+                records.append(record)
+            }
+        }
+
+        let keys = Set(records.map(\.key))
+        if let first = records.first {
+            for card in allCards(in: context) where !keys.contains(card.columnRaw) { card.columnRaw = first.key }
+        }
+        try? context.save()
+    }
+
+    /// De kolom zelf als die bestaat; anders de eerste kolom (bijv. als de Inbox is verwijderd).
+    static func resolve(_ column: BoardColumn, in context: ModelContext) -> BoardColumn {
+        let all = columns(in: context)
+        if all.contains(column) { return column }
+        return all.first ?? column
+    }
+
+    /// Actuele naam van een kolom (de waarde die views doorgeven kan een verouderde titel hebben).
+    static func title(of column: BoardColumn, in context: ModelContext) -> String {
+        columns(in: context).first { $0 == column }?.title ?? column.title
+    }
+
+    /// Nieuwe kolom aan de rechterkant.
+    @discardableResult
+    static func addColumn(title: String, in context: ModelContext) -> ColumnRecord? {
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let records = columnRecords(in: context)
+        let record = ColumnRecord(key: UUID().uuidString, title: name,
+                                  sortOrder: (records.map(\.sortOrder).max() ?? -1) + 1,
+                                  colorIndex: records.count)
+        context.insert(record)
+        try? context.save()
+        return record
+    }
+
+    static func renameColumn(_ record: ColumnRecord, to title: String, in context: ModelContext) {
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        record.title = name
+        try? context.save()
+    }
+
+    /// Verwijdert een kolom; de kaarten gaan onderaan de eerste andere kolom. De laatste kolom blijft altijd staan.
+    /// - Returns: de kolom waar de kaarten heen zijn gegaan en hoeveel het er waren, of `nil` als verwijderen niet kan.
+    @discardableResult
+    static func deleteColumn(_ record: ColumnRecord, in context: ModelContext) -> (destination: String, moved: Int)? {
+        let others = columnRecords(in: context).filter { $0.key != record.key }
+        guard let destination = others.first else { return nil }
+
+        let cards = allCards(in: context)
+        var next = (cards.filter { $0.columnRaw == destination.key }.map(\.sortOrder).max() ?? -1) + 1
+        let moving = cards.filter { $0.columnRaw == record.key }.sorted { $0.sortOrder < $1.sortOrder }
+        for card in moving {
+            card.columnRaw = destination.key
+            card.sortOrder = next
+            next += 1
+            if destination.key != BoardColumn.inboxID { card.isNew = false }
+        }
+        context.delete(record)
+        try? context.save()
+        return (destination.title, moving.count)
     }
 
     // MARK: Klant en logo
@@ -129,7 +230,7 @@ enum MailImporter {
                     unsupported += 1
                 }
             }
-            report(imported: imported, unsupported: unsupported, column: column, appState: appState)
+            report(imported: imported, unsupported: unsupported, column: column, context: context, appState: appState)
         }
         return true
     }
@@ -140,7 +241,7 @@ enum MailImporter {
         for url in urls {
             if let card = importFile(url, column: column, context: context) { imported.append(card) } else { unsupported += 1 }
         }
-        report(imported: imported, unsupported: unsupported, column: column, appState: appState)
+        report(imported: imported, unsupported: unsupported, column: column, context: context, appState: appState)
     }
 
     private static func importFile(_ url: URL, column: BoardColumn, context: ModelContext) -> TodoCard? {
@@ -151,11 +252,13 @@ enum MailImporter {
         return BoardService.addMail(EMLParser.parse(data), column: column, in: context)
     }
 
-    private static func report(imported: [TodoCard], unsupported: Int, column: BoardColumn, appState: AppState) {
+    private static func report(imported: [TodoCard], unsupported: Int, column: BoardColumn,
+                               context: ModelContext, appState: AppState) {
+        let columnTitle = BoardService.title(of: BoardService.resolve(column, in: context), in: context)
         if imported.count == 1, let card = imported.first {
-            appState.showToast("Mail van \(card.clientLabel ?? "onbekende afzender") toegevoegd aan \(column.title)")
+            appState.showToast("Mail van \(card.clientLabel ?? "onbekende afzender") toegevoegd aan \(columnTitle)")
         } else if imported.count > 1 {
-            appState.showToast("\(imported.count) mails toegevoegd aan \(column.title)")
+            appState.showToast("\(imported.count) mails toegevoegd aan \(columnTitle)")
         } else if unsupported > 0 {
             appState.showToast(unsupportedMessage)
         }

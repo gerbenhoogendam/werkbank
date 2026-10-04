@@ -5,6 +5,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppearanceSetting.applyStored()
+        BoardService.ensureColumns(in: Persistence.container.mainContext)
         MiniTimerController.shared.start()
 
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
