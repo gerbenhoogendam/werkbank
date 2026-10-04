@@ -33,7 +33,7 @@ struct MenuBarPanel: View {
     @State private var mode: Mode = .todo
     @State private var selectedID: UUID?
 
-    private var openCards: [TodoCard] { cards.filter { $0.column != .done } }
+    private var openCards: [TodoCard] { cards.filter { $0.columnRaw != BoardColumn.doneID } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

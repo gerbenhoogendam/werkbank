@@ -9,6 +9,8 @@ import SwiftUI
 struct BoardColumn: Hashable, Identifiable {
     /// De Inbox heeft een vaste sleutel: daar komen nieuwe mails en snelle invoer terecht.
     static let inboxID = "inbox"
+    /// De standaardkolom "Klaar": kaarten daarin tellen niet mee als openstaand (menubalk).
+    static let doneID = "done"
     static let inbox = BoardColumn(id: inboxID, title: "Inbox", color: ThingsColor.inbox, symbol: "tray.fill")
 
     let id: String
