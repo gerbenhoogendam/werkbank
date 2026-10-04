@@ -104,6 +104,7 @@ final class GmailSession {
     private(set) var busyMessageIDs: Set<String> = []
     private(set) var lastError: String?
 
+    @ObservationIgnored private var bodyCache: [String: String] = [:]
     @ObservationIgnored private var accessToken: String?
     @ObservationIgnored private var accessExpiry = Date.distantPast
     @ObservationIgnored private var authSession: ASWebAuthenticationSession?
@@ -341,6 +342,31 @@ final class GmailSession {
     private func archive(threadID: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["removeLabelIds": ["INBOX"]])
         _ = try await api("threads/\(threadID)/modify", method: "POST", body: body)
+    }
+
+    // MARK: Openklappen en archiveren vanuit de lijst
+
+    /// De tekst van een mail (alleen text, geen opmaak of bijlagen), voor het openklappen in het paneel.
+    func body(forMessageID id: String) async throws -> String {
+        if let cached = bodyCache[id] { return cached }
+        let text = EMLParser.parse(try await rawMessage(id: id)).bodyText ?? ""
+        bodyCache[id] = text
+        return text
+    }
+
+    /// Archiveert het gesprek zonder er een kaart van te maken (de knop in de lijst).
+    func archiveMessage(_ message: GmailMessageSummary, appState: AppState) async {
+        guard !busyMessageIDs.contains(message.id) else { return }
+        busyMessageIDs.insert(message.id)
+        defer { busyMessageIDs.remove(message.id) }
+        do {
+            try await archive(threadID: message.threadID)
+            messages.removeAll { $0.threadID == message.threadID }
+            bodyCache[message.id] = nil
+            appState.showToast("Mail gearchiveerd in Gmail")
+        } catch {
+            appState.showToast("Archiveren mislukt: \(error.localizedDescription)", seconds: 5)
+        }
     }
 
     // MARK: Naar het board slepen

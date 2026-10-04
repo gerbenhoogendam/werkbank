@@ -4,6 +4,9 @@ import WerkbankCore
 /// Uitklapvenster links: je Gmail-inbox. Sleep een mail naar een kolom van het board; daarna wordt hij in Gmail gearchiveerd.
 struct GmailPanel: View {
     private let gmail = GmailSession.shared
+    @Environment(AppState.self) private var appState
+    /// De mail die openstaat in de lijst (één tegelijk).
+    @State private var expandedID: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -148,13 +151,24 @@ struct GmailPanel: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(gmail.messages) { message in
-                            GmailRow(message: message, isBusy: gmail.busyMessageIDs.contains(message.id))
+                            GmailRow(message: message,
+                                     isBusy: gmail.busyMessageIDs.contains(message.id),
+                                     isExpanded: expandedID == message.id,
+                                     onToggle: {
+                                         withAnimation(.easeOut(duration: 0.15)) {
+                                             expandedID = expandedID == message.id ? nil : message.id
+                                         }
+                                     },
+                                     onArchive: {
+                                         if expandedID == message.id { expandedID = nil }
+                                         Task { await gmail.archiveMessage(message, appState: appState) }
+                                     })
                             Rectangle().fill(ThingsColor.separator).frame(height: 1)
                         }
                     }
                 }
             }
-            Text("Sleep een mail naar een kolom. Hij wordt daarna in Gmail gearchiveerd.")
+            Text("Klik een mail om hem te lezen. Sleep hem naar een kolom: hij wordt daarna in Gmail gearchiveerd.")
                 .thingsFont(.metadata)
                 .foregroundStyle(ThingsColor.textTertiary)
                 .padding(10)
@@ -166,51 +180,136 @@ struct GmailPanel: View {
 private struct GmailRow: View {
     let message: GmailMessageSummary
     let isBusy: Bool
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    let onArchive: () -> Void
+
+    private enum BodyState {
+        case loading
+        case loaded(String)
+        case failed(String)
+    }
 
     @State private var isHovering = false
+    @State private var bodyState: BodyState = .loading
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(message.isUnread ? ThingsColor.accent : Color.clear)
-                    .frame(width: 7, height: 7)
-                Text(message.senderDisplay)
-                    .font(.system(size: 13, weight: message.isUnread ? .semibold : .regular))
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if isExpanded { expandedContent }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isHovering || isExpanded ? ThingsColor.selection.opacity(0.5) : Color.clear)
+        .opacity(isBusy ? 0.5 : 1)
+        .onHover { isHovering = $0 }
+    }
+
+    // MARK: Kop (klikken klapt open, slepen naar een kolom)
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(message.isUnread ? ThingsColor.accent : Color.clear)
+                        .frame(width: 7, height: 7)
+                    Text(message.senderDisplay)
+                        .font(.system(size: 13, weight: message.isUnread ? .semibold : .regular))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if isBusy {
+                        ProgressView().controlSize(.mini)
+                    } else if let date = message.date {
+                        Text(Self.dateText(date))
+                            .thingsFont(.metadata)
+                            .foregroundStyle(ThingsColor.textSecondary)
+                    }
+                }
+                Text(message.subject)
+                    .thingsFont(.todoTitle)
                     .foregroundStyle(ThingsColor.textPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if isBusy {
-                    ProgressView().controlSize(.mini)
-                } else if let date = message.date {
-                    Text(Self.dateText(date))
+                    .lineLimit(isExpanded ? nil : 1)
+                    .padding(.leading, 13)
+                if !isExpanded, !message.snippet.isEmpty {
+                    Text(message.snippet)
                         .thingsFont(.metadata)
                         .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(2)
+                        .padding(.leading, 13)
                 }
             }
-            Text(message.subject)
-                .thingsFont(.todoTitle)
-                .foregroundStyle(ThingsColor.textPrimary)
-                .lineLimit(1)
-                .padding(.leading, 13)
-            if !message.snippet.isEmpty {
-                Text(message.snippet)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onToggle)
+            .onDrag { GmailSession.shared.dragProvider(for: message) }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Klik om de mail te lezen, of sleep hem naar een kolom")
+
+            Button(action: onArchive) {
+                Image(systemName: "archivebox")
+                    .font(.system(size: 12))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+            .opacity(isHovering || isExpanded ? 1 : 0)
+            .help("Archiveren in Gmail")
+            .accessibilityLabel("Archiveer mail van \(message.senderDisplay)")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: Opengeklapt
+
+    private var expandedContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let address = message.fromAddress {
+                Text(message.fromName.map { "\($0) <\(address)>" } ?? address)
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.textSecondary)
-                    .lineLimit(2)
-                    .padding(.leading, 13)
+                    .textSelection(.enabled)
             }
+            switch bodyState {
+            case .loading:
+                ProgressView().controlSize(.small)
+            case .loaded(let text):
+                ScrollView {
+                    Text(text.isEmpty ? "(Geen tekst in deze mail)" : text)
+                        .thingsFont(.notes)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 280)
+            case .failed(let reason):
+                Text(reason)
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.deadline)
+            }
+            Button(action: onArchive) {
+                Label("Archiveren", systemImage: "archivebox")
+            }
+            .disabled(isBusy)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isHovering ? ThingsColor.selection.opacity(0.5) : Color.clear)
-        .opacity(isBusy ? 0.5 : 1)
-        .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
-        .onDrag { GmailSession.shared.dragProvider(for: message) }
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Sleep naar een kolom om er een kaart van te maken")
+        .padding(.leading, 25)
+        .padding(.trailing, 12)
+        .padding(.bottom, 10)
+        .task(id: message.id) { await loadBody() }
+    }
+
+    private func loadBody() async {
+        bodyState = .loading
+        do {
+            bodyState = .loaded(try await GmailSession.shared.body(forMessageID: message.id))
+        } catch {
+            bodyState = .failed("Mail ophalen mislukt: \(error.localizedDescription)")
+        }
     }
 
     private static func dateText(_ date: Date) -> String {
