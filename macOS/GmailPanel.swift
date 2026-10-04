@@ -33,6 +33,23 @@ struct GmailPanel: View {
         }
     }
 
+    // MARK: Acties
+
+    private func archive(_ message: GmailMessageSummary) {
+        if expandedID == message.id { expandedID = nil }
+        Task { await gmail.archiveMessage(message, appState: appState) }
+    }
+
+    /// Veeg naar rechts: een taak met het onderwerp als titel in de Inbox, zonder de mail te openen.
+    /// Daarna wordt de mail gearchiveerd, net als bij slepen en bij "Maak taak".
+    private func quickTask(_ message: GmailMessageSummary) {
+        if expandedID == message.id { expandedID = nil }
+        Task {
+            await gmail.createTask(from: message, title: message.subject, minutes: 0, column: .inbox,
+                                   context: context, appState: appState)
+        }
+    }
+
     // MARK: Kop
 
     private var header: some View {
@@ -150,34 +167,46 @@ struct GmailPanel: View {
                     .foregroundStyle(ThingsColor.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(gmail.messages) { message in
-                            GmailRow(message: message,
-                                     isBusy: gmail.busyMessageIDs.contains(message.id),
-                                     isExpanded: expandedID == message.id,
-                                     onToggle: {
-                                         withAnimation(.easeOut(duration: 0.15)) {
-                                             expandedID = expandedID == message.id ? nil : message.id
-                                         }
-                                     },
-                                     onArchive: {
-                                         if expandedID == message.id { expandedID = nil }
-                                         Task { await gmail.archiveMessage(message, appState: appState) }
-                                     },
-                                     onCreateTask: { title, minutes, column in
-                                         if expandedID == message.id { expandedID = nil }
-                                         Task {
-                                             await gmail.createTask(from: message, title: title, minutes: minutes,
-                                                                    column: column, context: context, appState: appState)
-                                         }
-                                     })
-                            Rectangle().fill(ThingsColor.separator).frame(height: 1)
-                        }
+                // Een List (geen ScrollView) voor de veegacties: met twee vingers op het trackpad naar links
+                // archiveert, naar rechts maakt direct een taak. Met een muis kan dat niet; gebruik dan de knoppen.
+                List {
+                    ForEach(gmail.messages) { message in
+                        GmailRow(message: message,
+                                 isBusy: gmail.busyMessageIDs.contains(message.id),
+                                 isExpanded: expandedID == message.id,
+                                 onToggle: {
+                                     withAnimation(.easeOut(duration: 0.15)) {
+                                         expandedID = expandedID == message.id ? nil : message.id
+                                     }
+                                 },
+                                 onArchive: { archive(message) },
+                                 onCreateTask: { title, minutes, column in
+                                     if expandedID == message.id { expandedID = nil }
+                                     Task {
+                                         await gmail.createTask(from: message, title: title, minutes: minutes,
+                                                                column: column, context: context, appState: appState)
+                                     }
+                                 })
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button { archive(message) } label: {
+                                    Label("Archiveren", systemImage: "archivebox")
+                                }
+                                .tint(ThingsColor.textSecondary)
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button { quickTask(message) } label: {
+                                    Label("Taak maken", systemImage: "checkmark.circle")
+                                }
+                                .tint(ThingsColor.accent)
+                            }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
-            Text("Klik een mail om hem te lezen. Sleep hem naar een kolom: hij wordt daarna in Gmail gearchiveerd.")
+            Text("Klik een mail om hem te lezen. Veeg naar links om te archiveren, naar rechts voor een taak (twee vingers op het trackpad). Of sleep hem naar een kolom: hij wordt dan ook gearchiveerd.")
                 .thingsFont(.metadata)
                 .foregroundStyle(ThingsColor.textTertiary)
                 .padding(10)
