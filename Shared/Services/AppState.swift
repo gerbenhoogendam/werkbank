@@ -22,11 +22,11 @@ final class AppState {
 
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
-    func showToast(_ message: String) {
+    func showToast(_ message: String, seconds: Double = 2) {
         toast = message
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.toast = nil
         }

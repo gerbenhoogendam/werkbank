@@ -3,3 +3,5 @@
 APP_BUNDLE_ID = nl.itgwerkbank.werkbank
 // Team ID (10 tekens) van je betaalde account, te vinden op developer.apple.com > Account > Membership details.
 DEVELOPMENT_TEAM = ABCDE12345
+// OAuth-client-id van Google Cloud (type "iOS", bundle-id = APP_BUNDLE_ID), eindigt op .apps.googleusercontent.com.
+GOOGLE_CLIENT_ID = 1234567890-abcdefg.apps.googleusercontent.com

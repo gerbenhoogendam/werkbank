@@ -11,8 +11,15 @@ struct MainView: View {
     // Verdeling van het venster; bewaard tussen sessies. Dubbelklik op een scheidingslijn zet hem terug.
     @AppStorage("layout.boardFraction") private var boardFraction = Self.defaultBoardFraction
     @AppStorage("layout.agendaFraction") private var agendaFraction = Self.defaultAgendaFraction
+    // Gmail-paneel links (standaard verborgen); breedte schuifbaar en bewaard.
+    @AppStorage("gmail.panelVisible") private var gmailVisible = false
+    @AppStorage("gmail.panelWidth") private var gmailWidth = Self.defaultGmailWidth
     @State private var boardDragStart: Double?
     @State private var agendaDragStart: Double?
+    @State private var gmailDragStart: Double?
+
+    private static let defaultGmailWidth = 300.0
+    private static let gmailRange = 240.0...480.0
 
     private static let defaultBoardFraction = 0.45
     private static let defaultAgendaFraction = 0.75
@@ -23,32 +30,48 @@ struct MainView: View {
         @Bindable var state = appState
 
         ZStack {
-            GeometryReader { geo in
-                VStack(spacing: 0) {
-                    BoardView()
-                        .frame(height: geo.size.height * clamp(boardFraction, Self.boardRange))
-                    SplitDivider(isHorizontalLine: true,
+            HStack(spacing: 0) {
+                if gmailVisible {
+                    GmailPanel()
+                        .frame(width: clamp(gmailWidth, Self.gmailRange))
+                    SplitDivider(isHorizontalLine: false,
+                                 label: "Schuif de breedte van het Gmail-paneel",
                                  onChanged: { translation in
-                                     let start = boardDragStart ?? boardFraction
-                                     boardDragStart = start
-                                     boardFraction = clamp(start + Double(translation / geo.size.height), Self.boardRange)
+                                     let start = gmailDragStart ?? gmailWidth
+                                     gmailDragStart = start
+                                     gmailWidth = clamp(start + Double(translation), Self.gmailRange)
                                  },
-                                 onEnded: { boardDragStart = nil },
-                                 onReset: { boardFraction = Self.defaultBoardFraction })
+                                 onEnded: { gmailDragStart = nil },
+                                 onReset: { gmailWidth = Self.defaultGmailWidth })
                         .zIndex(1)
-                    HStack(spacing: 0) {
-                        AgendaView()
-                            .frame(width: geo.size.width * clamp(agendaFraction, Self.agendaRange))
-                        SplitDivider(isHorizontalLine: false,
+                }
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        BoardView()
+                            .frame(height: geo.size.height * clamp(boardFraction, Self.boardRange))
+                        SplitDivider(isHorizontalLine: true,
                                      onChanged: { translation in
-                                         let start = agendaDragStart ?? agendaFraction
-                                         agendaDragStart = start
-                                         agendaFraction = clamp(start + Double(translation / geo.size.width), Self.agendaRange)
+                                         let start = boardDragStart ?? boardFraction
+                                         boardDragStart = start
+                                         boardFraction = clamp(start + Double(translation / geo.size.height), Self.boardRange)
                                      },
-                                     onEnded: { agendaDragStart = nil },
-                                     onReset: { agendaFraction = Self.defaultAgendaFraction })
+                                     onEnded: { boardDragStart = nil },
+                                     onReset: { boardFraction = Self.defaultBoardFraction })
                             .zIndex(1)
-                        TimeListView()
+                        HStack(spacing: 0) {
+                            AgendaView()
+                                .frame(width: geo.size.width * clamp(agendaFraction, Self.agendaRange))
+                            SplitDivider(isHorizontalLine: false,
+                                         onChanged: { translation in
+                                             let start = agendaDragStart ?? agendaFraction
+                                             agendaDragStart = start
+                                             agendaFraction = clamp(start + Double(translation / geo.size.width), Self.agendaRange)
+                                         },
+                                         onEnded: { agendaDragStart = nil },
+                                         onReset: { agendaFraction = Self.defaultAgendaFraction })
+                                .zIndex(1)
+                            TimeListView()
+                        }
                     }
                 }
             }
@@ -70,8 +93,11 @@ struct MainView: View {
         }
         .coordinateSpace(.named("main"))
         .background(ThingsColor.backgroundContent)
-        .onDrop(of: [.emailMessage, .fileURL], isTargeted: $state.isDropTargeted) { providers in
-            MailImporter.handle(providers: providers, context: context, appState: appState)
+        .onDrop(of: [.emailMessage, .fileURL, .gmailMessage], isTargeted: $state.isDropTargeted) { providers in
+            if GmailDrop.accepts(providers) {
+                return GmailDrop.handle(providers: providers, column: .inbox, context: context, appState: appState)
+            }
+            return MailImporter.handle(providers: providers, context: context, appState: appState)
         }
         .sheet(item: $state.stopContext) { stop in
             if let entry = TimerService.allEntries(in: context).first(where: { $0.id == stop.entryID }) {
@@ -79,6 +105,15 @@ struct MainView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { gmailVisible.toggle() }
+                } label: {
+                    Label("Gmail", systemImage: "sidebar.left")
+                }
+                .keyboardShortcut("g", modifiers: [.command, .option])
+                .help("Gmail-paneel tonen of verbergen (⌥⌘G)")
+            }
             ToolbarItem(placement: .primaryAction) {
                 SettingsLink {
                     Label("Voorkeuren", systemImage: "gearshape")
@@ -123,6 +158,7 @@ private func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double {
 private struct SplitDivider: View {
     /// `true`: een horizontale lijn (verschuift op en neer); `false`: een verticale lijn (links/rechts).
     let isHorizontalLine: Bool
+    var label: String? = nil
     let onChanged: (CGFloat) -> Void
     let onEnded: () -> Void
     let onReset: () -> Void
@@ -158,8 +194,8 @@ private struct SplitDivider: View {
                 }
                 .onEnded { _ in onEnded() }
         )
-            .accessibilityLabel(isHorizontalLine ? "Schuif de verdeling tussen board en agenda"
-                                                 : "Schuif de verdeling tussen agenda en Tijd schrijven")
+            .accessibilityLabel(label ?? (isHorizontalLine ? "Schuif de verdeling tussen board en agenda"
+                                                           : "Schuif de verdeling tussen agenda en Tijd schrijven"))
     }
 }
 

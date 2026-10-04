@@ -56,6 +56,7 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 - Kaarten naar de agenda slepen: starttijd (kwartieren) → eindtijd (greep) → popover met `GH: vdm|ndm|<tijd> <titel>` → echt `EKEvent`.
 - Snelle invoer met globale sneltoets (standaard ⌥⌘T), `#klant` wordt label.
 - `.eml` op het venster slepen → kaarten in de Inbox, klantnaam uit domein/koppeltabel/freemail, logo via Google Custom Search met favicon-terugval.
+- Gmail-paneel links (⌥⌘G): inloggen met Google, inbox bekijken, een mail naar een kolom slepen. De mail wordt een kaart (titel, afzender, tekst) en wordt daarna in Gmail gearchiveerd. Zie "Gmail koppelen".
 - Tijd schrijven: één lopende timer, pauze/hervat/stop, verplichte omschrijving, eindtijdcontrole, afronding, "geschreven"-vinkje, CSV-export (`BillingExporter`-protocol).
 - Menubalkknop met lopende tijd, bestaande to-do starten, snelle support (starten of direct loggen).
 - Voorkeuren (⌘,), een eigen venster met tabs: **Agenda's** (welke agenda's zichtbaar zijn, standaard doelagenda), **Weergave** (thema automatisch/licht/donker, werkweek of dag, werkdagen, uren) en **Overig** (sneltoets, afronding, waarschuwingsdrempel, koppeltabel, Google-sleutel).
@@ -81,7 +82,7 @@ Het bureaubladontwerp (board + agenda + tijdlijst tegelijk, slepen tussen panele
 - **Eindtijd bij inplannen** wordt begrensd op het einde van het zichtbare agenda-uur (instelling), niet op middernacht.
 - **Voor 08:00** is de standaardprefix `vdm` (de spec zegt daar niets over).
 - **Google API-sleutel** staat in `UserDefaults` (niet in de Keychain).
-- Geen app-icoon en geen asset-catalogus.
+- **Gmail-paneel**: compileert, maar is nooit uitgevoerd tegen een echt Google-account. Archiveren haalt het label INBOX van het hele gesprek (zoals de knop Archiveren in Gmail), niet alleen van het gesleepte bericht.
 - De bundle-id is een placeholder (`com.example.werkbank`).
 
 ## iCloud-synchronisatie
@@ -102,3 +103,20 @@ Let op: de eerste keer dat CloudKit draait, wordt het schema in de *Development*
 TestFlight/App Store moet je het schema in het CloudKit Dashboard naar *Production* uitrollen.
 Bestaande lokale gegevens uit een build zonder iCloud worden meegenomen; lukt de migratie niet, dan bewaart de app de
 oude database als back-up (`default.store.backup-…`) en begint leeg.
+
+## Gmail koppelen
+
+Het Gmail-paneel (macOS) gebruikt de Gmail API met inloggen via Google (OAuth met PKCE). Er staat geen wachtwoord of client secret
+in de app; de refresh-token staat in de sleutelhanger. De app vraagt de scope `gmail.modify`: lezen en archiveren, geen verwijderen of versturen.
+
+Eenmalig instellen (gratis Google-account volstaat):
+1. Maak op [console.cloud.google.com](https://console.cloud.google.com) een project en zet onder *APIs & Services › Library* de **Gmail API** aan.
+2. *OAuth-toestemmingsscherm* (Google Auth Platform): type **Extern**, app-naam Werkbank, jouw e-mailadres. Voeg onder *Gegevenstoegang* de scope
+   `https://www.googleapis.com/auth/gmail.modify` toe en jouw Gmail-adres als testgebruiker.
+3. Zet de publicatiestatus op **In productie**. Blijft hij op *Testen*, dan verloopt de login elke 7 dagen. In productie zonder verificatie
+   toont Google bij het eerste inloggen "Google heeft deze app niet geverifieerd": kies *Geavanceerd › Doorgaan naar Werkbank*. Voor eigen gebruik is verificatie niet nodig (limiet 100 gebruikers).
+4. *Credentials › OAuth-client-ID aanmaken*, type **iOS**, bundle-id = jouw `APP_BUNDLE_ID`. Kopieer de client-id (eindigt op `.apps.googleusercontent.com`).
+5. Zet in `Config/Local.xcconfig`: `GOOGLE_CLIENT_ID = <client-id>`, draai `xcodegen generate` en bouw opnieuw.
+
+Gebruik: ⌥⌘G of de knop linksboven in de werkbalk opent het paneel; *Inloggen met Google*; sleep een mail naar een kolom. Eerst wordt de kaart gemaakt,
+daarna wordt de mail in Gmail gearchiveerd. Mislukt archiveren, dan blijft de kaart staan, blijft de mail in de inbox en krijg je een melding.

@@ -227,15 +227,18 @@ struct BoardView: View {
                 Color.clear.preference(key: ColumnFrameKey.self, value: [column: geo.frame(in: .main)])
             }
         )
-        // Een mail (.eml) op een kolom slepen zet de kaart in die kolom.
-        .onDrop(of: [.emailMessage, .fileURL], isTargeted: Binding(
+        // Een mail (.eml, of een mail uit het Gmail-paneel) op een kolom slepen zet de kaart in die kolom.
+        .onDrop(of: [.emailMessage, .fileURL, .gmailMessage], isTargeted: Binding(
             get: { dropTargetColumn == column },
             set: { targeted in
                 if targeted { dropTargetColumn = column }
                 else if dropTargetColumn == column { dropTargetColumn = nil }
             }
         )) { providers in
-            MailImporter.handle(providers: providers, column: column, context: context, appState: appState)
+            if GmailDrop.accepts(providers) {
+                return GmailDrop.handle(providers: providers, column: column, context: context, appState: appState)
+            }
+            return MailImporter.handle(providers: providers, column: column, context: context, appState: appState)
         }
     }
 

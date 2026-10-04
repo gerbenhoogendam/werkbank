@@ -1,5 +1,7 @@
 // Standaardwaarden. Eigen waarden zet je in Config/Local.xcconfig (staat in .gitignore).
 APP_BUNDLE_ID = com.example.werkbank
 DEVELOPMENT_TEAM =
+// OAuth-client-id (type "iOS") voor het Gmail-paneel; zie README, "Gmail koppelen". Leeg = paneel toont uitleg.
+GOOGLE_CLIENT_ID =
 
 #include? "Local.xcconfig"
