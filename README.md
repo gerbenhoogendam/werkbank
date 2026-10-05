@@ -132,8 +132,9 @@ Dit is nog nooit uitgevoerd: ik kan niet inloggen bij Apple. Verwacht dat de eer
 
 **Eenmalig bij Apple**
 1. [developer.apple.com](https://developer.apple.com) › Account: je betaalde account en je Team ID (staat al in `Config/Local.xcconfig`).
-2. [App Store Connect](https://appstoreconnect.apple.com) › Apps › **+ Nieuwe app**: maak een app aan voor iOS met bundle-id = jouw `APP_BUNDLE_ID` (bijv. `nl.itgwerkbank.werkbank`).
-   Wil je ook de Mac-versie in TestFlight, maak dan nog een app aan voor macOS met hetzelfde bundle-id.
+2. [App Store Connect](https://appstoreconnect.apple.com) › Apps › **+ › Nieuwe app** (niet "Nieuwe appbundel"): vink de platforms aan (iOS en eventueel macOS),
+   kies een unieke naam, primaire taal Nederlands, jouw `APP_BUNDLE_ID` als bundle-id (staat hij niet in de lijst, bouw dan eerst één keer vanuit Xcode met je team,
+   dan registreert Xcode hem) en een eigen SKU. iOS en macOS delen één app zolang ze hetzelfde bundle-id hebben; een platform voeg je later toe via het linkermenu.
 3. App Store Connect › Gebruikers en toegang › Integraties › App Store Connect API › **Teamsleutels**: genereer een sleutel met rol **Beheerder**
    (nodig voor cloud-ondertekening). Download het `.p8`-bestand (kan maar één keer) en noteer *Key ID* en *Issuer ID*.
 4. [CloudKit-dashboard](https://icloud.developer.apple.com) › jouw container `iCloud.<bundle-id>` › **Deploy schema changes** naar *Production*.
