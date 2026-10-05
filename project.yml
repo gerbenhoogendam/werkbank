@@ -68,6 +68,8 @@ targets:
       properties:
         CFBundleDisplayName: Werkbank
         LSApplicationCategoryType: public.app-category.productivity
+        # Alleen standaardversleuteling (HTTPS): vrijgesteld; voorkomt de exportvraag bij elke TestFlight-upload.
+        ITSAppUsesNonEncryptionExempt: true
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
         GoogleClientID: $(GOOGLE_CLIENT_ID)
@@ -123,6 +125,7 @@ targets:
             UTTypeDescription: Kolom (Werkbank)
             UTTypeConformsTo:
               - public.data
+        ITSAppUsesNonEncryptionExempt: true
         UILaunchScreen: {}
         UIBackgroundModes:
           - remote-notification

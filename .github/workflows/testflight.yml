@@ -1,0 +1,55 @@
+name: TestFlight
+
+# Handmatig starten (Actions › TestFlight › Run workflow). Bouwt een Release, ondertekent met cloud-ondertekening
+# via een App Store Connect API-sleutel en uploadt naar TestFlight. Instellen: zie README, "TestFlight".
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Welk platform uploaden?"
+        type: choice
+        options: [beide, iOS, macOS]
+        default: beide
+      version:
+        description: "Versienummer voor testers (bijv. 0.2.0)"
+        required: true
+        default: "0.1.0"
+
+jobs:
+  ios:
+    if: inputs.platform == 'beide' || inputs.platform == 'iOS'
+    name: Upload iOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/testflight
+        with:
+          scheme: Werkbank-iOS
+          destination: "generic/platform=iOS"
+          version: ${{ inputs.version }}
+          build-number: ${{ github.run_number }}
+          team-id: ${{ vars.APPLE_TEAM_ID }}
+          bundle-id: ${{ vars.APP_BUNDLE_ID }}
+          google-client-id: ${{ vars.GOOGLE_CLIENT_ID }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-key-p8: ${{ secrets.ASC_KEY_P8 }}
+
+  macos:
+    if: inputs.platform == 'beide' || inputs.platform == 'macOS'
+    name: Upload macOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/testflight
+        with:
+          scheme: Werkbank-macOS
+          destination: "generic/platform=macOS"
+          version: ${{ inputs.version }}
+          build-number: ${{ github.run_number }}
+          team-id: ${{ vars.APPLE_TEAM_ID }}
+          bundle-id: ${{ vars.APP_BUNDLE_ID }}
+          google-client-id: ${{ vars.GOOGLE_CLIENT_ID }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-key-p8: ${{ secrets.ASC_KEY_P8 }}

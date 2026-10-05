@@ -124,3 +124,37 @@ Eenmalig instellen (gratis Google-account volstaat):
 
 Gebruik: ⌥⌘G of de knop linksboven in de werkbalk opent het paneel; *Inloggen met Google*. Klik een mail om hem in de lijst open te klappen (alleen de tekst, geen opmaak of bijlagen); de archiefknop staat in de rij (bij aanwijzen) en onder de opengeklapte mail en archiveert zonder kaart. Onder de tekst kun je ook meteen een taak maken: titel (standaard het onderwerp), al bestede minuten en kolom; daarna wordt de mail gearchiveerd. Veeg een mail (twee vingers op het trackpad) naar links om te archiveren of naar rechts om meteen een taak te maken (onderwerp als titel, in de Inbox, daarna gearchiveerd). Sleep een mail naar een kolom. Eerst wordt de kaart gemaakt,
 daarna wordt de mail in Gmail gearchiveerd. Mislukt archiveren, dan blijft de kaart staan, blijft de mail in de inbox en krijg je een melding.
+
+## TestFlight (testers uitnodigen)
+
+De build en upload lopen via GitHub Actions (`.github/workflows/testflight.yml`); jij regelt eenmalig de Apple-kant en de geheimen.
+Dit is nog nooit uitgevoerd: ik kan niet inloggen bij Apple. Verwacht dat de eerste run om iets vraagt.
+
+**Eenmalig bij Apple**
+1. [developer.apple.com](https://developer.apple.com) › Account: je betaalde account en je Team ID (staat al in `Config/Local.xcconfig`).
+2. [App Store Connect](https://appstoreconnect.apple.com) › Apps › **+ Nieuwe app**: maak een app aan voor iOS met bundle-id = jouw `APP_BUNDLE_ID` (bijv. `nl.itgwerkbank.werkbank`).
+   Wil je ook de Mac-versie in TestFlight, maak dan nog een app aan voor macOS met hetzelfde bundle-id.
+3. App Store Connect › Gebruikers en toegang › Integraties › App Store Connect API › **Teamsleutels**: genereer een sleutel met rol **Beheerder**
+   (nodig voor cloud-ondertekening). Download het `.p8`-bestand (kan maar één keer) en noteer *Key ID* en *Issuer ID*.
+4. [CloudKit-dashboard](https://icloud.developer.apple.com) › jouw container `iCloud.<bundle-id>` › **Deploy schema changes** naar *Production*.
+   Zonder dit synchroniseren TestFlight-builds niet via iCloud (die gebruiken de Production-omgeving).
+
+**Eenmalig in GitHub** (repo › Settings › Secrets and variables › Actions)
+- Secrets: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (de volledige inhoud van het `.p8`-bestand, inclusief de BEGIN/END-regels).
+- Variables: `APPLE_TEAM_ID`, `APP_BUNDLE_ID`, en optioneel `GOOGLE_CLIENT_ID` (voor het Gmail-paneel).
+
+**Uploaden**: Actions › *TestFlight* › Run workflow › kies platform en versienummer. Het buildnummer loopt vanzelf op.
+Na een paar minuten verwerkt Apple de build; daarna staat hij in App Store Connect › TestFlight.
+
+**Testers**
+- *Intern* (tot 100 mensen met een rol in je App Store Connect-team): direct beschikbaar, geen controle door Apple.
+- *Extern* (iedereen, via e-mail of openbare link): de eerste build gaat langs Beta App Review. Je moet een beschrijving, een feedback-e-mailadres
+  en meestal een privacybeleid-URL invullen.
+- Testers installeren de app TestFlight (iPhone, iPad en Mac) en accepteren de uitnodiging.
+
+**Let op voor anderen**
+- Elke tester heeft eigen gegevens in zijn eigen iCloud; er wordt niets met jou gedeeld.
+- Gmail-paneel: de OAuth-client in je Google Cloud-project werkt voor maximaal 100 gebruikers en toont bij het eerste inloggen "app niet geverifieerd".
+  Staat het project nog op *Testen*, dan moet je elke tester als testgebruiker toevoegen.
+- Het logo zoeken via Google vraagt een eigen API-sleutel (Voorkeuren › Overig); zonder sleutel wordt het favicon gebruikt.
+- De Mac-app in TestFlight vraagt een Mac App Store-ondertekening; cloud-ondertekening met de Beheerder-sleutel regelt dat zelf.

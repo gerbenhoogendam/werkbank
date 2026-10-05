@@ -1,0 +1,123 @@
+name: Archive en upload naar TestFlight
+description: Genereert het project, archiveert met cloud-ondertekening en uploadt naar App Store Connect.
+
+inputs:
+  scheme:
+    required: true
+    description: "Werkbank-iOS of Werkbank-macOS"
+  destination:
+    required: true
+    description: "xcodebuild-bestemming"
+  version:
+    required: true
+    description: "MARKETING_VERSION"
+  build-number:
+    required: true
+    description: "CURRENT_PROJECT_VERSION (moet per upload oplopen)"
+  team-id:
+    required: true
+    description: "Apple Team ID"
+  bundle-id:
+    required: true
+    description: "APP_BUNDLE_ID"
+  google-client-id:
+    required: false
+    default: ""
+    description: "OAuth-client-id voor het Gmail-paneel"
+  asc-key-id:
+    required: true
+    description: "App Store Connect API Key ID"
+  asc-issuer-id:
+    required: true
+    description: "App Store Connect Issuer ID"
+  asc-key-p8:
+    required: true
+    description: "Inhoud van het .p8-bestand"
+
+runs:
+  using: composite
+  steps:
+    - name: Controleren of de instellingen er zijn
+      shell: bash
+      env:
+        TEAM: ${{ inputs.team-id }}
+        BUNDLE: ${{ inputs.bundle-id }}
+        KEY_ID: ${{ inputs.asc-key-id }}
+        ISSUER: ${{ inputs.asc-issuer-id }}
+        KEY_P8: ${{ inputs.asc-key-p8 }}
+      run: |
+        missing=""
+        [ -z "$TEAM" ] && missing="$missing APPLE_TEAM_ID (variabele)"
+        [ -z "$BUNDLE" ] && missing="$missing APP_BUNDLE_ID (variabele)"
+        [ -z "$KEY_ID" ] && missing="$missing ASC_KEY_ID (secret)"
+        [ -z "$ISSUER" ] && missing="$missing ASC_ISSUER_ID (secret)"
+        [ -z "$KEY_P8" ] && missing="$missing ASC_KEY_P8 (secret)"
+        if [ -n "$missing" ]; then
+          echo "::error::Ontbrekend in Settings > Secrets and variables > Actions:$missing"
+          exit 1
+        fi
+
+    - name: XcodeGen installeren
+      shell: bash
+      run: brew install xcodegen
+
+    - name: Instellingen en API-sleutel neerzetten
+      shell: bash
+      env:
+        TEAM: ${{ inputs.team-id }}
+        BUNDLE: ${{ inputs.bundle-id }}
+        GCID: ${{ inputs.google-client-id }}
+        KEY_P8: ${{ inputs.asc-key-p8 }}
+      run: |
+        printf 'APP_BUNDLE_ID = %s\nDEVELOPMENT_TEAM = %s\nGOOGLE_CLIENT_ID = %s\n' "$BUNDLE" "$TEAM" "$GCID" > Config/Local.xcconfig
+        mkdir -p "$RUNNER_TEMP/keys"
+        printf '%s\n' "$KEY_P8" > "$RUNNER_TEMP/keys/AuthKey.p8"
+        chmod 600 "$RUNNER_TEMP/keys/AuthKey.p8"
+
+    - name: Project genereren
+      shell: bash
+      run: xcodegen generate
+
+    - name: Archiveren (Release, cloud-ondertekening)
+      shell: bash
+      env:
+        SCHEME: ${{ inputs.scheme }}
+        DEST: ${{ inputs.destination }}
+        VERSION: ${{ inputs.version }}
+        BUILD: ${{ inputs.build-number }}
+        KEY_ID: ${{ inputs.asc-key-id }}
+        ISSUER: ${{ inputs.asc-issuer-id }}
+      run: |
+        set -o pipefail
+        xcodebuild archive \
+          -project Werkbank.xcodeproj \
+          -scheme "$SCHEME" \
+          -configuration Release \
+          -destination "$DEST" \
+          -archivePath "$RUNNER_TEMP/Werkbank.xcarchive" \
+          -allowProvisioningUpdates \
+          -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+          -authenticationKeyID "$KEY_ID" \
+          -authenticationKeyIssuerID "$ISSUER" \
+          MARKETING_VERSION="$VERSION" \
+          CURRENT_PROJECT_VERSION="$BUILD" \
+          2>&1 | tee "$RUNNER_TEMP/archive.log" | tail -n 60
+
+    - name: Exporteren en uploaden naar App Store Connect
+      shell: bash
+      env:
+        TEAM: ${{ inputs.team-id }}
+        KEY_ID: ${{ inputs.asc-key-id }}
+        ISSUER: ${{ inputs.asc-issuer-id }}
+      run: |
+        set -o pipefail
+        printf '%s' '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>destination</key><string>upload</string><key>signingStyle</key><string>automatic</string><key>uploadSymbols</key><true/><key>teamID</key><string>'"$TEAM"'</string></dict></plist>' > "$RUNNER_TEMP/ExportOptions.plist"
+        xcodebuild -exportArchive \
+          -archivePath "$RUNNER_TEMP/Werkbank.xcarchive" \
+          -exportPath "$RUNNER_TEMP/export" \
+          -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+          -allowProvisioningUpdates \
+          -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+          -authenticationKeyID "$KEY_ID" \
+          -authenticationKeyIssuerID "$ISSUER" \
+          2>&1 | tee "$RUNNER_TEMP/export.log" | tail -n 60
