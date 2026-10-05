@@ -57,6 +57,17 @@ runs:
           exit 1
         fi
 
+    - name: Xcode 26 kiezen (Apple eist de iOS 26 SDK voor uploads)
+      shell: bash
+      run: |
+        latest=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+        if [ -z "$latest" ]; then
+          echo "::error::Geen Xcode 26 op deze runner. Beschikbaar: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
+          exit 1
+        fi
+        sudo xcode-select -s "$latest"
+        xcodebuild -version
+
     - name: XcodeGen installeren
       shell: bash
       run: brew install xcodegen
