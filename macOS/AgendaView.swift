@@ -411,7 +411,7 @@ struct AgendaView: View {
 
 // MARK: - Dagkolom
 
-private struct DayColumn: View {
+struct DayColumn: View {
     let day: Date
     let events: [AgendaEvent]
     let startHour: Int
@@ -422,6 +422,19 @@ private struct DayColumn: View {
 
     @Environment(DragCoordinator.self) private var drag
     private let calendar = Calendar.current
+
+    // Expliciet, omdat de privé-eigenschappen de automatische init buiten dit bestand verbergen
+    // (ook de Maandagenda gebruikt deze kolom).
+    init(day: Date, events: [AgendaEvent], startHour: Int, endHour: Int, hourHeight: CGFloat,
+         dayEnd: Date, onTapEvent: @escaping (AgendaEvent) -> Void) {
+        self.day = day
+        self.events = events
+        self.startHour = startHour
+        self.endHour = endHour
+        self.hourHeight = hourHeight
+        self.dayEnd = dayEnd
+        self.onTapEvent = onTapEvent
+    }
 
     private var totalHeight: CGFloat { hourHeight * CGFloat(endHour - startHour) }
 

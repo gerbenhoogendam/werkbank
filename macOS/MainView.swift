@@ -18,6 +18,9 @@ struct MainView: View {
     @State private var agendaDragStart: Double?
     @State private var gmailDragStart: Double?
     @State private var showArchive = false
+    // Maandagenda: `monthShown` houdt de weergave in beeld, `monthOpen` stuurt het open- en dichtvouwen.
+    @State private var monthShown = false
+    @State private var monthOpen = false
 
     private static let defaultGmailWidth = 300.0
     private static let gmailRange = 240.0...480.0
@@ -74,6 +77,13 @@ struct MainView: View {
                             TimeListView()
                         }
                     }
+                    // Over het hele venster, behalve het Gmail-paneel.
+                    .overlay {
+                        if monthShown {
+                            MonthAgendaView(isOpen: $monthOpen, onClose: closeMonthAgenda)
+                                .transition(.identity)
+                        }
+                    }
                 }
             }
 
@@ -116,6 +126,16 @@ struct MainView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    toggleMonthAgenda()
+                } label: {
+                    Label("Maandagenda", systemImage: "calendar")
+                        .labelStyle(.titleAndIcon)
+                }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .help("Vier werkweken tegelijk (⌥⌘A)")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
                     showArchive.toggle()
                 } label: {
                     Label("Archief", systemImage: "archivebox")
@@ -140,6 +160,23 @@ struct MainView: View {
                 }
                 .help("Nieuwe kaart in de Inbox (werkt ook vanuit andere apps met de sneltoets)")
             }
+        }
+    }
+
+    private func toggleMonthAgenda() {
+        if monthShown && monthOpen {
+            closeMonthAgenda()
+        } else if !monthShown {
+            monthShown = true   // de weergave zet zelf `monthOpen` aan zodra ze in beeld is
+        }
+    }
+
+    private func closeMonthAgenda() {
+        monthOpen = false
+        // Pas weghalen als het dichtvouwen klaar is (langste vertraging 0,5 s + 0,55 s).
+        Task {
+            try? await Task.sleep(for: .milliseconds(1150))
+            if !monthOpen { monthShown = false }
         }
     }
 
