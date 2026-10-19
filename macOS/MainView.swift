@@ -173,9 +173,9 @@ struct MainView: View {
 
     private func closeMonthAgenda() {
         monthOpen = false
-        // Pas weghalen als het dichtvouwen klaar is (langste vertraging 0,5 s + 0,55 s).
+        // Pas weghalen als het dichtvouwen klaar is (langste vertraging 0,25 s + 0,2 s).
         Task {
-            try? await Task.sleep(for: .milliseconds(1150))
+            try? await Task.sleep(for: .milliseconds(600))
             if !monthOpen { monthShown = false }
         }
     }

@@ -32,12 +32,12 @@ struct MonthAgendaView: View {
             Rectangle()
                 .fill(ThingsColor.backgroundSidebar)
                 .opacity(isOpen ? 1 : 0)
-                .animation(.easeOut(duration: 0.3), value: isOpen)
+                .animation(.easeOut(duration: 0.15), value: isOpen)
 
             VStack(spacing: 0) {
                 topBar
                     .opacity(isOpen ? 1 : 0)
-                    .animation(.easeOut(duration: 0.25).delay(isOpen ? 0.3 : 0), value: isOpen)
+                    .animation(.easeOut(duration: 0.12).delay(isOpen ? 0.15 : 0), value: isOpen)
                 if service.hasAccess {
                     pages
                 } else {
@@ -140,19 +140,19 @@ struct MonthAgendaView: View {
                     page(mondays[0], fetched, width, height)
                         .opacity(isOpen ? 1 : 0)
                         .scaleEffect(isOpen ? 1 : 0.92, anchor: .topLeading)
-                        .animation(.easeOut(duration: 0.4).delay(isOpen ? 0.05 : 0.5), value: isOpen)
+                        .animation(.easeOut(duration: 0.2).delay(isOpen ? 0.025 : 0.25), value: isOpen)
                     // Rechtsboven klapt open om de linkerrand (de rug), onderaan om de bovenrand.
                     page(mondays[1], fetched, width, height)
                         .modifier(FoldEffect(angle: isOpen ? 0 : -90, axis: (0, 1, 0), anchor: .leading))
-                        .animation(.easeInOut(duration: 0.55).delay(isOpen ? 0.2 : 0.3), value: isOpen)
+                        .animation(.easeInOut(duration: 0.275).delay(isOpen ? 0.1 : 0.15), value: isOpen)
                 }
                 HStack(spacing: gap) {
                     page(mondays[2], fetched, width, height)
                         .modifier(FoldEffect(angle: isOpen ? 0 : 90, axis: (1, 0, 0), anchor: .top))
-                        .animation(.easeInOut(duration: 0.55).delay(isOpen ? 0.55 : 0.1), value: isOpen)
+                        .animation(.easeInOut(duration: 0.275).delay(isOpen ? 0.275 : 0.05), value: isOpen)
                     page(mondays[3], fetched, width, height)
                         .modifier(FoldEffect(angle: isOpen ? 0 : 90, axis: (1, 0, 0), anchor: .top))
-                        .animation(.easeInOut(duration: 0.55).delay(isOpen ? 0.7 : 0), value: isOpen)
+                        .animation(.easeInOut(duration: 0.275).delay(isOpen ? 0.35 : 0), value: isOpen)
                 }
             }
             .padding(.horizontal, gap)
