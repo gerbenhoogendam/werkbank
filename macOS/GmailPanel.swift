@@ -167,44 +167,37 @@ struct GmailPanel: View {
                     .foregroundStyle(ThingsColor.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Een List (geen ScrollView) voor de veegacties: met twee vingers op het trackpad naar links
-                // archiveert, naar rechts maakt direct een taak. Met een muis kan dat niet; gebruik dan de knoppen.
-                List {
-                    ForEach(gmail.messages) { message in
-                        GmailRow(message: message,
-                                 isBusy: gmail.busyMessageIDs.contains(message.id),
-                                 isExpanded: expandedID == message.id,
-                                 onToggle: {
-                                     withAnimation(.easeOut(duration: 0.15)) {
-                                         expandedID = expandedID == message.id ? nil : message.id
-                                     }
-                                 },
-                                 onArchive: { archive(message) },
-                                 onCreateTask: { title, minutes, column in
-                                     if expandedID == message.id { expandedID = nil }
-                                     Task {
-                                         await gmail.createTask(from: message, title: title, minutes: minutes,
-                                                                column: column, context: context, appState: appState)
-                                     }
-                                 })
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button { archive(message) } label: {
-                                    Label("Archiveren", systemImage: "archivebox")
-                                }
-                                .tint(ThingsColor.textSecondary)
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button { quickTask(message) } label: {
-                                    Label("Taak maken", systemImage: "checkmark.circle")
-                                }
-                                .tint(ThingsColor.accent)
-                            }
+                // ScrollView, geen List: een List nam het slepen van de rij over. De veegacties (twee vingers op het
+                // trackpad: links archiveert, rechts maakt een taak) staan los in `TrackpadSwipe`.
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(gmail.messages) { message in
+                            GmailRow(message: message,
+                                     isBusy: gmail.busyMessageIDs.contains(message.id),
+                                     isExpanded: expandedID == message.id,
+                                     onToggle: {
+                                         withAnimation(.easeOut(duration: 0.15)) {
+                                             expandedID = expandedID == message.id ? nil : message.id
+                                         }
+                                     },
+                                     onArchive: { archive(message) },
+                                     onCreateTask: { title, minutes, column in
+                                         if expandedID == message.id { expandedID = nil }
+                                         Task {
+                                             await gmail.createTask(from: message, title: title, minutes: minutes,
+                                                                    column: column, context: context, appState: appState)
+                                         }
+                                     })
+                                .trackpadSwipe(
+                                    leading: SwipeAction(systemImage: "checkmark.circle", title: "Taak maken",
+                                                         color: ThingsColor.accent) { quickTask(message) },
+                                    trailing: SwipeAction(systemImage: "archivebox", title: "Archiveren",
+                                                          color: ThingsColor.textSecondary) { archive(message) }
+                                )
+                            Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                        }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
             Text("Klik een mail om hem te lezen. Veeg naar links om te archiveren, naar rechts voor een taak (twee vingers op het trackpad). Of sleep hem naar een kolom: hij wordt dan ook gearchiveerd.")
                 .thingsFont(.metadata)
