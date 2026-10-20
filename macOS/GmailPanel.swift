@@ -8,10 +8,9 @@ struct GmailPanel: View {
     private let gmail = GmailSession.shared
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var context
-    /// De mail die openstaat in de lijst (één tegelijk).
-    @State private var expandedID: String?
-    /// Zolang je een mail versleept, staat onderaan het ronde doel voor de analyse met Claude.
-    @State private var isDraggingMail = false
+    /// De mail die is aangeklikt (alleen markering; lezen doe je met dubbelklikken).
+    @State private var selectedID: String?
+    private let dragState = MailDragState.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,13 +23,13 @@ struct GmailPanel: View {
         // Een Gmail-mail loslaten op het paneel zelf doet niets (zo kun je een sleepactie afbreken).
         .onDrop(of: [.gmailMessage], isTargeted: nil) { _ in true }
         .overlay(alignment: .bottom) {
-            if isDraggingMail {
+            if dragState.isDragging {
                 ClaudeDropTarget()
                     .padding(.bottom, 64)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isDraggingMail)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: dragState.isDragging)
         .task {
             if gmail.state == .signedIn {
                 await gmail.migrateLegacyIfNeeded()
@@ -46,26 +45,15 @@ struct GmailPanel: View {
 
     // MARK: Acties
 
-    /// De sleep begon: toon het Claude-doel tot de muisknop weer los is (er is geen aparte "sleep afgebroken"-melding).
-    private func mailDragStarted() {
-        guard !isDraggingMail else { return }
-        isDraggingMail = true
-        Task { @MainActor in
-            while NSEvent.pressedMouseButtons & 1 != 0 { try? await Task.sleep(for: .milliseconds(100)) }
-            try? await Task.sleep(for: .milliseconds(450))   // de drop-afhandeling gaat voor
-            isDraggingMail = false
-        }
-    }
-
     private func archive(_ message: GmailMessageSummary) {
-        if expandedID == message.id { expandedID = nil }
+        if selectedID == message.id { selectedID = nil }
         Task { await gmail.archiveMessage(message, appState: appState) }
     }
 
     /// Veeg naar rechts: een taak met het onderwerp als titel in de Inbox, zonder de mail te openen.
     /// Daarna wordt de mail gearchiveerd, net als bij slepen en bij "Maak taak".
     private func quickTask(_ message: GmailMessageSummary) {
-        if expandedID == message.id { expandedID = nil }
+        if selectedID == message.id { selectedID = nil }
         Task {
             await gmail.createTask(from: message, title: message.subject, minutes: 0, column: .inbox,
                                    context: context, appState: appState)
@@ -107,7 +95,7 @@ struct GmailPanel: View {
         Menu {
             ForEach(gmail.accounts, id: \.self) { email in
                 Button {
-                    expandedID = nil
+                    selectedID = nil
                     Task { await gmail.switchAccount(to: email) }
                 } label: {
                     if email == gmail.activeAccount {
@@ -224,21 +212,10 @@ struct GmailPanel: View {
                         ForEach(gmail.messages) { message in
                             GmailRow(message: message,
                                      isBusy: gmail.busyMessageIDs.contains(message.id),
-                                     isExpanded: expandedID == message.id,
-                                     onToggle: {
-                                         withAnimation(.easeOut(duration: 0.15)) {
-                                             expandedID = expandedID == message.id ? nil : message.id
-                                         }
-                                     },
+                                     isSelected: selectedID == message.id,
+                                     onSelect: { selectedID = message.id },
                                      onArchive: { archive(message) },
-                                     onDragStarted: mailDragStarted,
-                                     onCreateTask: { title, minutes, column in
-                                         if expandedID == message.id { expandedID = nil }
-                                         Task {
-                                             await gmail.createTask(from: message, title: title, minutes: minutes,
-                                                                    column: column, context: context, appState: appState)
-                                         }
-                                     })
+                                     onDragStarted: { dragState.begin() })
                                 .trackpadSwipe(
                                     leading: SwipeAction(systemImage: "checkmark.circle", title: "Taak maken",
                                                          color: ThingsColor.accent) { quickTask(message) },
@@ -250,11 +227,6 @@ struct GmailPanel: View {
                     }
                 }
             }
-            Text("Klik een mail om hem te lezen. Veeg naar links om te archiveren, naar rechts voor een taak (twee vingers op het trackpad). Of sleep hem naar een kolom: hij wordt dan ook gearchiveerd.")
-                .thingsFont(.metadata)
-                .foregroundStyle(ThingsColor.textTertiary)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -262,38 +234,27 @@ struct GmailPanel: View {
 private struct GmailRow: View {
     let message: GmailMessageSummary
     let isBusy: Bool
-    let isExpanded: Bool
-    let onToggle: () -> Void
+    let isSelected: Bool
+    let onSelect: () -> Void
     let onArchive: () -> Void
     let onDragStarted: () -> Void
-    let onCreateTask: (String, Int, BoardColumn) -> Void
 
-    private enum BodyState {
-        case loading
-        case loaded(String)
-        case failed(String)
-    }
-
-    @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
+    @Environment(\.openWindow) private var openWindow
     @State private var isHovering = false
-    @State private var bodyState: BodyState = .loading
-    // Taak maken: titel (standaard het onderwerp), al bestede minuten en de kolom.
-    @State private var taskTitle = ""
-    @State private var minutesText = ""
-    @State private var targetColumnID = BoardColumn.inboxID
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            if isExpanded { expandedContent }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isHovering || isExpanded ? ThingsColor.selection.opacity(0.5) : Color.clear)
-        .opacity(isBusy ? 0.5 : 1)
-        .onHover { isHovering = $0 }
+        header
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isSelected ? ThingsColor.selection : (isHovering ? ThingsColor.selection.opacity(0.5) : Color.clear))
+            .opacity(isBusy ? 0.5 : 1)
+            .onHover { isHovering = $0 }
     }
 
-    // MARK: Kop (klikken klapt open, slepen naar een kolom)
+    private func open() {
+        openWindow(id: "mail", value: MailRef(message: message))
+    }
+
+    // MARK: Rij (één klik markeert, dubbelklik opent de mail, slepen naar een kolom)
 
     private var header: some View {
         HStack(alignment: .top, spacing: 4) {
@@ -318,9 +279,9 @@ private struct GmailRow: View {
                 Text(message.subject)
                     .thingsFont(.todoTitle)
                     .foregroundStyle(ThingsColor.textPrimary)
-                    .lineLimit(isExpanded ? nil : 1)
+                    .lineLimit(1)
                     .padding(.leading, 13)
-                if !isExpanded, !message.snippet.isEmpty {
+                if !message.snippet.isEmpty {
                     Text(message.snippet)
                         .thingsFont(.metadata)
                         .foregroundStyle(ThingsColor.textSecondary)
@@ -330,23 +291,24 @@ private struct GmailRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .onTapGesture(perform: onToggle)
+            // Eerst dubbelklik, dan enkele klik: anders wint de enkele klik altijd.
+            .onTapGesture(count: 2, perform: open)
+            .onTapGesture(perform: onSelect)
             .onDrag {
                 onDragStarted()
                 return GmailSession.shared.dragProvider(for: message)
             }
             .contextMenu {
-                Button("Analyseer met Claude") {
-                    ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
-                }
+                Button("Openen") { open() }
+                Button("Analyseer met Claude") { analyze() }
+                Divider()
+                Button("Archiveren", action: onArchive)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Klik om de mail te lezen, of sleep hem naar een kolom")
+            .accessibilityHint("Dubbelklik om de mail te openen, of sleep hem naar een kolom")
 
-            Button {
-                ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
-            } label: {
+            Button(action: analyze) {
                 ClaudeSpark()
                     .frame(width: 14, height: 14)
                     .frame(width: 24, height: 24)
@@ -354,7 +316,7 @@ private struct GmailRow: View {
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
-            .opacity(isHovering || isExpanded ? 1 : 0)
+            .opacity(isHovering || isSelected ? 1 : 0)
             .help("Laat Claude deze mail analyseren")
             .accessibilityLabel("Analyseer mail van \(message.senderDisplay) met Claude")
 
@@ -367,7 +329,7 @@ private struct GmailRow: View {
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
-            .opacity(isHovering || isExpanded ? 1 : 0)
+            .opacity(isHovering || isSelected ? 1 : 0)
             .help("Archiveren in Gmail")
             .accessibilityLabel("Archiveer mail van \(message.senderDisplay)")
         }
@@ -376,108 +338,9 @@ private struct GmailRow: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: Opengeklapt
-
-    private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let address = message.fromAddress {
-                Text(message.fromName.map { "\($0) <\(address)>" } ?? address)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .textSelection(.enabled)
-            }
-            switch bodyState {
-            case .loading:
-                ProgressView().controlSize(.small)
-            case .loaded(let text):
-                ScrollView {
-                    Text(text.isEmpty ? "(Geen tekst in deze mail)" : text)
-                        .thingsFont(.notes)
-                        .foregroundStyle(ThingsColor.textPrimary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 280)
-            case .failed(let reason):
-                Text(reason)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.deadline)
-            }
-            taskSection
-        }
-        .padding(.leading, 25)
-        .padding(.trailing, 12)
-        .padding(.bottom, 10)
-        .task(id: message.id) {
-            if taskTitle.isEmpty { taskTitle = message.subject }
-            await loadBody()
-        }
-    }
-
-    // MARK: Taak maken
-
-    private var minutes: Int { Int(minutesText.trimmingCharacters(in: .whitespaces)) ?? 0 }
-
-    private var taskSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
-            Text("Taak maken")
-                .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.textPrimary)
-            TextField("Titel van de taak", text: $taskTitle)
-                .textFieldStyle(.roundedBorder)
-            HStack(spacing: 6) {
-                Text("Al besteed")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                TextField("0", text: $minutesText)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 52)
-                Text("min")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 6) {
-                Text("In kolom")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                Picker("In kolom", selection: $targetColumnID) {
-                    ForEach(columnRecords) { record in
-                        Text(record.title).tag(record.key)
-                    }
-                }
-                .labelsHidden()
-            }
-            HStack(spacing: 8) {
-                Button {
-                    let column = columnRecords.first { $0.key == targetColumnID }?.column ?? .inbox
-                    onCreateTask(taskTitle, minutes, column)
-                } label: {
-                    Text("Maak taak")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isBusy || taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button(action: onArchive) {
-                    Label("Alleen archiveren", systemImage: "archivebox")
-                }
-                .disabled(isBusy)
-            }
-            Text("Beide archiveren de mail in Gmail.")
-                .thingsFont(.metadata)
-                .foregroundStyle(ThingsColor.textTertiary)
-        }
-    }
-
-    private func loadBody() async {
-        bodyState = .loading
-        do {
-            bodyState = .loaded(try await GmailSession.shared.body(forMessageID: message.id))
-        } catch {
-            bodyState = .failed("Mail ophalen mislukt: \(error.localizedDescription)")
-        }
+    private func analyze() {
+        ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
+        openWindow(id: "claude")
     }
 
     private static func dateText(_ date: Date) -> String {

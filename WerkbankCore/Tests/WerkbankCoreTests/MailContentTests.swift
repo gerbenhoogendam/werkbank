@@ -139,6 +139,33 @@ final class MailContentTests: XCTestCase {
         XCTAssertEqual(mail.blocks.last, .text("[Inhoud van bijlage error.log]\nfout 42 op regel 3"))
     }
 
+    func testDisplayHTMLInlinesCidImagesAndEscapesPlainText() {
+        let png = b64(7)
+        let html = """
+        From: a@example.com
+        Subject: Scherm
+        Content-Type: multipart/related; boundary="R"
+
+        --R
+        Content-Type: text/html; charset=utf-8
+
+        <p>Kijk:</p><img src="cid:shot">
+        --R
+        Content-Type: image/png
+        Content-ID: <shot>
+        Content-Transfer-Encoding: base64
+
+        \(png)
+        --R--
+        """
+        let mail = MailContentParser.parse(Data(html.utf8))
+        XCTAssertTrue(mail.displayHTML.contains("data:image/png;base64,\(png)"))
+        XCTAssertFalse(mail.displayHTML.contains("cid:"))
+
+        let plain = MailContentParser.parse(Data("From: a@b.nl\nSubject: x\n\n1 < 2 & 3 > 2".utf8))
+        XCTAssertEqual(plain.displayHTML, "<pre class=\"plain\">1 &lt; 2 &amp; 3 &gt; 2</pre>")
+    }
+
     func testHeaderTextOmitsEmptyFields() {
         let mail = MailContentParser.parse(Data("From: a@b.nl\nSubject: Hoi\n\nTekst".utf8))
         XCTAssertEqual(mail.headerText, "Van: a@b.nl\nOnderwerp: Hoi")

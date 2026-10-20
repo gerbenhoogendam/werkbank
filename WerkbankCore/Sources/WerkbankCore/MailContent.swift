@@ -27,6 +27,9 @@ public struct MailContent: Equatable {
     public var cc: String
     public var date: String
     public var blocks: [MailBlock]
+    /// De mail zoals hij op het scherm getoond wordt: de HTML met inline afbeeldingen als data-URL (of de platte tekst
+    /// als `<pre>`). Zonder omhulsel: het weergavevenster zet er stijl en een beveiligingsregel omheen.
+    public var displayHTML: String = ""
 
     /// Kop van de mail als platte tekst (alleen ingevulde regels).
     public var headerText: String {
@@ -92,7 +95,8 @@ public enum MailContentParser {
         }
 
         return MailContent(subject: field("subject"), from: field("from"), to: field("to"), cc: field("cc"),
-                           date: field("date"), blocks: limitImages(blocks))
+                           date: field("date"), blocks: limitImages(blocks),
+                           displayHTML: displayHTML(html: walked.html, plain: walked.plain, attachments: attachments))
     }
 
     // MARK: - Structuur
@@ -208,6 +212,37 @@ public enum MailContentParser {
         }
         appendText(ns.substring(from: cursor))
         return blocks
+    }
+
+    // MARK: - Weergave
+
+    private static let cidReference = try! NSRegularExpression(pattern: #"cid:([^"'\s)>]+)"#, options: [.caseInsensitive])
+
+    static func displayHTML(html: String?, plain: String?, attachments: [MailAttachment]) -> String {
+        if let html { return inlineCIDImages(in: html, attachments: attachments) }
+        if let plain { return "<pre class=\"plain\">" + escapeHTML(plain) + "</pre>" }
+        return "<p><i>(Geen inhoud)</i></p>"
+    }
+
+    /// Vervangt `cid:`-verwijzingen door data-URL's, zodat de afbeeldingen zonder netwerk op hun plek verschijnen.
+    static func inlineCIDImages(in html: String, attachments: [MailAttachment]) -> String {
+        let ns = NSString(string: html)
+        var result = html
+        for match in cidReference.matches(in: html, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let raw = ns.substring(with: match.range(at: 1))
+            let wanted = (raw.removingPercentEncoding ?? raw).trimmingCharacters(in: CharacterSet(charactersIn: "<> ")).lowercased()
+            guard let attachment = attachments.first(where: { $0.contentID?.lowercased() == wanted }),
+                  attachment.mediaType.hasPrefix("image/"),
+                  let range = Range(match.range, in: result) else { continue }
+            result.replaceSubrange(range, with: "data:\(attachment.mediaType);base64,\(attachment.data.base64EncodedString())")
+        }
+        return result
+    }
+
+    static func escapeHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
     }
 
     // MARK: - Bijlage naar stuk

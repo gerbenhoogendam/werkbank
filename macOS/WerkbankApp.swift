@@ -35,6 +35,22 @@ struct WerkbankApp: App {
         }
         .defaultSize(width: 1440, height: 900)
 
+        // Eén venster per mail (dubbelklik in het Gmail-paneel).
+        WindowGroup("Mail", id: "mail", for: MailRef.self) { ref in
+            if let value = ref.wrappedValue {
+                MailWindowView(ref: value)
+                    .environment(appState)
+                    .modelContainer(Persistence.container)
+            }
+        }
+        .defaultSize(width: 760, height: 860)
+
+        Window("Analyse door Claude", id: "claude") {
+            ClaudeAnalysisView()
+                .environment(appState)
+        }
+        .defaultSize(width: 720, height: 780)
+
         MenuBarExtra {
             MenuBarPanel()
                 .scrollIndicators(.hidden)

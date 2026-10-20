@@ -108,8 +108,6 @@ final class ClaudeAnalyzer {
         var answer: String
     }
 
-    /// Het blad met de analyse staat open.
-    var isPresented = false
     private(set) var phase: Phase = .idle
     private(set) var subject = ""
     private(set) var attachmentSummary = ""
@@ -141,8 +139,7 @@ final class ClaudeAnalyzer {
     func analyze(messageID: String, subject: String) {
         task?.cancel()
         reset(subject: subject)
-        isPresented = true
-        guard hasKey else { return }   // het blad vraagt dan om de sleutel
+        guard hasKey else { return }   // het venster vraagt dan om de sleutel
         phase = .preparing
         task = Task { [weak self] in
             do {
@@ -185,10 +182,7 @@ final class ClaudeAnalyzer {
         if isBusy { phase = .idle }
     }
 
-    func close() {
-        task?.cancel()
-        isPresented = false
-    }
+    func close() { task?.cancel() }
 
     /// Slaat een nieuwe sleutel op en begint (opnieuw) als er al een mail klaarstond.
     func saveKey(_ key: String) {

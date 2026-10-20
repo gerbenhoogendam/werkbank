@@ -522,9 +522,10 @@ final class GmailSession {
 
     /// Maakt van een gesleepte Gmail-mail een kaart in `column` en archiveert hem daarna in Gmail.
     /// Archiveren gebeurt pas als de kaart is opgeslagen; mislukt het, dan blijft de kaart staan en de mail in de inbox.
+    @discardableResult
     func importDropped(_ payload: GmailDragPayload, column: BoardColumn,
-                       context: ModelContext, appState: AppState) async {
-        guard !busyMessageIDs.contains(payload.messageID) else { return }
+                       context: ModelContext, appState: AppState) async -> TodoCard? {
+        guard !busyMessageIDs.contains(payload.messageID) else { return nil }
         busyMessageIDs.insert(payload.messageID)
         defer { busyMessageIDs.remove(payload.messageID) }
 
@@ -533,7 +534,7 @@ final class GmailSession {
             raw = try await rawMessage(id: payload.messageID)
         } catch {
             appState.showToast("Mail ophalen uit Gmail mislukt: \(error.localizedDescription)", seconds: 5)
-            return
+            return nil
         }
 
         let card = BoardService.addMail(EMLParser.parse(raw), column: column, in: context)
@@ -549,6 +550,7 @@ final class GmailSession {
         } catch {
             appState.showToast("Kaart gemaakt, maar archiveren in Gmail mislukte: \(error.localizedDescription)", seconds: 6)
         }
+        return card
     }
 
     /// De sleeplading van één rij in het paneel.

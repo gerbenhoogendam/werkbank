@@ -1,6 +1,7 @@
 import AppKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 import WerkbankCore
 
 // MARK: - Voorkeuren
@@ -422,7 +423,10 @@ struct DayColumn: View {
 
     @Environment(DragCoordinator.self) private var drag
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     private let calendar = Calendar.current
+    /// Waar een gesleepte mail boven de kolom hangt (voor het stippelblok).
+    @State private var mailHoverY: CGFloat?
 
     /// Verplaatsing van een herhalende afspraak die nog op de keuze "alleen deze / ook volgende" wacht.
     private struct PendingMove: Identifiable {
@@ -488,6 +492,10 @@ struct DayColumn: View {
                     slotPreview(slot, width: width)
                 }
 
+                if let y = mailHoverY {
+                    slotPreview(AgendaSlot(day: day, start: slotStart(forY: y)), width: width)
+                }
+
                 if let draft = drag.draft, draft.day == day {
                     DraftBlock(draft: draft, hourHeight: hourHeight, dayEnd: dayEnd)
                         .frame(width: max(0, width - 4), height: draftHeight(draft))
@@ -499,6 +507,7 @@ struct DayColumn: View {
                 }
             }
             .frame(width: width, height: totalHeight, alignment: .topLeading)
+            .onDrop(of: [.gmailMessage], delegate: MailDropDelegate(hoverY: $mailHoverY, perform: handleMailDrop))
             .background(
                 Color.clear.preference(key: DayFrameKey.self, value: [day: geo.frame(in: .main)])
             )
@@ -519,6 +528,37 @@ struct DayColumn: View {
         } message: { move in
             Text("\"\(move.event.title)\" verplaatsen naar \(move.calendar.title).")
         }
+    }
+
+    // MARK: Een mail op de agenda laten vallen
+
+    /// Begin van het kwartier onder de muis, binnen de zichtbare uren.
+    private func slotStart(forY y: CGFloat) -> Date {
+        let raw = Double(startHour * 60) + Double(y / hourHeight) * 60
+        let snapped = (raw / 15).rounded(.down) * 15
+        let clamped = min(max(snapped, Double(startHour * 60)), Double(endHour * 60 - 15))
+        return calendar.startOfDay(for: day).addingTimeInterval(clamped * 60)
+    }
+
+    /// De mail wordt een kaart in de Inbox (en in Gmail gearchiveerd) en loopt dan door dezelfde stappen als een
+    /// kaart die je op de agenda sleept: eindtijd kiezen en bevestigen.
+    private func handleMailDrop(y: CGFloat, providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }) else {
+            return false
+        }
+        let start = slotStart(forY: y)
+        let end = Scheduling.defaultEnd(start: start, dayEnd: dayEnd)
+        let day = day
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
+            guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
+            Task { @MainActor in
+                guard let card = await GmailSession.shared.importDropped(payload, column: .inbox,
+                                                                         context: modelContext, appState: appState) else { return }
+                drag.draft = ScheduleDraft(cardID: card.id, todoTitle: card.title, day: day,
+                                           start: start, end: end, step: .end)
+            }
+        }
+        return true
     }
 
     // MARK: Verplaatsen naar een andere agenda
@@ -728,5 +768,23 @@ private struct DraftBlock: View {
                 gripBase = nil
                 drag.draft?.step = .confirm
             }
+    }
+}
+
+/// Opvangen van een mail boven een dagkolom, met de hoogte van de muis voor het stippelblok.
+private struct MailDropDelegate: DropDelegate {
+    @Binding var hoverY: CGFloat?
+    let perform: (CGFloat, [NSItemProvider]) -> Bool
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.gmailMessage]) }
+    func dropEntered(info: DropInfo) { hoverY = info.location.y }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        hoverY = info.location.y
+        return DropProposal(operation: .copy)
+    }
+    func dropExited(info: DropInfo) { hoverY = nil }
+    func performDrop(info: DropInfo) -> Bool {
+        hoverY = nil
+        return perform(info.location.y, info.itemProviders(for: [.gmailMessage]))
     }
 }

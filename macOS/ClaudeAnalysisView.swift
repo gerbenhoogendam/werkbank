@@ -30,6 +30,7 @@ struct ClaudeSpark: View {
 /// Ronde sleepdoel onderaan de maillijst: een mail erop loslaten start de analyse.
 struct ClaudeDropTarget: View {
     @State private var isTargeted = false
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ZStack {
@@ -53,6 +54,7 @@ struct ClaudeDropTarget: View {
                     guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
                     Task { @MainActor in
                         ClaudeAnalyzer.shared.analyze(messageID: payload.messageID, subject: payload.subject ?? "")
+                        openWindow(id: "claude")
                     }
                 }
                 return true
@@ -66,6 +68,7 @@ struct ClaudeDropTarget: View {
 
 struct ClaudeAnalysisView: View {
     private let analyzer = ClaudeAnalyzer.shared
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(ClaudeSettings.modelKey) private var modelRaw = ClaudeModel.opus.rawValue
     @State private var keyText = ""
     @State private var question = ""
@@ -83,7 +86,7 @@ struct ClaudeAnalysisView: View {
                 footer
             }
         }
-        .frame(minWidth: 620, idealWidth: 700, minHeight: 560, idealHeight: 720)
+        .frame(minWidth: 560, minHeight: 480)
         .background(ThingsColor.backgroundContent)
     }
 
@@ -112,8 +115,11 @@ struct ClaudeAnalysisView: View {
             Button("Opnieuw") { analyzer.restart() }
                 .disabled(analyzer.isBusy)
                 .help("Dezelfde mail opnieuw analyseren (met het gekozen model)")
-            Button("Sluit") { analyzer.close() }
-                .keyboardShortcut(.cancelAction)
+            Button("Sluit") {
+                analyzer.close()
+                dismiss()
+            }
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
