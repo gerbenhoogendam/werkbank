@@ -98,23 +98,55 @@ final class GmailSession {
     enum State: Equatable { case signedOut, signingIn, signedIn }
 
     private(set) var state: State = .signedOut
-    private(set) var emailAddress: String?
+    /// Gekoppelde mailboxen (e-mailadressen) en welke daarvan nu in het paneel staat.
+    private(set) var accounts: [String] = []
+    private(set) var activeAccount: String?
+    var emailAddress: String? { activeAccount }
+    /// `true` terwijl het inlogvenster voor een (extra) account open staat.
+    private(set) var isAddingAccount = false
     private(set) var messages: [GmailMessageSummary] = []
     private(set) var isLoading = false
     private(set) var busyMessageIDs: Set<String> = []
     private(set) var lastError: String?
 
     @ObservationIgnored private var bodyCache: [String: String] = [:]
+    /// Laatst opgehaalde inbox per mailbox, zodat schakelen direct iets toont.
+    @ObservationIgnored private var messageCache: [String: [GmailMessageSummary]] = [:]
+    @ObservationIgnored private var loadingKeys: Set<String> = []
     @ObservationIgnored private var accessToken: String?
     @ObservationIgnored private var accessExpiry = Date.distantPast
     @ObservationIgnored private var authSession: ASWebAuthenticationSession?
     @ObservationIgnored private let presenter = WebAuthPresenter()
 
-    private static let refreshAccount = "refreshToken"
+    /// Vóór het schakelen tussen mailboxen stond hier één token; dat blijft werken tot het naar een adres is verhuisd.
+    private static let legacyAccount = "refreshToken"
+    private static let accountsKey = "gmail.accounts"
+    private static let activeKey = "gmail.activeAccount"
     private static let inboxPageSize = "40"
 
+    private static func tokenAccount(_ email: String) -> String { "refreshToken:\(email)" }
+
     private init() {
-        if Keychain.read(Self.refreshAccount) != nil { state = .signedIn }
+        let defaults = UserDefaults.standard
+        accounts = (defaults.stringArray(forKey: Self.accountsKey) ?? []).filter {
+            Keychain.read(Self.tokenAccount($0)) != nil
+        }
+        let saved = defaults.string(forKey: Self.activeKey)
+        activeAccount = saved.flatMap { accounts.contains($0) ? $0 : nil } ?? accounts.first
+        if hasAnyAccount { state = .signedIn }
+    }
+
+    private var hasAnyAccount: Bool { !accounts.isEmpty || Keychain.read(Self.legacyAccount) != nil }
+
+    private var activeRefreshToken: String? {
+        if let account = activeAccount { return Keychain.read(Self.tokenAccount(account)) }
+        return Keychain.read(Self.legacyAccount)
+    }
+
+    private func persistAccounts() {
+        let defaults = UserDefaults.standard
+        defaults.set(accounts, forKey: Self.accountsKey)
+        defaults.set(activeAccount, forKey: Self.activeKey)
     }
 
     // MARK: Configuratie
@@ -128,20 +160,25 @@ final class GmailSession {
 
     // MARK: Inloggen
 
+    /// Voegt een mailbox toe (en maakt hem actief). Google vraagt altijd welk account je wilt gebruiken.
     func signIn() async {
         guard isConfigured, let redirectURI = GoogleOAuth.redirectURI(forClientID: Self.clientID),
               let scheme = GoogleOAuth.redirectScheme(forClientID: Self.clientID) else {
             lastError = GmailError.notConfigured.localizedDescription
             return
         }
-        state = .signingIn
+        if !hasAnyAccount { state = .signingIn }
+        isAddingAccount = true
         lastError = nil
+        defer { isAddingAccount = false }
         do {
             let verifier = Self.randomToken()
             let challenge = Base64URL.encode(Data(SHA256.hash(data: Data(verifier.utf8))))
             let expectedState = Self.randomToken()
             guard let url = GoogleOAuth.authorizationURL(clientID: Self.clientID, codeChallenge: challenge,
-                                                          state: expectedState) else { throw GmailError.notConfigured }
+                                                          state: expectedState, selectAccount: true) else {
+                throw GmailError.notConfigured
+            }
 
             let callback = try await authenticate(url: url, callbackScheme: scheme)
             let redirect = GoogleOAuth.parseRedirect(callback)
@@ -160,22 +197,44 @@ final class GmailSession {
             guard let refresh = tokens.refreshToken else {
                 throw GmailError.signInFailed("Google gaf geen refresh-token terug")
             }
-            Keychain.write(refresh, account: Self.refreshAccount)
+            guard let email = try await profileEmail(accessToken: tokens.accessToken) else {
+                throw GmailError.signInFailed("het e-mailadres van het account is onbekend")
+            }
+            // Zelfde account nogmaals toevoegen vervangt alleen de token.
+            Keychain.write(refresh, account: Self.tokenAccount(email))
+            if !accounts.contains(email) { accounts.append(email) }
+            if let current = activeAccount { messageCache[current] = messages }
+            activeAccount = email
+            persistAccounts()
+            messages = messageCache[email] ?? []
             accessToken = tokens.accessToken
             accessExpiry = Date().addingTimeInterval(tokens.expiresIn)
             state = .signedIn
-            await loadProfile()
             await reload()
         } catch GmailError.signInCancelled {
-            state = Keychain.read(Self.refreshAccount) == nil ? .signedOut : .signedIn
+            state = hasAnyAccount ? .signedIn : .signedOut
         } catch {
-            state = Keychain.read(Self.refreshAccount) == nil ? .signedOut : .signedIn
+            state = hasAnyAccount ? .signedIn : .signedOut
             lastError = error.localizedDescription
         }
     }
 
-    func signOut() {
-        if let refresh = Keychain.read(Self.refreshAccount) {
+    /// Schakelt het paneel naar een andere gekoppelde mailbox.
+    func switchAccount(to email: String) async {
+        guard accounts.contains(email), email != activeAccount else { return }
+        if let current = activeAccount { messageCache[current] = messages }
+        activeAccount = email
+        persistAccounts()
+        accessToken = nil
+        accessExpiry = .distantPast
+        messages = messageCache[email] ?? []
+        lastError = nil
+        await reload()
+    }
+
+    /// Koppelt een mailbox los (en trekt de toegang bij Google in).
+    func removeAccount(_ email: String) {
+        if let refresh = Keychain.read(Self.tokenAccount(email)) {
             // Best effort: trek de toegang bij Google ook in.
             Task.detached {
                 var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/revoke")!)
@@ -185,16 +244,53 @@ final class GmailSession {
                 _ = try? await URLSession.shared.data(for: request)
             }
         }
-        clearLocalSession()
+        Keychain.delete(Self.tokenAccount(email))
+        accounts.removeAll { $0 == email }
+        messageCache[email] = nil
+        if activeAccount == email {
+            activeAccount = accounts.first
+            accessToken = nil
+            accessExpiry = .distantPast
+            messages = activeAccount.flatMap { messageCache[$0] } ?? []
+            state = hasAnyAccount ? .signedIn : .signedOut
+        }
+        persistAccounts()
+        if activeAccount != nil { Task { await reload() } }
     }
 
-    private func clearLocalSession() {
-        Keychain.delete(Self.refreshAccount)
-        accessToken = nil
-        accessExpiry = .distantPast
-        emailAddress = nil
-        messages = []
-        state = .signedOut
+    func signOut() {
+        if let account = activeAccount {
+            removeAccount(account)
+        } else {
+            Keychain.delete(Self.legacyAccount)
+            accessToken = nil
+            accessExpiry = .distantPast
+            messages = []
+            state = .signedOut
+        }
+    }
+
+    /// Verhuist de enkele token van vóór het schakelen naar een token per e-mailadres.
+    func migrateLegacyIfNeeded() async {
+        guard accounts.isEmpty, let legacy = Keychain.read(Self.legacyAccount) else { return }
+        do {
+            let tokens = try await tokenRequest(["grant_type": "refresh_token",
+                                                 "refresh_token": legacy,
+                                                 "client_id": Self.clientID])
+            guard let email = try await profileEmail(accessToken: tokens.accessToken) else { return }
+            Keychain.write(legacy, account: Self.tokenAccount(email))
+            Keychain.delete(Self.legacyAccount)
+            accounts = [email]
+            activeAccount = email
+            persistAccounts()
+            accessToken = tokens.accessToken
+            accessExpiry = Date().addingTimeInterval(tokens.expiresIn)
+        } catch GmailError.sessionExpired {
+            Keychain.delete(Self.legacyAccount)
+            state = .signedOut
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     private func authenticate(url: URL, callbackScheme: String) async throws -> URL {
@@ -236,7 +332,7 @@ final class GmailSession {
 
     private func validAccessToken() async throws -> String {
         if let token = accessToken, accessExpiry > Date().addingTimeInterval(60) { return token }
-        guard let refresh = Keychain.read(Self.refreshAccount) else { throw GmailError.notSignedIn }
+        guard let refresh = activeRefreshToken else { throw GmailError.notSignedIn }
         do {
             let tokens = try await tokenRequest(["grant_type": "refresh_token",
                                                  "refresh_token": refresh,
@@ -245,7 +341,8 @@ final class GmailSession {
             accessExpiry = Date().addingTimeInterval(tokens.expiresIn)
             return tokens.accessToken
         } catch GmailError.sessionExpired {
-            clearLocalSession()
+            // De toegang is ingetrokken of verlopen: dit account moet opnieuw worden toegevoegd.
+            signOut()
             throw GmailError.sessionExpired
         }
     }
@@ -290,17 +387,26 @@ final class GmailSession {
         return data
     }
 
-    func loadProfile() async {
-        guard let data = try? await api("profile"),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        emailAddress = json["emailAddress"] as? String
+    /// Het e-mailadres bij een access-token (rechtstreeks, los van het actieve account).
+    private func profileEmail(accessToken: String) async throws -> String? {
+        var request = URLRequest(url: URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/profile")!)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw GmailError.invalidResponse }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["emailAddress"] as? String
     }
 
     /// Haalt de inbox (nieuwste eerst, één rij per gesprek) opnieuw op.
     func reload() async {
-        guard state == .signedIn, !isLoading else { return }
+        guard state == .signedIn else { return }
+        let key = activeAccount ?? ""
+        guard !loadingKeys.contains(key) else { return }
+        loadingKeys.insert(key)
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            loadingKeys.remove(key)
+            isLoading = !loadingKeys.isEmpty
+        }
         do {
             let listData = try await api("messages", query: [URLQueryItem(name: "labelIds", value: "INBOX"),
                                                               URLQueryItem(name: "maxResults", value: Self.inboxPageSize)])
@@ -317,10 +423,14 @@ final class GmailSession {
                 }
                 return found.sorted { $0.0 < $1.0 }.map(\.1)
             }
-            messages = summaries
-            lastError = nil
+            // Is er intussen naar een andere mailbox geschakeld, dan hoort dit resultaat daar niet te belanden.
+            messageCache[key] = summaries
+            if key == (activeAccount ?? "") {
+                messages = summaries
+                lastError = nil
+            }
         } catch {
-            if state == .signedIn { lastError = error.localizedDescription }
+            if state == .signedIn, key == (activeAccount ?? "") { lastError = error.localizedDescription }
         }
     }
 

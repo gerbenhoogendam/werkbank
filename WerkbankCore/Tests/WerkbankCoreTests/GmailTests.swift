@@ -93,6 +93,16 @@ final class GmailTests: XCTestCase {
         XCTAssertEqual(value("access_type"), "offline")
     }
 
+    func testAuthorizationURLAsksForAccountChoiceOnlyWhenRequested() throws {
+        func prompt(_ select: Bool) throws -> String? {
+            let url = try XCTUnwrap(GoogleOAuth.authorizationURL(clientID: "123-abc.apps.googleusercontent.com",
+                                                                  codeChallenge: "C", state: "S", selectAccount: select))
+            return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "prompt" }?.value
+        }
+        XCTAssertEqual(try prompt(false), "consent")
+        XCTAssertEqual(try prompt(true), "select_account consent")
+    }
+
     func testParseRedirect() throws {
         let ok = try XCTUnwrap(URL(string: "com.googleusercontent.apps.123-abc:/oauth2redirect?code=4%2F0AX&state=STATE"))
         let parsed = GoogleOAuth.parseRedirect(ok)

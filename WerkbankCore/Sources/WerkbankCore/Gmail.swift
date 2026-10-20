@@ -151,7 +151,10 @@ public enum GoogleOAuth {
         redirectScheme(forClientID: clientID).map { "\($0):/oauth2redirect" }
     }
 
-    public static func authorizationURL(clientID: String, codeChallenge: String, state: String) -> URL? {
+    /// - Parameter selectAccount: laat Google altijd een accountkeuze tonen (nodig om een tweede mailbox toe te voegen;
+    ///   anders kiest Google stilzwijgend het account waarmee de browser al is ingelogd).
+    public static func authorizationURL(clientID: String, codeChallenge: String, state: String,
+                                        selectAccount: Bool = false) -> URL? {
         guard let redirect = redirectURI(forClientID: clientID) else { return nil }
         var components = URLComponents(string: authorizationEndpoint)
         components?.queryItems = [
@@ -164,7 +167,7 @@ public enum GoogleOAuth {
             URLQueryItem(name: "state", value: state),
             // offline + consent: zonder dat geeft Google geen refresh-token.
             URLQueryItem(name: "access_type", value: "offline"),
-            URLQueryItem(name: "prompt", value: "consent"),
+            URLQueryItem(name: "prompt", value: selectAccount ? "select_account consent" : "consent"),
         ]
         return components?.url
     }

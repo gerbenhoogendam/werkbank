@@ -22,7 +22,7 @@ struct GmailPanel: View {
         .onDrop(of: [.gmailMessage], isTargeted: nil) { _ in true }
         .task {
             if gmail.state == .signedIn {
-                if gmail.emailAddress == nil { await gmail.loadProfile() }
+                await gmail.migrateLegacyIfNeeded()
                 await gmail.reload()
             }
             // Gmail kent geen push naar deze app: ververs af en toe zolang het paneel open staat.
@@ -56,7 +56,7 @@ struct GmailPanel: View {
         HStack(spacing: 8) {
             Image(systemName: "envelope.fill")
                 .foregroundStyle(ThingsColor.accent)
-            Text("Gmail")
+            Text(gmail.accounts.count > 1 ? "Mail" : "Gmail")
                 .thingsFont(.heading)
                 .foregroundStyle(ThingsColor.textPrimary)
             Spacer()
@@ -73,20 +73,48 @@ struct GmailPanel: View {
                     .foregroundStyle(ThingsColor.textSecondary)
                     .help("Inbox verversen")
                 }
-                Menu {
-                    if let email = gmail.emailAddress { Text(email) }
-                    Button("Uitloggen", role: .destructive) { gmail.signOut() }
-                } label: {
-                    Image(systemName: "person.crop.circle")
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help(gmail.emailAddress ?? "Account")
+                accountMenu
             }
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
+    }
+
+    /// Schakelen tussen gekoppelde mailboxen, een mailbox toevoegen of loskoppelen.
+    private var accountMenu: some View {
+        Menu {
+            ForEach(gmail.accounts, id: \.self) { email in
+                Button {
+                    expandedID = nil
+                    Task { await gmail.switchAccount(to: email) }
+                } label: {
+                    if email == gmail.activeAccount {
+                        Label(email, systemImage: "checkmark")
+                    } else {
+                        Text(email)
+                    }
+                }
+            }
+            Divider()
+            Button("Mailbox toevoegen…") { Task { await gmail.signIn() } }
+                .disabled(gmail.isAddingAccount)
+            if let email = gmail.activeAccount {
+                Button("\(email) loskoppelen", role: .destructive) { gmail.removeAccount(email) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "person.crop.circle")
+                if gmail.accounts.count > 1, let email = gmail.activeAccount {
+                    Text(email.split(separator: "@").first.map(String.init) ?? email)
+                        .thingsFont(.metadata)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(gmail.emailAddress ?? "Account")
     }
 
     // MARK: Inhoud

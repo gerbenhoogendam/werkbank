@@ -125,6 +125,12 @@ Eenmalig instellen (gratis Google-account volstaat):
 Gebruik: ⌥⌘G of de knop linksboven in de werkbalk opent het paneel; *Inloggen met Google*. Klik een mail om hem in de lijst open te klappen (alleen de tekst, geen opmaak of bijlagen); de archiefknop staat in de rij (bij aanwijzen) en onder de opengeklapte mail en archiveert zonder kaart. Onder de tekst kun je ook meteen een taak maken: titel (standaard het onderwerp), al bestede minuten en kolom; daarna wordt de mail gearchiveerd. Veeg een mail (twee vingers op het trackpad) naar links om te archiveren of naar rechts om meteen een taak te maken (onderwerp als titel, in de Inbox, daarna gearchiveerd). Sleep een mail naar een kolom. Eerst wordt de kaart gemaakt,
 daarna wordt de mail in Gmail gearchiveerd. Mislukt archiveren, dan blijft de kaart staan, blijft de mail in de inbox en krijg je een melding.
 
+**Meer dan één mailbox**: het account-icoon rechtsboven in het paneel toont je gekoppelde mailboxen. Kies er een om te schakelen,
+*Mailbox toevoegen…* om er een bij te koppelen (Google vraagt dan welk account), of *loskoppelen* om er een te verwijderen. De OAuth-client-ID
+hoort bij de app, niet bij een mailbox: voor een extra adres is geen nieuw Cloud-project nodig. Het adres moet zelf kunnen inloggen;
+een gedelegeerde mailbox (jij als gemachtigde) kan niet via de Gmail API. Staat de OAuth-app op *Testen*, voeg het extra adres dan
+toe als testgebruiker (en weet dat de login dan na 7 dagen verloopt); staat hij *In productie*, dan volstaat "Geavanceerd › Doorgaan".
+
 ## TestFlight (testers uitnodigen)
 
 De build en upload lopen via GitHub Actions (`.github/workflows/testflight.yml`); jij regelt eenmalig de Apple-kant en de geheimen.
