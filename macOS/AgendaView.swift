@@ -421,7 +421,16 @@ struct DayColumn: View {
     let onTapEvent: (AgendaEvent) -> Void
 
     @Environment(DragCoordinator.self) private var drag
+    @Environment(AppState.self) private var appState
     private let calendar = Calendar.current
+
+    /// Verplaatsing van een herhalende afspraak die nog op de keuze "alleen deze / ook volgende" wacht.
+    private struct PendingMove: Identifiable {
+        let event: AgendaEvent
+        let calendar: AgendaCalendar
+        var id: String { event.id }
+    }
+    @State private var pendingMove: PendingMove?
 
     // Expliciet, omdat de privé-eigenschappen de automatische init buiten dit bestand verbergen
     // (ook de Maandagenda gebruikt deze kolom).
@@ -470,6 +479,7 @@ struct DayColumn: View {
                             .onTapGesture(count: 2) { onTapEvent(event) }
                             .contextMenu {
                                 Button("Toevoegen aan Tijd schrijven") { onTapEvent(event) }
+                                moveMenu(for: event)
                             }
                     }
                 }
@@ -496,6 +506,47 @@ struct DayColumn: View {
         .frame(height: totalHeight)
         .overlay(alignment: .leading) {
             Rectangle().fill(ThingsColor.separator).frame(width: 1)
+        }
+        .confirmationDialog(
+            "Herhalende afspraak",
+            isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingMove
+        ) { move in
+            Button("Alleen deze afspraak") { perform(move, thisAndFuture: false) }
+            Button("Deze en alle volgende") { perform(move, thisAndFuture: true) }
+            Button("Annuleer", role: .cancel) {}
+        } message: { move in
+            Text("\"\(move.event.title)\" verplaatsen naar \(move.calendar.title).")
+        }
+    }
+
+    // MARK: Verplaatsen naar een andere agenda
+
+    /// Alleen agenda's waarin je mag schrijven, behalve de agenda waar de afspraak al in staat.
+    @ViewBuilder private func moveMenu(for event: AgendaEvent) -> some View {
+        let targets = CalendarService.shared.writableCalendars.filter { $0.id != event.calendarID }
+        if !targets.isEmpty {
+            Menu("Verplaats naar agenda") {
+                ForEach(targets) { target in
+                    Button(target.title) {
+                        if event.isRecurring {
+                            pendingMove = PendingMove(event: event, calendar: target)
+                        } else {
+                            perform(PendingMove(event: event, calendar: target), thisAndFuture: false)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func perform(_ move: PendingMove, thisAndFuture: Bool) {
+        do {
+            try CalendarService.shared.moveEvent(move.event, toCalendarID: move.calendar.id, thisAndFuture: thisAndFuture)
+            appState.showToast("\"\(move.event.title)\" staat nu in \(move.calendar.title)")
+        } catch {
+            appState.showToast("Verplaatsen mislukt: \(error.localizedDescription)", seconds: 6)
         }
     }
 

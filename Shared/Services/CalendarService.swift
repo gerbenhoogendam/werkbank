@@ -19,6 +19,9 @@ struct AgendaEvent: Identifiable, Equatable {
     let calendarID: String
     let calendarTitle: String
     let color: Color
+    /// Nodig om dezelfde afspraak later in EventKit terug te vinden (verplaatsen naar een andere agenda).
+    let eventIdentifier: String
+    let isRecurring: Bool
 }
 
 /// EventKit-laag. `revision` verhoogt bij elke `EKEventStoreChanged`, zodat views live meebewegen.
@@ -95,7 +98,9 @@ final class CalendarService {
                     isAllDay: event.isAllDay,
                     calendarID: event.calendar.calendarIdentifier,
                     calendarTitle: event.calendar.title,
-                    color: Color(cgColor: event.calendar.cgColor)
+                    color: Color(cgColor: event.calendar.cgColor),
+                    eventIdentifier: event.eventIdentifier ?? "",
+                    isRecurring: event.hasRecurrenceRules
                 )
             }
             .sorted { $0.start < $1.start }
@@ -127,8 +132,42 @@ final class CalendarService {
         revision += 1
     }
 
+    /// Zet een afspraak in een andere agenda. Bij een herhalende afspraak kiest `thisAndFuture` of alleen
+    /// dit voorkomen verhuist of ook alle volgende. EventKit weigert dit soms (andere account, uitnodiging van
+    /// iemand anders); die fout komt ongewijzigd terug, en niet-opgeslagen wijzigingen worden weggegooid.
+    func moveEvent(_ event: AgendaEvent, toCalendarID: String, thisAndFuture: Bool) throws {
+        guard let target = store.calendar(withIdentifier: toCalendarID) else { throw CalendarError.calendarNotFound }
+        guard target.allowsContentModifications else { throw CalendarError.targetReadOnly }
+        guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
+        guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        ek.calendar = target
+        do {
+            try store.save(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
+        } catch {
+            store.reset()
+            throw error
+        }
+        revision += 1
+    }
+
+    private func ekEvent(for event: AgendaEvent) -> EKEvent? {
+        guard !event.eventIdentifier.isEmpty else { return nil }
+        let predicate = store.predicateForEvents(withStart: event.start.addingTimeInterval(-1),
+                                                 end: event.end.addingTimeInterval(1), calendars: nil)
+        return store.events(matching: predicate).first {
+            $0.eventIdentifier == event.eventIdentifier && $0.startDate == event.start
+        }
+    }
+
     enum CalendarError: LocalizedError {
-        case calendarNotFound
-        var errorDescription: String? { "De gekozen agenda bestaat niet meer." }
+        case calendarNotFound, targetReadOnly, eventNotFound, eventReadOnly
+        var errorDescription: String? {
+            switch self {
+            case .calendarNotFound: "De gekozen agenda bestaat niet meer."
+            case .targetReadOnly: "In die agenda kun je niets toevoegen (alleen lezen)."
+            case .eventNotFound: "De afspraak is niet meer gevonden; hij is waarschijnlijk gewijzigd."
+            case .eventReadOnly: "Deze afspraak staat in een agenda die je niet kunt wijzigen."
+            }
+        }
     }
 }
