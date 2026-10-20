@@ -59,13 +59,13 @@ public enum MIMEBody {
     }
 
     /// Scheidt headers en inhoud bij de eerste lege regel. Een deel zonder headers begint met een lege regel.
-    private static func split(_ entity: String) -> (String, String) {
+    static func split(_ entity: String) -> (String, String) {
         if entity.hasPrefix("\n") { return ("", String(entity.dropFirst())) }
         guard let range = entity.range(of: "\n\n") else { return (entity, "") }
         return (String(entity[entity.startIndex..<range.lowerBound]), String(entity[range.upperBound...]))
     }
 
-    private static func parts(of body: String, boundary: String) -> [String] {
+    static func parts(of body: String, boundary: String) -> [String] {
         let pieces = body.components(separatedBy: "--" + boundary)
         var result: [String] = []
         for piece in pieces.dropFirst() {            // het eerste stuk is de preambule
@@ -79,8 +79,8 @@ public enum MIMEBody {
         return result
     }
 
-    private static func parameter(_ name: String, in header: String) -> String? {
-        let pattern = name + #"\s*=\s*(?:"([^"]*)"|([^;\s]+))"#
+    static func parameter(_ name: String, in header: String) -> String? {
+        let pattern = NSRegularExpression.escapedPattern(for: name) + #"\s*=\s*(?:"([^"]*)"|([^;\s]+))"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = NSString(string: header)
         guard let match = regex.firstMatch(in: header, range: NSRange(location: 0, length: ns.length)) else { return nil }
@@ -92,7 +92,7 @@ public enum MIMEBody {
 
     // MARK: - Decoderen
 
-    private static func decodeTransfer(_ body: String, encoding: String) -> Data {
+    static func decodeTransfer(_ body: String, encoding: String) -> Data {
         let bytes = body.data(using: .isoLatin1) ?? Data()
         switch encoding {
         case "base64":
@@ -131,7 +131,7 @@ public enum MIMEBody {
 
     // MARK: - Opschonen
 
-    private static func htmlToText(_ html: String) -> String {
+    static func htmlToText(_ html: String) -> String {
         var text = html
         let removals = [#"(?is)<style.*?</style>"#, #"(?is)<script.*?</script>"#, #"(?is)<head[\s>].*?</head>"#, #"(?s)<!--.*?-->"#]
         for pattern in removals { text = text.replacingOccurrences(of: pattern, with: "", options: .regularExpression) }
@@ -144,7 +144,7 @@ public enum MIMEBody {
     }
 
     /// Verwijdert regelafsluitende spaties en maakt van meer dan twee lege regels er twee.
-    private static func tidy(_ text: String) -> String {
+    static func tidy(_ text: String) -> String {
         let lines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
             .map { $0.replacingOccurrences(of: #"[ \t]+$"#, with: "", options: .regularExpression) }
         var result: [String] = []

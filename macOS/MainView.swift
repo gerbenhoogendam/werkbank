@@ -109,6 +109,10 @@ struct MainView: View {
             }
             return MailImporter.handle(providers: providers, context: context, appState: appState)
         }
+        .sheet(isPresented: Binding(get: { ClaudeAnalyzer.shared.isPresented },
+                                    set: { if !$0 { ClaudeAnalyzer.shared.close() } })) {
+            ClaudeAnalysisView()
+        }
         .sheet(item: $state.stopContext) { stop in
             if let entry = TimerService.allEntries(in: context).first(where: { $0.id == stop.entryID }) {
                 StopSheet(entry: entry, defaultEnd: stop.defaultEnd)

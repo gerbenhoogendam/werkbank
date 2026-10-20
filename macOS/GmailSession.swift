@@ -442,6 +442,9 @@ final class GmailSession {
         return GmailAPI.summary(fromMessageJSON: data)
     }
 
+    /// De ruwe mail (RFC 822), bijvoorbeeld voor de analyse met Claude.
+    func rawMessageData(id: String) async throws -> Data { try await rawMessage(id: id) }
+
     private func rawMessage(id: String) async throws -> Data {
         let data = try await api("messages/\(id)", query: [URLQueryItem(name: "format", value: "raw")])
         guard let raw = GmailAPI.rawMessage(fromJSON: data) else { throw GmailError.invalidResponse }
@@ -550,7 +553,7 @@ final class GmailSession {
 
     /// De sleeplading van één rij in het paneel.
     func dragProvider(for message: GmailMessageSummary) -> NSItemProvider {
-        let payload = GmailDragPayload(messageID: message.id, threadID: message.threadID)
+        let payload = GmailDragPayload(messageID: message.id, threadID: message.threadID, subject: message.subject)
         let data = (try? JSONEncoder().encode(payload)) ?? Data()
         let provider = NSItemProvider()
         provider.registerDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier,

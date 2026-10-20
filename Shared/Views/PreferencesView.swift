@@ -15,6 +15,10 @@ struct PreferencesView: View {
                 .tabItem { Label("Weergave", systemImage: "paintbrush") }
             ColumnsPreferences()
                 .tabItem { Label("Kolommen", systemImage: "rectangle.3.group") }
+            #if os(macOS)
+            ClaudePreferences()
+                .tabItem { Label("Claude", systemImage: "sparkles") }
+            #endif
             OtherPreferences()
                 .tabItem { Label("Overig", systemImage: "gearshape") }
         }

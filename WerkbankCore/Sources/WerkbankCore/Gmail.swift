@@ -57,10 +57,13 @@ public struct GmailMessageSummary: Equatable, Identifiable {
 public struct GmailDragPayload: Codable, Equatable {
     public var messageID: String
     public var threadID: String
+    /// Alleen om de analyse een titel te geven; ontbreekt in oudere sleeplading.
+    public var subject: String?
 
-    public init(messageID: String, threadID: String) {
+    public init(messageID: String, threadID: String, subject: String? = nil) {
         self.messageID = messageID
         self.threadID = threadID
+        self.subject = subject
     }
 }
 

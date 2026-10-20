@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 import WerkbankCore
@@ -9,6 +10,8 @@ struct GmailPanel: View {
     @Environment(\.modelContext) private var context
     /// De mail die openstaat in de lijst (één tegelijk).
     @State private var expandedID: String?
+    /// Zolang je een mail versleept, staat onderaan het ronde doel voor de analyse met Claude.
+    @State private var isDraggingMail = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +23,14 @@ struct GmailPanel: View {
         .background(ThingsColor.backgroundSidebar)
         // Een Gmail-mail loslaten op het paneel zelf doet niets (zo kun je een sleepactie afbreken).
         .onDrop(of: [.gmailMessage], isTargeted: nil) { _ in true }
+        .overlay(alignment: .bottom) {
+            if isDraggingMail {
+                ClaudeDropTarget()
+                    .padding(.bottom, 64)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isDraggingMail)
         .task {
             if gmail.state == .signedIn {
                 await gmail.migrateLegacyIfNeeded()
@@ -34,6 +45,17 @@ struct GmailPanel: View {
     }
 
     // MARK: Acties
+
+    /// De sleep begon: toon het Claude-doel tot de muisknop weer los is (er is geen aparte "sleep afgebroken"-melding).
+    private func mailDragStarted() {
+        guard !isDraggingMail else { return }
+        isDraggingMail = true
+        Task { @MainActor in
+            while NSEvent.pressedMouseButtons & 1 != 0 { try? await Task.sleep(for: .milliseconds(100)) }
+            try? await Task.sleep(for: .milliseconds(450))   // de drop-afhandeling gaat voor
+            isDraggingMail = false
+        }
+    }
 
     private func archive(_ message: GmailMessageSummary) {
         if expandedID == message.id { expandedID = nil }
@@ -209,6 +231,7 @@ struct GmailPanel: View {
                                          }
                                      },
                                      onArchive: { archive(message) },
+                                     onDragStarted: mailDragStarted,
                                      onCreateTask: { title, minutes, column in
                                          if expandedID == message.id { expandedID = nil }
                                          Task {
@@ -242,6 +265,7 @@ private struct GmailRow: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let onArchive: () -> Void
+    let onDragStarted: () -> Void
     let onCreateTask: (String, Int, BoardColumn) -> Void
 
     private enum BodyState {
@@ -307,10 +331,32 @@ private struct GmailRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onToggle)
-            .onDrag { GmailSession.shared.dragProvider(for: message) }
+            .onDrag {
+                onDragStarted()
+                return GmailSession.shared.dragProvider(for: message)
+            }
+            .contextMenu {
+                Button("Analyseer met Claude") {
+                    ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
+                }
+            }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Klik om de mail te lezen, of sleep hem naar een kolom")
+
+            Button {
+                ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
+            } label: {
+                ClaudeSpark()
+                    .frame(width: 14, height: 14)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+            .opacity(isHovering || isExpanded ? 1 : 0)
+            .help("Laat Claude deze mail analyseren")
+            .accessibilityLabel("Analyseer mail van \(message.senderDisplay) met Claude")
 
             Button(action: onArchive) {
                 Image(systemName: "archivebox")
