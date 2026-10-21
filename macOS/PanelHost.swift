@@ -6,9 +6,11 @@ enum PanelKind: Hashable, Identifiable {
     case mail(MailRef)
     case claude
     case event(AgendaEvent)
+    case compose(ComposeRef)
 
     var id: String {
         switch self {
+        case .compose(let ref): "compose-\(ref.id)"
         case .event(let event): "event-\(event.id)"
         case .mail(let ref): "mail-\(ref.messageID)"
         case .claude: "claude"
@@ -88,6 +90,20 @@ private struct PanelChrome: View {
                     }
             case .claude:
                 ClaudeAnalysisView()
+            case .compose(let ref):
+                ComposeView(ref: ref)
+                    .overlay(alignment: .topTrailing) {
+                        Button {
+                            PanelStore.shared.close(panel)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 17))
+                                .foregroundStyle(ThingsColor.textTertiary)
+                                .padding(10)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Sluiten zonder te versturen")
+                    }
             case .event(let event):
                 EventDetailView(event: event)
                     .overlay(alignment: .topTrailing) {

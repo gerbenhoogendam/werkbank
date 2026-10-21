@@ -85,6 +85,15 @@ struct GmailPanel: View {
                     .foregroundStyle(gmail.isCombined ? Color.white.opacity(0.75) : ThingsColor.textSecondary)
                     .help("Inbox verversen")
                 }
+                Button {
+                    PanelStore.shared.open(.compose(ComposeRef(mode: .new, source: nil)))
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(gmail.isCombined ? Color.white.opacity(0.75) : ThingsColor.textSecondary)
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .help("Nieuwe mail (⇧⌘N)")
                 accountMenu
             }
         }

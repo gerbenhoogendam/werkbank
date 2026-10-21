@@ -8,6 +8,13 @@ public struct MailAttachment: Equatable {
     public var data: Data
     /// Zonder `<` en `>`; inline afbeeldingen verwijzen hiernaar met `cid:`.
     public var contentID: String?
+
+    public init(name: String, mediaType: String, data: Data, contentID: String? = nil) {
+        self.name = name
+        self.mediaType = mediaType
+        self.data = data
+        self.contentID = contentID
+    }
 }
 
 /// Een stuk van een mail, in de volgorde waarin het in de mail staat.
@@ -30,6 +37,11 @@ public struct MailContent: Equatable {
     /// De mail zoals hij op het scherm getoond wordt: de HTML met inline afbeeldingen als data-URL (of de platte tekst
     /// als `<pre>`). Zonder omhulsel: het weergavevenster zet er stijl en een beveiligingsregel omheen.
     public var displayHTML: String = ""
+    /// Voor beantwoorden: het Message-ID, de References, het Reply-To-adres en de tekst om uit te citeren.
+    public var messageID: String = ""
+    public var references: String = ""
+    public var replyTo: String = ""
+    public var quotableText: String = ""
 
     /// Kop van de mail als platte tekst (alleen ingevulde regels).
     public var headerText: String {
@@ -94,9 +106,19 @@ public enum MailContentParser {
             blocks.append(contentsOf: block(for: attachments[index]))
         }
 
+        let quotable: String
+        if let plain = walked.plain {
+            quotable = MIMEBody.tidy(plain)
+        } else if let html = walked.html {
+            quotable = MIMEBody.tidy(MIMEBody.htmlToText(html))
+        } else {
+            quotable = ""
+        }
         return MailContent(subject: field("subject"), from: field("from"), to: field("to"), cc: field("cc"),
                            date: field("date"), blocks: limitImages(blocks),
-                           displayHTML: displayHTML(html: walked.html, plain: walked.plain, attachments: attachments))
+                           displayHTML: displayHTML(html: walked.html, plain: walked.plain, attachments: attachments),
+                           messageID: field("message-id"), references: field("references"),
+                           replyTo: field("reply-to"), quotableText: quotable)
     }
 
     // MARK: - Structuur

@@ -490,6 +490,14 @@ final class GmailSession {
         return GmailAPI.summary(fromMessageJSON: data)
     }
 
+    /// Verstuurt een kant-en-klare mail (RFC 822) vanuit `account`; `threadID` houdt een antwoord in hetzelfde gesprek.
+    func send(raw: Data, threadID: String?, account: String) async throws {
+        var json: [String: Any] = ["raw": Base64URL.encode(raw)]
+        if let threadID { json["threadId"] = threadID }
+        let body = try JSONSerialization.data(withJSONObject: json)
+        _ = try await api("messages/send", method: "POST", body: body, account: account)
+    }
+
     /// De ruwe mail (RFC 822), bijvoorbeeld voor de analyse met Claude.
     func rawMessageData(id: String) async throws -> Data { try await rawMessage(id: id) }
 

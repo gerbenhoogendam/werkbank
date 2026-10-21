@@ -16,6 +16,8 @@ struct PreferencesView: View {
             ColumnsPreferences()
                 .tabItem { Label("Kolommen", systemImage: "rectangle.3.group") }
             #if os(macOS)
+            SignaturePreferences()
+                .tabItem { Label("Handtekening", systemImage: "signature") }
             ClaudePreferences()
                 .tabItem { Label("Claude", systemImage: "sparkles") }
             #endif

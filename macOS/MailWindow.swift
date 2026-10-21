@@ -177,6 +177,15 @@ struct MailWindowView: View {
 
     // MARK: Acties
 
+    private func composeButton(_ title: String, symbol: String, mode: ComposeRef.Mode) -> some View {
+        Button {
+            PanelStore.shared.open(.compose(ComposeRef(mode: mode, source: ref)))
+        } label: {
+            Label(title, systemImage: symbol)
+        }
+        .help(mode == .replyAll ? "Antwoord aan iedereen" : title)
+    }
+
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
@@ -200,7 +209,12 @@ struct MailWindowView: View {
                     }
                 }
                 .disabled(isBusy)
+
                 Spacer()
+
+                composeButton("Beantwoorden", symbol: "arrowshape.turn.up.left", mode: .reply)
+                composeButton("Allen", symbol: "arrowshape.turn.up.left.2", mode: .replyAll)
+                composeButton("Doorsturen", symbol: "arrowshape.turn.up.right", mode: .forward)
             }
 
             HStack(spacing: 8) {
