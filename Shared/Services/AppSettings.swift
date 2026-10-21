@@ -17,10 +17,15 @@ enum SettingsKey {
     static let longRunMinutes   = "longRunWarningMinutes"
     static let appearance       = "appearance"         // "system" | "light" | "dark"
     static let miniTimerSize    = "miniTimerSize"      // "small" | "medium" | "large"
+    /// Beginpunten voor de reistijd bij een afspraak met een adres.
+    static let officeAddress    = "travelOfficeAddress"
+    static let homeAddress      = "travelHomeAddress"
 }
 
 enum AppSettings {
     private static let d = UserDefaults.standard
+
+    static let defaultOfficeAddress = "Anthonie Fokkerstraat 57, 3772 MP Barneveld"
 
     static var roundingMinutes: Int {
         let v = d.integer(forKey: SettingsKey.roundingMinutes)

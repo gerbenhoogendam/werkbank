@@ -3,12 +3,28 @@ import SwiftUI
 
 /// Details van een agenda-afspraak, als paneel boven het hoofdvenster.
 struct EventDetailView: View {
-    let event: AgendaEvent
+    let target: EventTarget
+    let onClose: () -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
 
     private let service = CalendarService.shared
+    @AppStorage(SettingsKey.hiddenCalendars) private var disabledRaw = ""
+
+    private var existing: AgendaEvent? {
+        if case .existing(let event) = target { return event }
+        return nil
+    }
+
+    /// Hulp voor de weergave van een nieuwe afspraak: een lege "afspraak" met het gekozen tijdvak.
+    private var event: AgendaEvent {
+        if let existing { return existing }
+        guard case .new(let start, let end) = target else { fatalError("onbereikbaar") }
+        return AgendaEvent(id: "new", title: "", start: start, end: end, isAllDay: false, calendarID: "",
+                           calendarTitle: "", color: .accentColor, eventIdentifier: "", isRecurring: false,
+                           location: nil, notes: nil, url: nil, organizer: nil, attendees: [])
+    }
     @State private var original: EventEdit?
     @State private var draft: EventEdit?
     @State private var isEditing = false
@@ -29,7 +45,26 @@ struct EventDetailView: View {
             }
         }
         .background(ThingsColor.backgroundContent)
-        .task { original = service.editableEvent(for: event) }
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 17))
+                    .foregroundStyle(ThingsColor.textTertiary)
+                    .padding(10)
+            }
+            .buttonStyle(.plain)
+            .help("Sluiten")
+        }
+        .task {
+            if let existing {
+                original = service.editableEvent(for: existing)
+            } else if case .new(let start, let end) = target {
+                let blank = service.blankEdit(start: start, end: end, hiddenCalendarIDs: AppSettings.parseHidden(disabledRaw))
+                original = blank
+                draft = blank
+                isEditing = true
+            }
+        }
         .confirmationDialog("Deze afspraak herhaalt",
                             isPresented: Binding(get: { askSpan != nil }, set: { if !$0 { askSpan = nil } }),
                             titleVisibility: .visible, presenting: askSpan) { action in
@@ -67,7 +102,10 @@ struct EventDetailView: View {
                     .padding(.trailing, 28)
 
                     row("clock", whenText)
-                    if let location = event.location { row("mappin.and.ellipse", location) }
+                    if let location = event.location {
+                        row("mappin.and.ellipse", location)
+                        EventLocationView(location: location, arrival: event.start)
+                    }
                     if let url = event.url {
                         row("link", url.absoluteString) { NSWorkspace.shared.open(url) }
                     }
@@ -119,7 +157,7 @@ struct EventDetailView: View {
         VStack(spacing: 0) {
             Form {
                 Section {
-                    TextField("Titel", text: edit.title)
+                    TextField("Titel", text: edit.title, prompt: Text(existing == nil ? "Nieuwe afspraak" : ""))
                     TextField("Locatie", text: edit.location)
                     TextField("Link (URL)", text: edit.urlText)
                 }
@@ -169,11 +207,13 @@ struct EventDetailView: View {
                         .foregroundStyle(ThingsColor.deadline)
                 }
                 HStack {
-                    Button("Verwijderen", role: .destructive) {
-                        if event.isRecurring { askSpan = .delete } else { commit(.delete, future: false) }
+                    if existing != nil {
+                        Button("Verwijderen", role: .destructive) {
+                            if event.isRecurring { askSpan = .delete } else { commit(.delete, future: false) }
+                        }
                     }
                     Spacer()
-                    Button("Annuleer") { isEditing = false }
+                    Button("Annuleer") { if existing == nil { onClose() } else { isEditing = false } }
                         .keyboardShortcut(.cancelAction)
                     Button("Opslaan") {
                         if event.isRecurring { askSpan = .save } else { commit(.save, future: false) }
@@ -190,11 +230,17 @@ struct EventDetailView: View {
         guard let action, let draft, let original else { return }
         do {
             switch action {
-            case .save: try service.saveEvent(event, edit: draft, original: original, thisAndFuture: future)
-            case .delete: try service.deleteEvent(event, thisAndFuture: future)
+            case .save:
+                if let existing {
+                    try service.saveEvent(existing, edit: draft, original: original, thisAndFuture: future)
+                } else {
+                    try service.createEvent(edit: draft)
+                }
+            case .delete:
+                if let existing { try service.deleteEvent(existing, thisAndFuture: future) }
             }
             appState.showToast(action == .save ? "Afspraak opgeslagen" : "Afspraak verwijderd")
-            PanelStore.shared.close(.event(event))
+            onClose()
         } catch {
             errorText = error.localizedDescription
         }

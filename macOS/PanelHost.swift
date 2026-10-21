@@ -105,19 +105,7 @@ private struct PanelChrome: View {
                         .help("Sluiten zonder te versturen")
                     }
             case .event(let event):
-                EventDetailView(event: event)
-                    .overlay(alignment: .topTrailing) {
-                        Button {
-                            PanelStore.shared.close(panel)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 17))
-                                .foregroundStyle(ThingsColor.textTertiary)
-                                .padding(10)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Sluiten")
-                    }
+                EventDetailView(target: .existing(event)) { PanelStore.shared.close(panel) }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

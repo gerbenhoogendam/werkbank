@@ -227,8 +227,41 @@ final class CalendarService {
     func saveEvent(_ event: AgendaEvent, edit: EventEdit, original: EventEdit, thisAndFuture: Bool) throws {
         guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
         guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
-        let cal = Calendar.current
+        if edit.calendarID != ek.calendar.calendarIdentifier {
+            guard let target = store.calendar(withIdentifier: edit.calendarID) else { throw CalendarError.calendarNotFound }
+            guard target.allowsContentModifications else { throw CalendarError.targetReadOnly }
+            ek.calendar = target
+        }
+        try apply(edit, to: ek, originalRepeat: original.repeatOption, originalAlert: original.alert)
+        do {
+            try store.save(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
+        } catch {
+            store.reset()
+            throw error
+        }
+        revision += 1
+    }
 
+    /// Maakt een nieuwe afspraak met alle velden van het bewerkformulier.
+    func createEvent(edit: EventEdit) throws {
+        guard let calendar = store.calendar(withIdentifier: edit.calendarID) else { throw CalendarError.calendarNotFound }
+        guard calendar.allowsContentModifications else { throw CalendarError.targetReadOnly }
+        let ek = EKEvent(eventStore: store)
+        ek.calendar = calendar
+        try apply(edit, to: ek, originalRepeat: nil, originalAlert: nil)
+        do {
+            try store.save(ek, span: .thisEvent)
+        } catch {
+            store.reset()
+            throw error
+        }
+        revision += 1
+    }
+
+    /// Zet de velden van het formulier op een EKEvent. Herhaling en herinnering worden alleen aangeraakt als ze
+    /// anders zijn dan voor het bewerken (zo blijft een aangepaste regel staan).
+    private func apply(_ edit: EventEdit, to ek: EKEvent, originalRepeat: EventRepeat?, originalAlert: EventAlert?) throws {
+        let cal = Calendar.current
         var start = edit.start
         var end = edit.end
         if edit.isAllDay {
@@ -246,11 +279,6 @@ final class CalendarService {
             url = parsed
         }
 
-        if edit.calendarID != ek.calendar.calendarIdentifier {
-            guard let target = store.calendar(withIdentifier: edit.calendarID) else { throw CalendarError.calendarNotFound }
-            guard target.allowsContentModifications else { throw CalendarError.targetReadOnly }
-            ek.calendar = target
-        }
         let title = edit.title.trimmingCharacters(in: .whitespacesAndNewlines)
         ek.title = title.isEmpty ? "(zonder titel)" : title
         ek.location = edit.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : edit.location
@@ -266,22 +294,21 @@ final class CalendarService {
         case .unavailable: .unavailable
         }
 
-        if edit.repeatOption != original.repeatOption, edit.repeatOption != .custom {
+        if edit.repeatOption != .custom, edit.repeatOption != (originalRepeat ?? .none) {
             for rule in ek.recurrenceRules ?? [] { ek.removeRecurrenceRule(rule) }
             if let rule = edit.repeatOption.rule { ek.addRecurrenceRule(rule) }
         }
-        if edit.alert != original.alert, edit.alert != .custom {
+        if edit.alert != .custom, edit.alert != (originalAlert ?? .none) {
             for alarm in ek.alarms ?? [] { ek.removeAlarm(alarm) }
             if edit.alert != .none { ek.addAlarm(EKAlarm(relativeOffset: -Double(edit.alert.rawValue) * 60)) }
         }
+    }
 
-        do {
-            try store.save(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
-        } catch {
-            store.reset()
-            throw error
-        }
-        revision += 1
+    /// Lege afspraak voor het formulier "nieuwe afspraak" (standaardagenda, bezet, geen herhaling).
+    func blankEdit(start: Date, end: Date, hiddenCalendarIDs: Set<String>) -> EventEdit {
+        EventEdit(title: "", location: "", urlText: "", isAllDay: false, start: start, end: end,
+                  calendarID: defaultTargetCalendarID(hiddenCalendarIDs: hiddenCalendarIDs) ?? "",
+                  repeatOption: .none, alert: .none, availability: .busy, notes: "", canModify: true)
     }
 
     func deleteEvent(_ event: AgendaEvent, thisAndFuture: Bool) throws {

@@ -147,7 +147,8 @@ struct AgendaView: View {
                                     endHour: endHour,
                                     hourHeight: hourHeight,
                                     dayEnd: dayEnd(day),
-                                    onTapEvent: { PanelStore.shared.open(.event($0)) }
+                                    onTapEvent: { EventDetailStore.shared.present(.existing($0), day: day) },
+                                    onCreate: { start, end in EventDetailStore.shared.present(.new(start: start, end: end), day: day) }
                                 )
                             }
                         }
@@ -184,6 +185,7 @@ struct AgendaView: View {
         .onPreferenceChange(DayFrameKey.self) { drag.agenda.dayFrames = $0 }
         .onPreferenceChange(DraftFrameKey.self) { draftFrame = $0 }
         .overlay(alignment: .topLeading) { confirmPopover }
+        .overlay(alignment: .topLeading) { eventDetail }
         .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
         .onAppear {
             drag.onAgendaDrop = { card, slot in
@@ -191,6 +193,26 @@ struct AgendaView: View {
                 drag.draft = ScheduleDraft(cardID: card.id, todoTitle: card.title, day: slot.day,
                                            start: slot.start, end: end, step: .end)
             }
+        }
+    }
+
+    /// Detailvenster van een afspraak, over de kolom van die dag (minstens 360 pt breed, binnen de agenda).
+    @ViewBuilder private var eventDetail: some View {
+        let store = EventDetailStore.shared
+        if let presented = store.presented, let dayFrame = drag.agenda.dayFrames[presented.day] {
+            let agenda = drag.agenda.frame
+            let viewport = drag.agenda.scrollViewport
+            let width = min(max(dayFrame.width, 360), max(0, agendaSize.width - 8))
+            let x = max(4, min(dayFrame.minX - agenda.minX, agendaSize.width - width - 4))
+            let top = viewport.minY - agenda.minY + 4
+            EventDetailView(target: presented.target) { store.close() }
+                .id(presented.id)
+                .frame(width: width, height: max(200, viewport.height - 8))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(ThingsColor.separator))
+                .shadow(color: ThingsColor.cardShadow, radius: 14, x: 0, y: 5)
+                .offset(x: x, y: top)
+                .transition(.opacity)
         }
     }
 
@@ -414,6 +436,8 @@ struct DayColumn: View {
     let hourHeight: CGFloat
     let dayEnd: Date
     let onTapEvent: (AgendaEvent) -> Void
+    /// Vasthouden en slepen over een leeg stuk van de kolom: begin- en eindtijd van een nieuwe afspraak.
+    var onCreate: ((Date, Date) -> Void)?
 
     @Environment(DragCoordinator.self) private var drag
     @Environment(AppState.self) private var appState
@@ -421,6 +445,8 @@ struct DayColumn: View {
     private let calendar = Calendar.current
     /// Waar een gesleepte mail boven de kolom hangt (voor het stippelblok).
     @State private var mailHoverY: CGFloat?
+    /// Het tijdvak dat je nu met de muis opspant.
+    @State private var createRange: (start: Date, end: Date)?
 
     /// Verplaatsing van een herhalende afspraak die nog op de keuze "alleen deze / ook volgende" wacht.
     private struct PendingMove: Identifiable {
@@ -433,7 +459,7 @@ struct DayColumn: View {
     // Expliciet, omdat de privé-eigenschappen de automatische init buiten dit bestand verbergen
     // (ook de Maandagenda gebruikt deze kolom).
     init(day: Date, events: [AgendaEvent], startHour: Int, endHour: Int, hourHeight: CGFloat,
-         dayEnd: Date, onTapEvent: @escaping (AgendaEvent) -> Void) {
+         dayEnd: Date, onTapEvent: @escaping (AgendaEvent) -> Void, onCreate: ((Date, Date) -> Void)? = nil) {
         self.day = day
         self.events = events
         self.startHour = startHour
@@ -441,6 +467,7 @@ struct DayColumn: View {
         self.hourHeight = hourHeight
         self.dayEnd = dayEnd
         self.onTapEvent = onTapEvent
+        self.onCreate = onCreate
     }
 
     private var totalHeight: CGFloat { hourHeight * CGFloat(endHour - startHour) }
@@ -471,6 +498,8 @@ struct DayColumn: View {
 
             ZStack(alignment: .topLeading) {
                 hourLines
+                    .contentShape(Rectangle())
+                    .gesture(createGesture)
 
                 ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                     let slot = layout[index]
@@ -492,6 +521,24 @@ struct DayColumn: View {
 
                 if let slot = drag.agendaSlot, slot.day == day {
                     slotPreview(slot, width: width)
+                }
+
+                if let range = pendingRange {
+                    let top = y(range.start)
+                    let bottom = y(range.end)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(ThingsColor.accent.opacity(0.22))
+                        .overlay(alignment: .topLeading) {
+                            Text("\(DutchDate.time(range.start))–\(DutchDate.time(range.end))")
+                                .font(.system(size: 10))
+                                .monospacedDigit()
+                                .foregroundStyle(ThingsColor.accent)
+                                .padding(4)
+                        }
+                        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(ThingsColor.accent.opacity(0.6)))
+                        .frame(width: max(0, width - 4), height: max(8, bottom - top))
+                        .offset(x: 2, y: top)
+                        .allowsHitTesting(false)
                 }
 
                 if let y = mailHoverY {
@@ -530,6 +577,51 @@ struct DayColumn: View {
         } message: { move in
             Text("\"\(move.event.title)\" verplaatsen naar \(move.calendar.title).")
         }
+    }
+
+    // MARK: Een afspraak opspannen
+
+    /// Het tijdvak dat nu getoond wordt: wat je opspant, of de nieuwe afspraak waarvan het formulier openstaat.
+    private var pendingRange: (start: Date, end: Date)? {
+        if let createRange { return createRange }
+        if onCreate != nil, let presented = EventDetailStore.shared.presented,
+           calendar.isDate(presented.day, inSameDayAs: day), case .new(let start, let end) = presented.target {
+            return (start, end)
+        }
+        return nil
+    }
+
+    private func time(forY y: CGFloat, roundUp: Bool) -> Date {
+        let raw = Double(startHour * 60) + Double(y / hourHeight) * 60
+        let snapped = roundUp ? (raw / 15).rounded(.up) * 15 : (raw / 15).rounded(.down) * 15
+        let clamped = min(max(snapped, Double(startHour * 60)), Double(endHour * 60))
+        return calendar.startOfDay(for: day).addingTimeInterval(clamped * 60)
+    }
+
+    private func range(from a: CGFloat, to b: CGFloat) -> (start: Date, end: Date) {
+        let start = time(forY: min(a, b), roundUp: false)
+        var end = time(forY: max(a, b), roundUp: true)
+        if end <= start { end = min(start.addingTimeInterval(15 * 60), dayEndLimit) }
+        return (start, end)
+    }
+
+    private var dayEndLimit: Date {
+        calendar.startOfDay(for: day).addingTimeInterval(Double(endHour * 60) * 60)
+    }
+
+    private var createGesture: some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+            .onChanged { value in
+                guard onCreate != nil else { return }
+                createRange = range(from: value.startLocation.y, to: value.location.y)
+            }
+            .onEnded { value in
+                defer { createRange = nil }
+                guard let onCreate else { return }
+                let result = range(from: value.startLocation.y, to: value.location.y)
+                guard result.end > result.start else { return }
+                onCreate(result.start, result.end)
+            }
     }
 
     // MARK: Een mail op de agenda laten vallen

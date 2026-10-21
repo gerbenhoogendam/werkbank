@@ -35,6 +35,8 @@ struct PreferencesView: View {
 private struct CalendarsPreferences: View {
     @AppStorage(SettingsKey.hiddenCalendars) private var hiddenRaw = ""
     @AppStorage(SettingsKey.defaultCalendar) private var defaultCalendar = ""
+    @AppStorage(SettingsKey.officeAddress) private var officeAddress = AppSettings.defaultOfficeAddress
+    @AppStorage(SettingsKey.homeAddress) private var homeAddress = ""
 
     private let service = CalendarService.shared
 
@@ -84,6 +86,10 @@ private struct CalendarsPreferences: View {
                             Text(calendar.title).tag(calendar.id)
                         }
                     }
+                }
+                Section("Reistijd per auto") {
+                    TextField("Kantoor", text: $officeAddress, prompt: Text("Straat 1, 1234 AB Plaats"))
+                    TextField("Thuis", text: $homeAddress, prompt: Text("Straat 1, 1234 AB Plaats"))
                 }
             } else {
                 Section {
