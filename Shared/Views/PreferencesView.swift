@@ -41,21 +41,38 @@ private struct CalendarsPreferences: View {
             if service.hasAccess {
                 Section {
                     ForEach(service.calendars) { calendar in
-                        Toggle(isOn: visibleBinding(calendar.id)) {
-                            Label {
-                                Text(calendar.title)
-                            } icon: {
-                                Image(systemName: "circle.fill").foregroundStyle(calendar.color)
+                        HStack {
+                            Toggle(isOn: visibleBinding(calendar.id)) {
+                                Label {
+                                    Text(calendar.title)
+                                } icon: {
+                                    Image(systemName: "circle.fill").foregroundStyle(calendar.color)
+                                }
                             }
+                            #if os(macOS)
+                            .toggleStyle(.checkbox)
+                            #endif
+                            Spacer()
+                            if service.hasCustomColor(calendar.id) {
+                                Button {
+                                    service.setColor(nil, forCalendar: calendar.id)
+                                } label: {
+                                    Image(systemName: "arrow.uturn.backward")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Oorspronkelijke kleur terugzetten")
+                            }
+                            ColorPicker("Kleur van \(calendar.title)",
+                                        selection: Binding(get: { calendar.color },
+                                                           set: { service.setColor($0, forCalendar: calendar.id) }),
+                                        supportsOpacity: false)
+                                .labelsHidden()
                         }
-                        #if os(macOS)
-                        .toggleStyle(.checkbox)
-                        #endif
                     }
                 } header: {
                     Text("Zichtbare agenda's")
                 } footer: {
-                    Text("Uitgevinkte agenda's zijn nergens zichtbaar. De aangevinkte agenda's kun je boven de agenda tijdelijk aan/uit zetten. Er wordt niets aan de agenda's zelf gewijzigd.")
+                    Text("Uitgevinkte agenda's zijn nergens zichtbaar. De aangevinkte agenda's kun je boven de agenda tijdelijk aan/uit zetten. De kleur geldt alleen in Werkbank; de agenda's zelf en de Agenda-app blijven ongemoeid. Een kleur per afspraak bestaat niet in macOS-agenda's.")
                 }
 
                 Section("Standaard agenda") {

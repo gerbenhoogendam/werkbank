@@ -1,6 +1,11 @@
 import EventKit
 import Foundation
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 struct AgendaCalendar: Identifiable, Hashable {
     let id: String
@@ -82,7 +87,7 @@ final class CalendarService {
         guard hasAccess else { calendars = []; return }
         calendars = store.calendars(for: .event)
             .map { AgendaCalendar(id: $0.calendarIdentifier, title: $0.title,
-                                  color: Color(cgColor: $0.cgColor), allowsModifications: $0.allowsContentModifications) }
+                                  color: CalendarColors.color(for: $0.calendarIdentifier) ?? Color(cgColor: $0.cgColor), allowsModifications: $0.allowsContentModifications) }
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
@@ -103,7 +108,7 @@ final class CalendarService {
                     isAllDay: event.isAllDay,
                     calendarID: event.calendar.calendarIdentifier,
                     calendarTitle: event.calendar.title,
-                    color: Color(cgColor: event.calendar.cgColor),
+                    color: CalendarColors.color(for: event.calendar.calendarIdentifier) ?? Color(cgColor: event.calendar.cgColor),
                     eventIdentifier: event.eventIdentifier ?? "",
                     isRecurring: event.hasRecurrenceRules,
                     location: event.location?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
@@ -160,6 +165,137 @@ final class CalendarService {
         revision += 1
     }
 
+    // MARK: Kleuren
+
+    /// Stelt een eigen kleur in voor een agenda (alleen in Werkbank; de Agenda-app en de agenda zelf blijven ongemoeid).
+    /// `nil` zet de oorspronkelijke kleur terug.
+    func setColor(_ color: Color?, forCalendar id: String) {
+        CalendarColors.set(color, for: id)
+        reloadCalendars()
+        revision += 1
+    }
+
+    var hasCustomColors: Bool { CalendarColors.hasAny }
+    func hasCustomColor(_ id: String) -> Bool { CalendarColors.color(for: id) != nil }
+
+    // MARK: Bewerken
+
+    /// De bewerkbare velden van een afspraak, zoals ze nu in EventKit staan.
+    func editableEvent(for event: AgendaEvent) -> EventEdit? {
+        guard let ek = ekEvent(for: event) else { return nil }
+        let rules = ek.recurrenceRules ?? []
+        let repeatOption: EventRepeat
+        if rules.isEmpty {
+            repeatOption = .none
+        } else if rules.count == 1, let rule = rules.first, rule.recurrenceEnd == nil,
+                  rule.daysOfTheWeek == nil, rule.daysOfTheMonth == nil, rule.monthsOfTheYear == nil,
+                  rule.weeksOfTheYear == nil, rule.daysOfTheYear == nil, rule.setPositions == nil {
+            switch (rule.frequency, rule.interval) {
+            case (.daily, 1): repeatOption = .daily
+            case (.weekly, 1): repeatOption = .weekly
+            case (.weekly, 2): repeatOption = .biweekly
+            case (.monthly, 1): repeatOption = .monthly
+            case (.yearly, 1): repeatOption = .yearly
+            default: repeatOption = .custom
+            }
+        } else {
+            repeatOption = .custom
+        }
+        let alarms = ek.alarms ?? []
+        let alert: EventAlert
+        if alarms.isEmpty {
+            alert = .none
+        } else if alarms.count == 1, alarms[0].absoluteDate == nil, alarms[0].proximity == .none,
+                  let match = EventAlert(rawValue: Int((-alarms[0].relativeOffset / 60).rounded())), match.rawValue >= 0 {
+            alert = match
+        } else {
+            alert = .custom
+        }
+        let availability: EventAvailability = switch ek.availability {
+        case .free: .free
+        case .tentative: .tentative
+        case .unavailable: .unavailable
+        default: .busy
+        }
+        return EventEdit(title: ek.title ?? "", location: ek.location ?? "", urlText: ek.url?.absoluteString ?? "",
+                         isAllDay: ek.isAllDay, start: ek.startDate, end: ek.endDate,
+                         calendarID: ek.calendar.calendarIdentifier, repeatOption: repeatOption, alert: alert,
+                         availability: availability, notes: ek.notes ?? "",
+                         canModify: ek.calendar.allowsContentModifications)
+    }
+
+    func saveEvent(_ event: AgendaEvent, edit: EventEdit, original: EventEdit, thisAndFuture: Bool) throws {
+        guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
+        guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        let cal = Calendar.current
+
+        var start = edit.start
+        var end = edit.end
+        if edit.isAllDay {
+            start = cal.startOfDay(for: edit.start)
+            end = cal.date(byAdding: DateComponents(day: 1, second: -1), to: cal.startOfDay(for: edit.end)) ?? edit.end
+            guard end >= start else { throw CalendarError.invalidRange }
+        } else {
+            guard end > start else { throw CalendarError.invalidRange }
+        }
+
+        let urlText = edit.urlText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var url: URL?
+        if !urlText.isEmpty {
+            guard let parsed = URL(string: urlText), parsed.scheme != nil else { throw CalendarError.invalidURL }
+            url = parsed
+        }
+
+        if edit.calendarID != ek.calendar.calendarIdentifier {
+            guard let target = store.calendar(withIdentifier: edit.calendarID) else { throw CalendarError.calendarNotFound }
+            guard target.allowsContentModifications else { throw CalendarError.targetReadOnly }
+            ek.calendar = target
+        }
+        let title = edit.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        ek.title = title.isEmpty ? "(zonder titel)" : title
+        ek.location = edit.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : edit.location
+        ek.url = url
+        ek.isAllDay = edit.isAllDay
+        ek.startDate = start
+        ek.endDate = end
+        ek.notes = edit.notes.isEmpty ? nil : edit.notes
+        ek.availability = switch edit.availability {
+        case .busy: .busy
+        case .free: .free
+        case .tentative: .tentative
+        case .unavailable: .unavailable
+        }
+
+        if edit.repeatOption != original.repeatOption, edit.repeatOption != .custom {
+            for rule in ek.recurrenceRules ?? [] { ek.removeRecurrenceRule(rule) }
+            if let rule = edit.repeatOption.rule { ek.addRecurrenceRule(rule) }
+        }
+        if edit.alert != original.alert, edit.alert != .custom {
+            for alarm in ek.alarms ?? [] { ek.removeAlarm(alarm) }
+            if edit.alert != .none { ek.addAlarm(EKAlarm(relativeOffset: -Double(edit.alert.rawValue) * 60)) }
+        }
+
+        do {
+            try store.save(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
+        } catch {
+            store.reset()
+            throw error
+        }
+        revision += 1
+    }
+
+    func deleteEvent(_ event: AgendaEvent, thisAndFuture: Bool) throws {
+        guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
+        guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        do {
+            try store.remove(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
+        } catch {
+            store.reset()
+            throw error
+        }
+        revision += 1
+    }
+
     private func ekEvent(for event: AgendaEvent) -> EKEvent? {
         guard !event.eventIdentifier.isEmpty else { return nil }
         let predicate = store.predicateForEvents(withStart: event.start.addingTimeInterval(-1),
@@ -170,13 +306,15 @@ final class CalendarService {
     }
 
     enum CalendarError: LocalizedError {
-        case calendarNotFound, targetReadOnly, eventNotFound, eventReadOnly
+        case calendarNotFound, targetReadOnly, eventNotFound, eventReadOnly, invalidRange, invalidURL
         var errorDescription: String? {
             switch self {
             case .calendarNotFound: "De gekozen agenda bestaat niet meer."
             case .targetReadOnly: "In die agenda kun je niets toevoegen (alleen lezen)."
             case .eventNotFound: "De afspraak is niet meer gevonden; hij is waarschijnlijk gewijzigd."
             case .eventReadOnly: "Deze afspraak staat in een agenda die je niet kunt wijzigen."
+            case .invalidRange: "Het einde moet na het begin liggen."
+            case .invalidURL: "Die link is geen geldige URL (bijvoorbeeld https://…)."
             }
         }
     }
@@ -184,4 +322,117 @@ final class CalendarService {
 
 private extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
+}
+
+// MARK: - Bewerken: waarden
+
+enum EventRepeat: String, CaseIterable, Identifiable {
+    case none, daily, weekly, biweekly, monthly, yearly, custom
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .none: "Nooit"
+        case .daily: "Elke dag"
+        case .weekly: "Elke week"
+        case .biweekly: "Elke 2 weken"
+        case .monthly: "Elke maand"
+        case .yearly: "Elk jaar"
+        case .custom: "Aangepast (ongewijzigd)"
+        }
+    }
+    var rule: EKRecurrenceRule? {
+        switch self {
+        case .none, .custom: nil
+        case .daily: EKRecurrenceRule(recurrenceWith: .daily, interval: 1, end: nil)
+        case .weekly: EKRecurrenceRule(recurrenceWith: .weekly, interval: 1, end: nil)
+        case .biweekly: EKRecurrenceRule(recurrenceWith: .weekly, interval: 2, end: nil)
+        case .monthly: EKRecurrenceRule(recurrenceWith: .monthly, interval: 1, end: nil)
+        case .yearly: EKRecurrenceRule(recurrenceWith: .yearly, interval: 1, end: nil)
+        }
+    }
+}
+
+/// Herinnering: het aantal minuten vóór de afspraak (-1 = geen, -2 = een aangepaste die ongewijzigd blijft).
+enum EventAlert: Int, CaseIterable, Identifiable {
+    case none = -1, custom = -2
+    case atTime = 0, min5 = 5, min10 = 10, min15 = 15, min30 = 30, hour1 = 60, hour2 = 120, day1 = 1440, day2 = 2880
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .none: "Geen"
+        case .custom: "Aangepast (ongewijzigd)"
+        case .atTime: "Op het moment zelf"
+        case .min5: "5 minuten ervoor"
+        case .min10: "10 minuten ervoor"
+        case .min15: "15 minuten ervoor"
+        case .min30: "30 minuten ervoor"
+        case .hour1: "1 uur ervoor"
+        case .hour2: "2 uur ervoor"
+        case .day1: "1 dag ervoor"
+        case .day2: "2 dagen ervoor"
+        }
+    }
+}
+
+enum EventAvailability: CaseIterable, Identifiable {
+    case busy, free, tentative, unavailable
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .busy: "Bezet"
+        case .free: "Beschikbaar"
+        case .tentative: "Voorlopig"
+        case .unavailable: "Niet aanwezig"
+        }
+    }
+}
+
+struct EventEdit: Equatable {
+    var title: String
+    var location: String
+    var urlText: String
+    var isAllDay: Bool
+    var start: Date
+    var end: Date
+    var calendarID: String
+    var repeatOption: EventRepeat
+    var alert: EventAlert
+    var availability: EventAvailability
+    var notes: String
+    var canModify: Bool
+}
+
+// MARK: - Eigen agendakleuren
+
+/// Eigen kleur per agenda, alleen binnen Werkbank (UserDefaults). EventKit kent geen kleur per afspraak.
+enum CalendarColors {
+    private static let key = "calendar.colors"
+
+    private static var stored: [String: [Double]] {
+        UserDefaults.standard.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+    }
+
+    static var hasAny: Bool { !stored.isEmpty }
+
+    static func color(for id: String) -> Color? {
+        guard let c = stored[id], c.count == 3 else { return nil }
+        return Color(.sRGB, red: c[0], green: c[1], blue: c[2], opacity: 1)
+    }
+
+    static func set(_ color: Color?, for id: String) {
+        var all = stored
+        if let color, let components = rgb(color) { all[id] = components } else { all[id] = nil }
+        UserDefaults.standard.set(all, forKey: key)
+    }
+
+    private static func rgb(_ color: Color) -> [Double]? {
+        #if os(macOS)
+        guard let c = NSColor(color).usingColorSpace(.sRGB) else { return nil }
+        return [Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent)]
+        #else
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        return [Double(r), Double(g), Double(b)]
+        #endif
+    }
 }
