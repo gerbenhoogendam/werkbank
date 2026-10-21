@@ -320,14 +320,7 @@ struct AgendaView: View {
             ForEach(days, id: \.self) { day in
                 VStack(spacing: 2) {
                     ForEach(allDay.filter { $0.start < dayEnd(day) && $0.end > calendar.startOfDay(for: day) }) { event in
-                        Text(event.title)
-                            .thingsFont(.tag)
-                            .foregroundStyle(ThingsColor.textPrimary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: 3).fill(event.color.opacity(0.25)))
+                        AllDayChip(title: event.title, color: event.color)
                             .contentShape(Rectangle())
                             .onTapGesture { PanelStore.shared.open(.event(event)) }
                     }
@@ -740,20 +733,24 @@ struct DayColumn: View {
 private struct EventBlock: View {
     let event: AgendaEvent
 
+    @AppStorage(SettingsKey.eventOpacity) private var opacity = EventStyle.defaultOpacity
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         // Korter dan 1 uur: alleen titel. Langer: titel + tijd.
         let isShort = event.end.timeIntervalSince(event.start) < 3600
+        let text = EventStyle.textColors(on: event.color, opacity: opacity, dark: colorScheme == .dark)
         HStack(spacing: 0) {
             Rectangle().fill(event.color).frame(width: 3)
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title)
                     .thingsFont(.tag)
-                    .foregroundStyle(ThingsColor.textPrimary)
+                    .foregroundStyle(text.primary)
                     .lineLimit(isShort ? 1 : 2)
                 if !isShort {
                     Text(DutchDate.range(event.start, event.end))
                         .font(.system(size: 10))
-                        .foregroundStyle(ThingsColor.textSecondary)
+                        .foregroundStyle(text.secondary)
                         .monospacedDigit()
                 }
             }
@@ -762,7 +759,7 @@ private struct EventBlock: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(event.color.opacity(0.18))
+        .background(event.color.opacity(opacity))
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .contentShape(Rectangle())
         .help("\(event.title)\n\(DutchDate.range(event.start, event.end))")

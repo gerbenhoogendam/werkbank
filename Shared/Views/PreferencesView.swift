@@ -37,6 +37,7 @@ private struct CalendarsPreferences: View {
     @AppStorage(SettingsKey.defaultCalendar) private var defaultCalendar = ""
     @AppStorage(SettingsKey.officeAddress) private var officeAddress = AppSettings.defaultOfficeAddress
     @AppStorage(SettingsKey.homeAddress) private var homeAddress = ""
+    @AppStorage(SettingsKey.eventOpacity) private var eventOpacity = 0.18
 
     private let service = CalendarService.shared
 
@@ -87,6 +88,21 @@ private struct CalendarsPreferences: View {
                         }
                     }
                 }
+                Section {
+                    LabeledContent("Dekking") {
+                        HStack {
+                            Slider(value: $eventOpacity, in: 0.1...1, step: 0.05)
+                            Text("\(Int((eventOpacity * 100).rounded())) %")
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
+                } header: {
+                    Text("Kleur van afspraken")
+                } footer: {
+                    Text("Bij een donkere kleur wordt de tekst vanzelf wit.")
+                }
+
                 Section("Reistijd per auto") {
                     TextField("Kantoor", text: $officeAddress, prompt: Text("Straat 1, 1234 AB Plaats"))
                     TextField("Thuis", text: $homeAddress, prompt: Text("Straat 1, 1234 AB Plaats"))

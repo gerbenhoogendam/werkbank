@@ -290,14 +290,7 @@ private struct WeekPage: View {
             ForEach(days, id: \.self) { day in
                 VStack(spacing: 2) {
                     ForEach(allDay.filter { $0.start < dayEnd(day) && $0.end > calendar.startOfDay(for: day) }) { event in
-                        Text(event.title)
-                            .thingsFont(.tag)
-                            .foregroundStyle(ThingsColor.textPrimary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: 3).fill(event.color.opacity(0.25)))
+                        AllDayChip(title: event.title, color: event.color, horizontalPadding: 4)
                     }
                 }
                 .padding(.horizontal, 2)

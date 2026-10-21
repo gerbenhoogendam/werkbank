@@ -20,6 +20,8 @@ enum SettingsKey {
     /// Beginpunten voor de reistijd bij een afspraak met een adres.
     static let officeAddress    = "travelOfficeAddress"
     static let homeAddress      = "travelHomeAddress"
+    /// Dekking van de kleur van een afspraak in de agenda (0,1 … 1).
+    static let eventOpacity     = "agendaEventOpacity"
 }
 
 enum AppSettings {
