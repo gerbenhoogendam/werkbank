@@ -42,7 +42,6 @@ struct MailWindowView: View {
 
     @State private var mail: MailContent?
     @State private var loadError: String?
-    @State private var allowRemote = false
     @State private var wasInList = false
     @State private var taskTitle = ""
     @State private var minutesText = ""
@@ -155,29 +154,12 @@ struct MailWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else if let mail {
             VStack(spacing: 0) {
-                if !allowRemote, hasRemoteImages(mail) {
-                    HStack {
-                        Image(systemName: "photo.badge.exclamationmark")
-                        Text("Afbeeldingen van het internet zijn geblokkeerd.")
-                        Spacer()
-                        Button("Laden") { allowRemote = true }
-                    }
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 6)
-                    .background(ThingsColor.backgroundSidebar)
-                }
-                MailWebView(html: mail.displayHTML, allowRemote: allowRemote)
+                MailWebView(html: mail.displayHTML, allowRemote: true)
             }
         } else {
             ProgressView("Mail ophalen…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private func hasRemoteImages(_ mail: MailContent) -> Bool {
-        mail.displayHTML.range(of: #"src\s*=\s*["']https?:"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private func load() async {
