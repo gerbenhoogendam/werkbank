@@ -540,7 +540,7 @@ struct DayColumn: View {
         return calendar.startOfDay(for: day).addingTimeInterval(clamped * 60)
     }
 
-    /// De mail wordt een kaart in de Inbox (en in Gmail gearchiveerd) en loopt dan door dezelfde stappen als een
+    /// De mail wordt een kaart in de Inbox (de mail blijft in Gmail staan) en loopt dan door dezelfde stappen als een
     /// kaart die je op de agenda sleept: eindtijd kiezen en bevestigen.
     private func handleMailDrop(y: CGFloat, providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }) else {
@@ -552,7 +552,7 @@ struct DayColumn: View {
         provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
             guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
             Task { @MainActor in
-                guard let card = await GmailSession.shared.importDropped(payload, column: .inbox,
+                guard let card = await GmailSession.shared.importDropped(payload, column: .inbox, archive: false,
                                                                          context: modelContext, appState: appState) else { return }
                 drag.draft = ScheduleDraft(cardID: card.id, todoTitle: card.title, day: day,
                                            start: start, end: end, step: .end)

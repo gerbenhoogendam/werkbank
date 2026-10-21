@@ -84,6 +84,9 @@ struct MainView: View {
                                 .transition(.identity)
                         }
                     }
+                    .overlay {
+                        PanelOverlay()
+                    }
                 }
             }
 

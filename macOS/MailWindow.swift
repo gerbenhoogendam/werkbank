@@ -29,15 +29,13 @@ struct MailRef: Codable, Hashable {
     }
 }
 
-/// De mail als echte mailweergave in een eigen venster. Aan de drie streepjes bovenaan pak je hem vast en sleep je hem
+/// De mail als echte mailweergave in een paneel boven het hoofdvenster. Aan de drie streepjes bovenaan pak je hem vast en sleep je hem
 /// naar een kolom van het board, naar de agenda (taak plus inplannen) of naar het Claude-icoon in het Gmail-paneel.
 struct MailWindowView: View {
     let ref: MailRef
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.openWindow) private var openWindow
     @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
 
     private let gmail = GmailSession.shared
@@ -61,15 +59,15 @@ struct MailWindowView: View {
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
             actions
         }
-        .frame(minWidth: 560, minHeight: 480)
         .background(ThingsColor.backgroundContent)
-        .navigationTitle(ref.subject)
         .task(id: ref) { await load() }
         // Is de mail via slepen een kaart geworden (en dus gearchiveerd), dan is dit venster klaar.
         .onChange(of: gmail.messages) { _, new in
             if wasInList, !new.contains(where: { $0.id == ref.messageID }) { dismiss() }
         }
     }
+
+    private func dismiss() { PanelStore.shared.closeMail(messageID: ref.messageID) }
 
     // MARK: Greep
 
@@ -214,7 +212,7 @@ struct MailWindowView: View {
 
                 Button {
                     ClaudeAnalyzer.shared.analyze(messageID: ref.messageID, subject: ref.subject)
-                    openWindow(id: "claude")
+                    PanelStore.shared.open(.claude)
                 } label: {
                     HStack(spacing: 5) {
                         ClaudeSpark().frame(width: 13, height: 13)

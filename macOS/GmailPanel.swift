@@ -239,7 +239,6 @@ private struct GmailRow: View {
     let onArchive: () -> Void
     let onDragStarted: () -> Void
 
-    @Environment(\.openWindow) private var openWindow
     @State private var isHovering = false
 
     var body: some View {
@@ -251,7 +250,7 @@ private struct GmailRow: View {
     }
 
     private func open() {
-        openWindow(id: "mail", value: MailRef(message: message))
+        PanelStore.shared.open(.mail(MailRef(message: message)))
     }
 
     // MARK: Rij (één klik markeert, dubbelklik opent de mail, slepen naar een kolom)
@@ -340,7 +339,7 @@ private struct GmailRow: View {
 
     private func analyze() {
         ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
-        openWindow(id: "claude")
+        PanelStore.shared.open(.claude)
     }
 
     private static func dateText(_ date: Date) -> String {
