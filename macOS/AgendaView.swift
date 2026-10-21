@@ -165,6 +165,7 @@ struct AgendaView: View {
                         await autoScroll(proxy)
                     }
                 }
+                .overlay(alignment: .topLeading) { eventDetail(in: geo.size, days: days) }
                 .onChange(of: config, initial: true) { _, new in
                     drag.agenda.hourHeight = new.hourHeight
                     drag.agenda.startHour = new.startHour
@@ -185,7 +186,6 @@ struct AgendaView: View {
         .onPreferenceChange(DayFrameKey.self) { drag.agenda.dayFrames = $0 }
         .onPreferenceChange(DraftFrameKey.self) { draftFrame = $0 }
         .overlay(alignment: .topLeading) { confirmPopover }
-        .overlay(alignment: .topLeading) { eventDetail }
         .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
         .onAppear {
             drag.onAgendaDrop = { card, slot in
@@ -197,22 +197,22 @@ struct AgendaView: View {
     }
 
     /// Detailvenster van een afspraak, over de kolom van die dag (minstens 360 pt breed, binnen de agenda).
-    @ViewBuilder private var eventDetail: some View {
+    /// De positie volgt uit de indeling zelf (uren-kolom plus even brede dagkolommen), niet uit gemeten frames.
+    @ViewBuilder private func eventDetail(in size: CGSize, days: [Date]) -> some View {
         let store = EventDetailStore.shared
-        if let presented = store.presented, let dayFrame = drag.agenda.dayFrames[presented.day] {
-            let agenda = drag.agenda.frame
-            let viewport = drag.agenda.scrollViewport
-            let width = min(max(dayFrame.width, 360), max(0, agendaSize.width - 8))
-            let x = max(4, min(dayFrame.minX - agenda.minX, agendaSize.width - width - 4))
-            let top = viewport.minY - agenda.minY + 4
+        if let presented = store.presented, !days.isEmpty {
+            let index = days.firstIndex { calendar.isDate($0, inSameDayAs: presented.day) } ?? 0
+            let columnWidth = max(1, (size.width - gutterWidth - 4) / CGFloat(days.count))
+            let width = min(max(columnWidth, 360), max(200, size.width - 8))
+            let x = max(4, min(gutterWidth + columnWidth * CGFloat(index), size.width - width - 4))
             EventDetailView(target: presented.target) { store.close() }
                 .id(presented.id)
-                .frame(width: width, height: max(200, viewport.height - 8))
+                .frame(width: width, height: max(200, size.height - 8))
+                .background(ThingsColor.backgroundContent)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(ThingsColor.separator))
                 .shadow(color: ThingsColor.cardShadow, radius: 14, x: 0, y: 5)
-                .offset(x: x, y: top)
-                .transition(.opacity)
+                .offset(x: x, y: 4)
         }
     }
 
