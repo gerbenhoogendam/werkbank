@@ -147,7 +147,7 @@ struct AgendaView: View {
                                     endHour: endHour,
                                     hourHeight: hourHeight,
                                     dayEnd: dayEnd(day),
-                                    onTapEvent: addToTimeList
+                                    onTapEvent: { PanelStore.shared.open(.event($0)) }
                                 )
                             }
                         }
@@ -306,6 +306,8 @@ struct AgendaView: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(event.color.opacity(0.25)))
+                            .contentShape(Rectangle())
+                            .onTapGesture { PanelStore.shared.open(.event(event)) }
                     }
                 }
                 .padding(.horizontal, 2)
@@ -332,14 +334,6 @@ struct AgendaView: View {
     }
 
     // MARK: Acties
-
-    private func addToTimeList(_ event: AgendaEvent) {
-        if TimerService.addCalendarEvent(event, in: context) != nil {
-            appState.showToast("Afspraak toegevoegd aan Tijd schrijven")
-        } else {
-            appState.showToast("Deze afspraak staat al in Tijd schrijven")
-        }
-    }
 
     private func autoScroll(_ proxy: ScrollViewProxy) async {
         guard drag.isDragging, drag.region == .agenda else { return }
@@ -451,6 +445,14 @@ struct DayColumn: View {
 
     private var totalHeight: CGFloat { hourHeight * CGFloat(endHour - startHour) }
 
+    private func addToTimeList(_ event: AgendaEvent) {
+        if TimerService.addCalendarEvent(event, in: modelContext) != nil {
+            appState.showToast("Afspraak toegevoegd aan Tijd schrijven")
+        } else {
+            appState.showToast("Deze afspraak staat al in Tijd schrijven")
+        }
+    }
+
     private func minutes(_ date: Date) -> Int {
         // Afspraken van eerdere/latere dagen worden tot deze dag begrensd.
         let startOfDay = calendar.startOfDay(for: day)
@@ -479,10 +481,10 @@ struct DayColumn: View {
                         EventBlock(event: event)
                             .frame(width: max(0, laneWidth - 3), height: max(18, bottom - top - 1))
                             .offset(x: laneWidth * CGFloat(slot.lane) + 1.5, y: top)
-                            // Bewust: een enkele klik doet niets; dubbelklik of rechtsklik voegt toe aan Tijd schrijven.
-                            .onTapGesture(count: 2) { onTapEvent(event) }
+                            // Klikken opent de details; "Tijd schrijven" zit in het contextmenu en in het detailpaneel.
+                            .onTapGesture { onTapEvent(event) }
                             .contextMenu {
-                                Button("Toevoegen aan Tijd schrijven") { onTapEvent(event) }
+                                Button("Toevoegen aan Tijd schrijven") { addToTimeList(event) }
                                 moveMenu(for: event)
                             }
                     }
@@ -671,9 +673,9 @@ private struct EventBlock: View {
         .background(event.color.opacity(0.18))
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .contentShape(Rectangle())
-        .help("\(event.title)\n\(DutchDate.range(event.start, event.end))\nDubbelklik om toe te voegen aan Tijd schrijven")
+        .help("\(event.title)\n\(DutchDate.range(event.start, event.end))")
         .accessibilityLabel("\(event.title), \(DutchDate.range(event.start, event.end))")
-        .accessibilityHint("Voegt de afspraak toe aan Tijd schrijven")
+        .accessibilityHint("Opent de details van de afspraak")
     }
 }
 

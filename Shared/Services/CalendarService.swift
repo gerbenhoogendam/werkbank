@@ -9,7 +9,7 @@ struct AgendaCalendar: Identifiable, Hashable {
     let allowsModifications: Bool
 }
 
-struct AgendaEvent: Identifiable, Equatable {
+struct AgendaEvent: Identifiable, Hashable {
     /// Stabiel per afspraak-voorkomen (herhalende afspraken delen een eventIdentifier).
     let id: String
     let title: String
@@ -22,6 +22,11 @@ struct AgendaEvent: Identifiable, Equatable {
     /// Nodig om dezelfde afspraak later in EventKit terug te vinden (verplaatsen naar een andere agenda).
     let eventIdentifier: String
     let isRecurring: Bool
+    let location: String?
+    let notes: String?
+    let url: URL?
+    let organizer: String?
+    let attendees: [String]
 }
 
 /// EventKit-laag. `revision` verhoogt bij elke `EKEventStoreChanged`, zodat views live meebewegen.
@@ -100,7 +105,12 @@ final class CalendarService {
                     calendarTitle: event.calendar.title,
                     color: Color(cgColor: event.calendar.cgColor),
                     eventIdentifier: event.eventIdentifier ?? "",
-                    isRecurring: event.hasRecurrenceRules
+                    isRecurring: event.hasRecurrenceRules,
+                    location: event.location?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
+                    notes: event.notes?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
+                    url: event.url,
+                    organizer: event.organizer?.name,
+                    attendees: (event.attendees ?? []).compactMap { $0.name }
                 )
             }
             .sorted { $0.start < $1.start }
@@ -170,4 +180,8 @@ final class CalendarService {
             }
         }
     }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

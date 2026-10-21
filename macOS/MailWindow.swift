@@ -21,7 +21,7 @@ struct MailRef: Codable, Hashable {
         subject = message.subject
         fromName = message.fromName
         fromAddress = message.fromAddress
-        account = GmailSession.shared.activeAccount
+        account = GmailSession.shared.account(for: message.id)
     }
 
     var summary: GmailMessageSummary {
@@ -165,10 +165,8 @@ struct MailWindowView: View {
     private func load() async {
         taskTitle = ref.subject
         wasInList = gmail.messages.contains { $0.id == ref.messageID }
-        if let account = ref.account, account != gmail.activeAccount {
-            loadError = "Deze mail hoort bij \(account). Schakel in het Gmail-paneel terug naar dat account en open hem opnieuw."
-            return
-        }
+        gmail.note(account: ref.account, forMessageID: ref.messageID)
+        gmail.note(account: ref.account, forMessageID: ref.threadID)
         do {
             let raw = try await gmail.rawMessageData(id: ref.messageID)
             mail = await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value

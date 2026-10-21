@@ -165,16 +165,8 @@ struct MonthAgendaView: View {
         let start = calendar.startOfDay(for: monday)
         let end = calendar.date(byAdding: .day, value: 7, to: start) ?? start
         let events = all.filter { $0.start < end && $0.end > start }
-        return WeekPage(days: days, events: events, startHour: startHour, endHour: endHour, onTapEvent: addToTimeList)
+        return WeekPage(days: days, events: events, startHour: startHour, endHour: endHour, onTapEvent: { PanelStore.shared.open(.event($0)) })
             .frame(width: width, height: height)
-    }
-
-    private func addToTimeList(_ event: AgendaEvent) {
-        if TimerService.addCalendarEvent(event, in: context) != nil {
-            appState.showToast("Afspraak toegevoegd aan Tijd schrijven")
-        } else {
-            appState.showToast("Deze afspraak staat al in Tijd schrijven")
-        }
     }
 }
 

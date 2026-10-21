@@ -102,6 +102,8 @@ final class GmailSession {
     private(set) var accounts: [String] = []
     private(set) var activeAccount: String?
     var emailAddress: String? { activeAccount }
+    /// `true`: alle gekoppelde mailboxen samen in één lijst (⌘0).
+    private(set) var isCombined = false
     /// `true` terwijl het inlogvenster voor een (extra) account open staat.
     private(set) var isAddingAccount = false
     private(set) var messages: [GmailMessageSummary] = []
@@ -113,8 +115,10 @@ final class GmailSession {
     /// Laatst opgehaalde inbox per mailbox, zodat schakelen direct iets toont.
     @ObservationIgnored private var messageCache: [String: [GmailMessageSummary]] = [:]
     @ObservationIgnored private var loadingKeys: Set<String> = []
-    @ObservationIgnored private var accessToken: String?
-    @ObservationIgnored private var accessExpiry = Date.distantPast
+    /// Access-token per mailbox (sleutel "" is de oude enkele token).
+    @ObservationIgnored private var tokenCache: [String: (token: String, expiry: Date)] = [:]
+    /// Bij welke mailbox een bericht of gesprek hoort, zodat acties de juiste token gebruiken (ook in de gecombineerde lijst).
+    @ObservationIgnored private var messageAccount: [String: String] = [:]
     @ObservationIgnored private var authSession: ASWebAuthenticationSession?
     @ObservationIgnored private let presenter = WebAuthPresenter()
 
@@ -122,6 +126,7 @@ final class GmailSession {
     private static let legacyAccount = "refreshToken"
     private static let accountsKey = "gmail.accounts"
     private static let activeKey = "gmail.activeAccount"
+    private static let combinedKey = "gmail.combined"
     private static let inboxPageSize = "40"
 
     private static func tokenAccount(_ email: String) -> String { "refreshToken:\(email)" }
@@ -133,20 +138,48 @@ final class GmailSession {
         }
         let saved = defaults.string(forKey: Self.activeKey)
         activeAccount = saved.flatMap { accounts.contains($0) ? $0 : nil } ?? accounts.first
+        isCombined = defaults.bool(forKey: Self.combinedKey) && accounts.count > 1
         if hasAnyAccount { state = .signedIn }
     }
 
     private var hasAnyAccount: Bool { !accounts.isEmpty || Keychain.read(Self.legacyAccount) != nil }
 
-    private var activeRefreshToken: String? {
-        if let account = activeAccount { return Keychain.read(Self.tokenAccount(account)) }
+    private func refreshToken(for account: String?) -> String? {
+        if let account, !account.isEmpty { return Keychain.read(Self.tokenAccount(account)) }
         return Keychain.read(Self.legacyAccount)
+    }
+
+    /// De mailbox waar een bericht (of gesprek) bij hoort; zonder bekend adres de actieve.
+    func account(for id: String) -> String? { messageAccount[id] ?? activeAccount }
+
+    /// Onthoudt de mailbox van een bericht dat niet uit de lijst komt (bijvoorbeeld een mailpaneel).
+    func note(account: String?, forMessageID id: String) {
+        if let account { messageAccount[id] = account }
+    }
+
+    /// Korte naam voor een tabblad of label: het deel voor de @.
+    static func shortName(_ email: String) -> String { email.split(separator: "@").first.map(String.init) ?? email }
+
+    /// Wat het paneel toont: de mailbox zelf, of alle mailboxen op datum.
+    private func refreshVisible() {
+        if isCombined {
+            messages = accounts.flatMap { messageCache[$0] ?? [] }
+                .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+        } else {
+            messages = messageCache[activeAccount ?? ""] ?? []
+        }
+    }
+
+    private func removeThreadFromLists(_ threadID: String) {
+        for key in Array(messageCache.keys) { messageCache[key]?.removeAll { $0.threadID == threadID } }
+        refreshVisible()
     }
 
     private func persistAccounts() {
         let defaults = UserDefaults.standard
         defaults.set(accounts, forKey: Self.accountsKey)
         defaults.set(activeAccount, forKey: Self.activeKey)
+        defaults.set(isCombined, forKey: Self.combinedKey)
     }
 
     // MARK: Configuratie
@@ -203,12 +236,11 @@ final class GmailSession {
             // Zelfde account nogmaals toevoegen vervangt alleen de token.
             Keychain.write(refresh, account: Self.tokenAccount(email))
             if !accounts.contains(email) { accounts.append(email) }
-            if let current = activeAccount { messageCache[current] = messages }
             activeAccount = email
+            isCombined = false
             persistAccounts()
-            messages = messageCache[email] ?? []
-            accessToken = tokens.accessToken
-            accessExpiry = Date().addingTimeInterval(tokens.expiresIn)
+            tokenCache[email] = (tokens.accessToken, Date().addingTimeInterval(tokens.expiresIn))
+            refreshVisible()
             state = .signedIn
             await reload()
         } catch GmailError.signInCancelled {
@@ -221,13 +253,21 @@ final class GmailSession {
 
     /// Schakelt het paneel naar een andere gekoppelde mailbox.
     func switchAccount(to email: String) async {
-        guard accounts.contains(email), email != activeAccount else { return }
-        if let current = activeAccount { messageCache[current] = messages }
+        guard accounts.contains(email), email != activeAccount || isCombined else { return }
         activeAccount = email
+        isCombined = false
         persistAccounts()
-        accessToken = nil
-        accessExpiry = .distantPast
-        messages = messageCache[email] ?? []
+        refreshVisible()
+        lastError = nil
+        await reload()
+    }
+
+    /// Alle mailboxen samen in één lijst.
+    func showCombined() async {
+        guard accounts.count > 1, !isCombined else { return }
+        isCombined = true
+        persistAccounts()
+        refreshVisible()
         lastError = nil
         await reload()
     }
@@ -247,14 +287,12 @@ final class GmailSession {
         Keychain.delete(Self.tokenAccount(email))
         accounts.removeAll { $0 == email }
         messageCache[email] = nil
-        if activeAccount == email {
-            activeAccount = accounts.first
-            accessToken = nil
-            accessExpiry = .distantPast
-            messages = activeAccount.flatMap { messageCache[$0] } ?? []
-            state = hasAnyAccount ? .signedIn : .signedOut
-        }
+        tokenCache[email] = nil
+        if activeAccount == email { activeAccount = accounts.first }
+        if accounts.count < 2 { isCombined = false }
+        state = hasAnyAccount ? .signedIn : .signedOut
         persistAccounts()
+        refreshVisible()
         if activeAccount != nil { Task { await reload() } }
     }
 
@@ -263,9 +301,9 @@ final class GmailSession {
             removeAccount(account)
         } else {
             Keychain.delete(Self.legacyAccount)
-            accessToken = nil
-            accessExpiry = .distantPast
-            messages = []
+            tokenCache[""] = nil
+            messageCache[""] = nil
+            refreshVisible()
             state = .signedOut
         }
     }
@@ -283,8 +321,7 @@ final class GmailSession {
             accounts = [email]
             activeAccount = email
             persistAccounts()
-            accessToken = tokens.accessToken
-            accessExpiry = Date().addingTimeInterval(tokens.expiresIn)
+            tokenCache[email] = (tokens.accessToken, Date().addingTimeInterval(tokens.expiresIn))
         } catch GmailError.sessionExpired {
             Keychain.delete(Self.legacyAccount)
             state = .signedOut
@@ -330,19 +367,19 @@ final class GmailSession {
         throw GmailError.invalidResponse
     }
 
-    private func validAccessToken() async throws -> String {
-        if let token = accessToken, accessExpiry > Date().addingTimeInterval(60) { return token }
-        guard let refresh = activeRefreshToken else { throw GmailError.notSignedIn }
+    private func validAccessToken(account: String?) async throws -> String {
+        let key = account ?? ""
+        if let cached = tokenCache[key], cached.expiry > Date().addingTimeInterval(60) { return cached.token }
+        guard let refresh = refreshToken(for: account) else { throw GmailError.notSignedIn }
         do {
             let tokens = try await tokenRequest(["grant_type": "refresh_token",
                                                  "refresh_token": refresh,
                                                  "client_id": Self.clientID])
-            accessToken = tokens.accessToken
-            accessExpiry = Date().addingTimeInterval(tokens.expiresIn)
+            tokenCache[key] = (tokens.accessToken, Date().addingTimeInterval(tokens.expiresIn))
             return tokens.accessToken
         } catch GmailError.sessionExpired {
             // De toegang is ingetrokken of verlopen: dit account moet opnieuw worden toegevoegd.
-            signOut()
+            if let account { removeAccount(account) } else { signOut() }
             throw GmailError.sessionExpired
         }
     }
@@ -362,8 +399,9 @@ final class GmailSession {
     // MARK: Gmail API
 
     private func api(_ path: String, query: [URLQueryItem] = [], method: String = "GET",
-                     body: Data? = nil, isRetry: Bool = false) async throws -> Data {
-        let token = try await validAccessToken()
+                     body: Data? = nil, account: String? = nil, isRetry: Bool = false) async throws -> Data {
+        let account = account ?? activeAccount
+        let token = try await validAccessToken(account: account)
         var components = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/\(path)")!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!)
@@ -376,8 +414,8 @@ final class GmailSession {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw GmailError.invalidResponse }
         if http.statusCode == 401, !isRetry {
-            accessToken = nil   // verlopen of ingetrokken: één keer opnieuw met een verse token
-            return try await api(path, query: query, method: method, body: body, isRetry: true)
+            tokenCache[account ?? ""] = nil   // verlopen of ingetrokken: één keer opnieuw met een verse token
+            return try await api(path, query: query, method: method, body: body, account: account, isRetry: true)
         }
         guard (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -396,11 +434,18 @@ final class GmailSession {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["emailAddress"] as? String
     }
 
-    /// Haalt de inbox (nieuwste eerst, één rij per gesprek) opnieuw op.
+    /// Haalt de inbox (nieuwste eerst, één rij per gesprek) opnieuw op; in de gecombineerde weergave van alle mailboxen.
     func reload() async {
         guard state == .signedIn else { return }
-        let key = activeAccount ?? ""
+        let keys = isCombined ? accounts : [activeAccount ?? ""]
+        await withTaskGroup(of: Void.self) { group in
+            for key in keys { group.addTask { await self.reload(key: key) } }
+        }
+    }
+
+    private func reload(key: String) async {
         guard !loadingKeys.contains(key) else { return }
+        let account: String? = key.isEmpty ? nil : key
         loadingKeys.insert(key)
         isLoading = true
         defer {
@@ -409,13 +454,14 @@ final class GmailSession {
         }
         do {
             let listData = try await api("messages", query: [URLQueryItem(name: "labelIds", value: "INBOX"),
-                                                              URLQueryItem(name: "maxResults", value: Self.inboxPageSize)])
+                                                              URLQueryItem(name: "maxResults", value: Self.inboxPageSize)],
+                                         account: account)
             var seenThreads = Set<String>()
             let refs = GmailAPI.messageRefs(fromListJSON: listData).refs.filter { seenThreads.insert($0.threadID).inserted }
 
             let summaries = await withTaskGroup(of: (Int, GmailMessageSummary?).self) { group -> [GmailMessageSummary] in
                 for (index, ref) in refs.enumerated() {
-                    group.addTask { (index, await self.summary(forMessageID: ref.id)) }
+                    group.addTask { (index, await self.summary(forMessageID: ref.id, account: account)) }
                 }
                 var found: [(Int, GmailMessageSummary)] = []
                 for await (index, summary) in group {
@@ -423,22 +469,24 @@ final class GmailSession {
                 }
                 return found.sorted { $0.0 < $1.0 }.map(\.1)
             }
-            // Is er intussen naar een andere mailbox geschakeld, dan hoort dit resultaat daar niet te belanden.
+            guard key.isEmpty || accounts.contains(key) else { return }   // intussen losgekoppeld
             messageCache[key] = summaries
-            if key == (activeAccount ?? "") {
-                messages = summaries
-                lastError = nil
+            for summary in summaries {
+                messageAccount[summary.id] = key
+                messageAccount[summary.threadID] = key
             }
+            refreshVisible()
+            lastError = nil
         } catch {
-            if state == .signedIn, key == (activeAccount ?? "") { lastError = error.localizedDescription }
+            if state == .signedIn, isCombined || key == (activeAccount ?? "") { lastError = error.localizedDescription }
         }
     }
 
-    private func summary(forMessageID id: String) async -> GmailMessageSummary? {
+    private func summary(forMessageID id: String, account: String?) async -> GmailMessageSummary? {
         let query = [URLQueryItem(name: "format", value: "metadata"),
                      URLQueryItem(name: "metadataHeaders", value: "From"),
                      URLQueryItem(name: "metadataHeaders", value: "Subject")]
-        guard let data = try? await api("messages/\(id)", query: query) else { return nil }
+        guard let data = try? await api("messages/\(id)", query: query, account: account) else { return nil }
         return GmailAPI.summary(fromMessageJSON: data)
     }
 
@@ -446,7 +494,8 @@ final class GmailSession {
     func rawMessageData(id: String) async throws -> Data { try await rawMessage(id: id) }
 
     private func rawMessage(id: String) async throws -> Data {
-        let data = try await api("messages/\(id)", query: [URLQueryItem(name: "format", value: "raw")])
+        let data = try await api("messages/\(id)", query: [URLQueryItem(name: "format", value: "raw")],
+                                 account: messageAccount[id])
         guard let raw = GmailAPI.rawMessage(fromJSON: data) else { throw GmailError.invalidResponse }
         return raw
     }
@@ -454,7 +503,7 @@ final class GmailSession {
     /// Archiveert het hele gesprek (haalt het label INBOX weg), zoals de knop "Archiveren" in Gmail.
     private func archive(threadID: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["removeLabelIds": ["INBOX"]])
-        _ = try await api("threads/\(threadID)/modify", method: "POST", body: body)
+        _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
     }
 
     // MARK: Openklappen en archiveren vanuit de lijst
@@ -474,7 +523,7 @@ final class GmailSession {
         defer { busyMessageIDs.remove(message.id) }
         do {
             try await archive(threadID: message.threadID)
-            messages.removeAll { $0.threadID == message.threadID }
+            removeThreadFromLists(message.threadID)
             bodyCache[message.id] = nil
             appState.showToast("Mail gearchiveerd in Gmail")
         } catch {
@@ -510,7 +559,7 @@ final class GmailSession {
         let timeNote = logged > 0 ? ", \(logged) min gelogd" : ""
         do {
             try await archive(threadID: message.threadID)
-            messages.removeAll { $0.threadID == message.threadID }
+            removeThreadFromLists(message.threadID)
             bodyCache[message.id] = nil
             appState.showToast("Taak gemaakt in \(columnTitle)\(timeNote); mail gearchiveerd in Gmail", seconds: 3)
         } catch {
@@ -550,7 +599,7 @@ final class GmailSession {
 
         do {
             try await archive(threadID: payload.threadID)
-            messages.removeAll { $0.threadID == payload.threadID }
+            removeThreadFromLists(payload.threadID)
             appState.showToast("Mail van \(sender) toegevoegd aan \(columnTitle) en gearchiveerd in Gmail", seconds: 3)
         } catch {
             appState.showToast("Kaart gemaakt, maar archiveren in Gmail mislukte: \(error.localizedDescription)", seconds: 6)

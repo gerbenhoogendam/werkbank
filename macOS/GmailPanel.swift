@@ -16,10 +16,12 @@ struct GmailPanel: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            if gmail.accounts.count > 1 { tabs }
             content
         }
         .frame(maxHeight: .infinity)
         .background(ThingsColor.backgroundSidebar)
+        .background { mailboxShortcuts }
         // Een Gmail-mail loslaten op het paneel zelf doet niets (zo kun je een sleepactie afbreken).
         .onDrop(of: [.gmailMessage], isTargeted: nil) { _ in true }
         .overlay(alignment: .bottom) {
@@ -65,10 +67,10 @@ struct GmailPanel: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "envelope.fill")
-                .foregroundStyle(ThingsColor.accent)
-            Text(gmail.accounts.count > 1 ? "Mail" : "Gmail")
+                .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.accent)
+            Text(gmail.isCombined ? "Alle mailboxen" : (gmail.accounts.count > 1 ? "Mail" : "Gmail"))
                 .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.textPrimary)
+                .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.textPrimary)
             Spacer()
             if gmail.state == .signedIn {
                 if gmail.isLoading {
@@ -80,7 +82,7 @@ struct GmailPanel: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(ThingsColor.textSecondary)
+                    .foregroundStyle(gmail.isCombined ? Color.white.opacity(0.75) : ThingsColor.textSecondary)
                     .help("Inbox verversen")
                 }
                 accountMenu
@@ -88,6 +90,72 @@ struct GmailPanel: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
+        // Gecombineerde weergave (⌘0): de balk is donker, zodat je ziet dat het niet één mailbox is.
+        .background(gmail.isCombined ? Color(white: 0.17) : Color.clear)
+    }
+
+    // MARK: Tabs
+
+    private var tabs: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(gmail.accounts.enumerated()), id: \.element) { index, email in
+                tab(title: GmailSession.shortName(email), hint: index < 9 ? "⌘\(index + 1)" : nil,
+                    isOn: !gmail.isCombined && gmail.activeAccount == email) {
+                    selectedID = nil
+                    Task { await gmail.switchAccount(to: email) }
+                }
+                .help(email)
+            }
+            tab(title: "Alles", hint: "⌘0", isOn: gmail.isCombined) {
+                selectedID = nil
+                Task { await gmail.showCombined() }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+    }
+
+    private func tab(title: String, hint: String?, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title).lineLimit(1)
+                if let hint {
+                    Text(hint).foregroundStyle(isOn ? Color.white.opacity(0.7) : ThingsColor.textTertiary)
+                }
+            }
+            .font(.system(size: 11.5, weight: isOn ? .semibold : .regular))
+            .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(isOn ? ThingsColor.accent : Color.clear))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// ⌘1…⌘9 schakelt tussen de mailboxen, ⌘0 toont ze samen (alleen als het Gmail-paneel open staat).
+    @ViewBuilder private var mailboxShortcuts: some View {
+        if gmail.accounts.count > 1 {
+            ZStack {
+                ForEach(Array(gmail.accounts.prefix(9).enumerated()), id: \.element) { index, email in
+                    Button("") {
+                        selectedID = nil
+                        Task { await gmail.switchAccount(to: email) }
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                }
+                Button("") {
+                    selectedID = nil
+                    Task { await gmail.showCombined() }
+                }
+                .keyboardShortcut("0", modifiers: .command)
+            }
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+        }
     }
 
     /// Schakelen tussen gekoppelde mailboxen, een mailbox toevoegen of loskoppelen.
@@ -98,7 +166,7 @@ struct GmailPanel: View {
                     selectedID = nil
                     Task { await gmail.switchAccount(to: email) }
                 } label: {
-                    if email == gmail.activeAccount {
+                    if email == gmail.activeAccount, !gmail.isCombined {
                         Label(email, systemImage: "checkmark")
                     } else {
                         Text(email)
@@ -115,13 +183,14 @@ struct GmailPanel: View {
             HStack(spacing: 4) {
                 Image(systemName: "person.crop.circle")
                 if gmail.accounts.count > 1, let email = gmail.activeAccount {
-                    Text(email.split(separator: "@").first.map(String.init) ?? email)
+                    Text(gmail.isCombined ? "Alles" : GmailSession.shortName(email))
                         .thingsFont(.metadata)
                         .lineLimit(1)
                 }
             }
         }
         .menuStyle(.borderlessButton)
+        .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.textPrimary)
         .menuIndicator(.hidden)
         .fixedSize()
         .help(gmail.emailAddress ?? "Account")
@@ -213,6 +282,7 @@ struct GmailPanel: View {
                             GmailRow(message: message,
                                      isBusy: gmail.busyMessageIDs.contains(message.id),
                                      isSelected: selectedID == message.id,
+                                     accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(GmailSession.shortName) : nil,
                                      onSelect: { selectedID = message.id },
                                      onArchive: { archive(message) },
                                      onDragStarted: { dragState.begin() })
@@ -235,6 +305,7 @@ private struct GmailRow: View {
     let message: GmailMessageSummary
     let isBusy: Bool
     let isSelected: Bool
+    var accountLabel: String? = nil
     let onSelect: () -> Void
     let onArchive: () -> Void
     let onDragStarted: () -> Void
@@ -267,6 +338,14 @@ private struct GmailRow: View {
                         .foregroundStyle(ThingsColor.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
+                    if let accountLabel {
+                        Text(accountLabel)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(ThingsColor.textSecondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(ThingsColor.separator.opacity(0.6)))
+                    }
                     if isBusy {
                         ProgressView().controlSize(.mini)
                     } else if let date = message.date {
