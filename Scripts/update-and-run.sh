@@ -8,7 +8,13 @@ echo "› Ophalen…"
 git pull --ff-only origin main
 
 echo "› Project genereren…"
-xcodegen generate --quiet
+if command -v xcodegen >/dev/null; then
+    xcodegen generate --quiet
+elif [ -x xcodegen/bin/xcodegen ]; then
+    ./xcodegen/bin/xcodegen generate --quiet
+else
+    echo "XcodeGen ontbreekt: brew install xcodegen" >&2; exit 1
+fi
 
 # Draait Werkbank nog, dan eerst netjes afsluiten (en zo nodig hard).
 if pgrep -x Werkbank >/dev/null; then
