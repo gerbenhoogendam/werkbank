@@ -124,8 +124,8 @@ struct MainView: View {
                 } label: {
                     Label("Gmail", systemImage: "sidebar.left")
                 }
-                .keyboardShortcut("g", modifiers: [.command, .option])
-                .help("Gmail-paneel tonen of verbergen (⌥⌘G)")
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+                .help("Mailpaneel tonen of verbergen (⇧⌘L)")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
