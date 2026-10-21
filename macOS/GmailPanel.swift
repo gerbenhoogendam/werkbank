@@ -10,6 +10,9 @@ struct GmailPanel: View {
     @Environment(\.modelContext) private var context
     /// De mail die is aangeklikt (alleen markering; lezen doe je met dubbelklikken).
     @State private var selectedID: String?
+    /// Mailbox waarvan de tabnaam wordt gewijzigd.
+    @State private var renaming: String?
+    @State private var renameText = ""
     private let dragState = MailDragState.shared
 
     var body: some View {
@@ -22,6 +25,13 @@ struct GmailPanel: View {
         .frame(maxHeight: .infinity)
         .background(ThingsColor.backgroundSidebar)
         .background { mailboxShortcuts }
+        .alert("Naam van de tab", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(renaming.map(GmailSession.shortName) ?? "", text: $renameText)
+            Button("Bewaar") { if let renaming { gmail.rename(renaming, to: renameText) } }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text(renaming ?? "")
+        }
         // Een Gmail-mail loslaten op het paneel zelf doet niets (zo kun je een sleepactie afbreken).
         .onDrop(of: [.gmailMessage], isTargeted: nil) { _ in true }
         .overlay(alignment: .bottom) {
@@ -107,15 +117,15 @@ struct GmailPanel: View {
 
     private var tabs: some View {
         HStack(spacing: 4) {
-            ForEach(Array(gmail.accounts.enumerated()), id: \.element) { index, email in
-                tab(title: GmailSession.shortName(email), hint: index < 9 ? "⌘\(index + 1)" : nil,
+            ForEach(gmail.accounts, id: \.self) { email in
+                tab(title: gmail.displayName(email),
                     isOn: !gmail.isCombined && gmail.activeAccount == email) {
                     selectedID = nil
                     Task { await gmail.switchAccount(to: email) }
                 }
                 .help(email)
             }
-            tab(title: "Alles", hint: "⌘0", isOn: gmail.isCombined) {
+            tab(title: "Alles", isOn: gmail.isCombined) {
                 selectedID = nil
                 Task { await gmail.showCombined() }
             }
@@ -126,14 +136,10 @@ struct GmailPanel: View {
         .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
     }
 
-    private func tab(title: String, hint: String?, isOn: Bool, action: @escaping () -> Void) -> some View {
+    private func tab(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Text(title).lineLimit(1)
-                if let hint {
-                    Text(hint).foregroundStyle(isOn ? Color.white.opacity(0.7) : ThingsColor.textTertiary)
-                }
-            }
+            Text(title)
+                .lineLimit(1)
             .font(.system(size: 11.5, weight: isOn ? .semibold : .regular))
             .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
             .padding(.horizontal, 9)
@@ -167,7 +173,7 @@ struct GmailPanel: View {
         }
     }
 
-    /// Schakelen tussen gekoppelde mailboxen, een mailbox toevoegen of loskoppelen.
+    /// Schakelen tussen gekoppelde mailboxen en ze een eigen naam geven. Toevoegen en loskoppelen: Voorkeuren › Mail.
     private var accountMenu: some View {
         Menu {
             ForEach(gmail.accounts, id: \.self) { email in
@@ -176,23 +182,26 @@ struct GmailPanel: View {
                     Task { await gmail.switchAccount(to: email) }
                 } label: {
                     if email == gmail.activeAccount, !gmail.isCombined {
-                        Label(email, systemImage: "checkmark")
+                        Label("\(gmail.displayName(email)) — \(email)", systemImage: "checkmark")
                     } else {
-                        Text(email)
+                        Text("\(gmail.displayName(email)) — \(email)")
                     }
                 }
             }
             Divider()
-            Button("Mailbox toevoegen…") { Task { await gmail.signIn() } }
-                .disabled(gmail.isAddingAccount)
-            if let email = gmail.activeAccount {
-                Button("\(email) loskoppelen", role: .destructive) { gmail.removeAccount(email) }
+            Menu("Naam wijzigen") {
+                ForEach(gmail.accounts, id: \.self) { email in
+                    Button("\(email)…") {
+                        renameText = gmail.displayNames[email] ?? ""
+                        renaming = email
+                    }
+                }
             }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "person.crop.circle")
                 if gmail.accounts.count > 1, let email = gmail.activeAccount {
-                    Text(gmail.isCombined ? "Alles" : GmailSession.shortName(email))
+                    Text(gmail.isCombined ? "Alles" : gmail.displayName(email))
                         .thingsFont(.metadata)
                         .lineLimit(1)
                 }
@@ -291,7 +300,7 @@ struct GmailPanel: View {
                             GmailRow(message: message,
                                      isBusy: gmail.busyMessageIDs.contains(message.id),
                                      isSelected: selectedID == message.id,
-                                     accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(GmailSession.shortName) : nil,
+                                     accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(gmail.displayName) : nil,
                                      onSelect: { selectedID = message.id },
                                      onArchive: { archive(message) },
                                      onDragStarted: { dragState.begin() })

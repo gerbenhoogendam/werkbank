@@ -160,6 +160,21 @@ final class GmailSession {
     /// Korte naam voor een tabblad of label: het deel voor de @.
     static func shortName(_ email: String) -> String { email.split(separator: "@").first.map(String.init) ?? email }
 
+    /// Eigen namen voor de tabs (leeg: het deel voor de @).
+    private(set) var displayNames: [String: String] =
+        UserDefaults.standard.dictionary(forKey: "gmail.displayNames") as? [String: String] ?? [:]
+
+    func displayName(_ email: String) -> String {
+        let name = displayNames[email]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? Self.shortName(email) : name
+    }
+
+    func rename(_ email: String, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        displayNames[email] = trimmed.isEmpty ? nil : trimmed
+        UserDefaults.standard.set(displayNames, forKey: "gmail.displayNames")
+    }
+
     /// Wat het paneel toont: de mailbox zelf, of alle mailboxen op datum.
     private func refreshVisible() {
         if isCombined {
