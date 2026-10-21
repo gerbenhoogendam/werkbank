@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -31,8 +32,9 @@ struct EventDetailView: View {
     @State private var errorText: String?
     @State private var askSpan: SpanAction?
 
-    private enum SpanAction: Identifiable {
+    private enum SpanAction: Hashable, Identifiable {
         case save, delete
+        case move(AgendaCalendar)
         var id: Self { self }
     }
 
@@ -68,8 +70,8 @@ struct EventDetailView: View {
         .confirmationDialog("Deze afspraak herhaalt",
                             isPresented: Binding(get: { askSpan != nil }, set: { if !$0 { askSpan = nil } }),
                             titleVisibility: .visible, presenting: askSpan) { action in
-            Button(action == .delete ? "Alleen deze verwijderen" : "Alleen deze opslaan") { commit(action, future: false) }
-            Button(action == .delete ? "Deze en alle volgende verwijderen" : "Deze en alle volgende opslaan") {
+            Button("Alleen deze \(Self.verb(action))") { commit(action, future: false) }
+            Button("Deze en alle volgende \(Self.verb(action))") {
                 commit(action, future: true)
             }
             Button("Annuleer", role: .cancel) {}
@@ -88,10 +90,7 @@ struct EventDetailView: View {
                             .foregroundStyle(ThingsColor.textPrimary)
                             .textSelection(.enabled)
                         HStack(spacing: 6) {
-                            Circle().fill(event.color).frame(width: 9, height: 9)
-                            Text(event.calendarTitle)
-                                .thingsFont(.metadata)
-                                .foregroundStyle(ThingsColor.textSecondary)
+                            calendarLabel
                             if event.isRecurring {
                                 Image(systemName: "repeat")
                                     .font(.system(size: 10))
@@ -226,7 +225,76 @@ struct EventDetailView: View {
         }
     }
 
+    private static func verb(_ action: SpanAction) -> String {
+        switch action {
+        case .save: "opslaan"
+        case .delete: "verwijderen"
+        case .move: "verplaatsen"
+        }
+    }
+
+    // MARK: Agenda wisselen
+
+    /// De agenda van de afspraak; aanklikken geeft een menu met de andere agenda's waarin je mag schrijven.
+    @ViewBuilder private var calendarLabel: some View {
+        let label = HStack(spacing: 6) {
+            Circle().fill(event.color).frame(width: 9, height: 9)
+            Text(event.calendarTitle)
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textSecondary)
+        }
+        let targets = service.writableCalendars.filter { $0.id != event.calendarID }
+        if existing != nil, original?.canModify == true, !targets.isEmpty {
+            Menu {
+                ForEach(targets) { target in
+                    Button {
+                        if event.isRecurring { askSpan = .move(target) } else { commit(.move(target), future: false) }
+                    } label: {
+                        Label { Text(target.title) } icon: { Image(nsImage: Self.dot(target.color)) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    label
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(ThingsColor.textTertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Andere agenda kiezen")
+        } else {
+            label
+        }
+    }
+
+    /// Gekleurd rondje voor een menu-item (SF Symbols worden in een menu eenkleurig getekend).
+    private static func dot(_ color: Color) -> NSImage {
+        let image = NSImage(size: NSSize(width: 10, height: 10), flipped: false) { rect in
+            NSColor(color).setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
     private func commit(_ action: SpanAction?, future: Bool) {
+        if case .move(let target) = action, let existing {
+            do {
+                try service.moveEvent(existing, toCalendarID: target.id, thisAndFuture: future)
+                appState.showToast("Verplaatst naar \(target.title)")
+                onClose()   // EventKit kan de afspraak bij een andere agenda een nieuw id geven
+            } catch {
+                errorText = error.localizedDescription
+                appState.showToast("Verplaatsen mislukt: \(error.localizedDescription)", seconds: 5)
+            }
+            return
+        }
         guard let action, let draft, let original else { return }
         do {
             switch action {
@@ -238,6 +306,8 @@ struct EventDetailView: View {
                 }
             case .delete:
                 if let existing { try service.deleteEvent(existing, thisAndFuture: future) }
+            case .move:
+                return
             }
             appState.showToast(action == .save ? "Afspraak opgeslagen" : "Afspraak verwijderd")
             onClose()
