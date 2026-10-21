@@ -312,7 +312,7 @@ struct BoardView: View {
             }
         )) { providers in
             if GmailDrop.accepts(providers) {
-                return GmailDrop.handle(providers: providers, column: column, context: context, appState: appState)
+                return GmailDrop.handle(providers: providers, column: column, archive: false, context: context, appState: appState)
             }
             return MailImporter.handle(providers: providers, column: column, context: context, appState: appState)
         }

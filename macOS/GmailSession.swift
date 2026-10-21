@@ -520,10 +520,10 @@ final class GmailSession {
 
     // MARK: Naar het board slepen
 
-    /// Maakt van een gesleepte Gmail-mail een kaart in `column` en archiveert hem daarna in Gmail.
+    /// Maakt van een gesleepte Gmail-mail een kaart in `column` en archiveert hem daarna in Gmail (tenzij `archive` uit staat).
     /// Archiveren gebeurt pas als de kaart is opgeslagen; mislukt het, dan blijft de kaart staan en de mail in de inbox.
     @discardableResult
-    func importDropped(_ payload: GmailDragPayload, column: BoardColumn,
+    func importDropped(_ payload: GmailDragPayload, column: BoardColumn, archive shouldArchive: Bool = true,
                        context: ModelContext, appState: AppState) async -> TodoCard? {
         guard !busyMessageIDs.contains(payload.messageID) else { return nil }
         busyMessageIDs.insert(payload.messageID)
@@ -542,6 +542,11 @@ final class GmailSession {
         InlineEditing.pendingEditID = card.id
         let sender = card.clientLabel ?? "onbekende afzender"
         let columnTitle = BoardService.title(of: BoardService.resolve(column, in: context), in: context)
+
+        guard shouldArchive else {
+            appState.showToast("Mail van \(sender) toegevoegd aan \(columnTitle)", seconds: 3)
+            return card
+        }
 
         do {
             try await archive(threadID: payload.threadID)
@@ -576,7 +581,7 @@ enum GmailDrop {
 
     /// - Returns: `true` als er een Gmail-mail in de sleeplading zit.
     @MainActor
-    static func handle(providers: [NSItemProvider], column: BoardColumn,
+    static func handle(providers: [NSItemProvider], column: BoardColumn, archive: Bool = true,
                        context: ModelContext, appState: AppState) -> Bool {
         let matching = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }
         guard !matching.isEmpty else { return false }
@@ -584,7 +589,7 @@ enum GmailDrop {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
                 guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
                 Task { @MainActor in
-                    await GmailSession.shared.importDropped(payload, column: column, context: context, appState: appState)
+                    await GmailSession.shared.importDropped(payload, column: column, archive: archive, context: context, appState: appState)
                 }
             }
         }

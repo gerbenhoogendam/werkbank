@@ -105,7 +105,7 @@ struct MainView: View {
         .background(ThingsColor.backgroundContent)
         .onDrop(of: [.emailMessage, .fileURL, .gmailMessage], isTargeted: $state.isDropTargeted) { providers in
             if GmailDrop.accepts(providers) {
-                return GmailDrop.handle(providers: providers, column: .inbox, context: context, appState: appState)
+                return GmailDrop.handle(providers: providers, column: .inbox, archive: false, context: context, appState: appState)
             }
             return MailImporter.handle(providers: providers, context: context, appState: appState)
         }
