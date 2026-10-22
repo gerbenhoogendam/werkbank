@@ -14,6 +14,26 @@ public enum QuoteSplitter {
     /// Aanhef vlak voor een citaat ("Op … schreef …:", "On … wrote:").
     private static let attribution = #"(?is)<div[^>]*>\s*(?:<[^>]+>\s*)*(Op|On|Am|Le)\s[^<]{0,300}?(schreef|wrote|geschreven|schrieb|écrit)[^<]{0,40}:?\s*(?:<[^>]+>\s*)*$"#
 
+    /// Onderwerp als doorgestuurde mail ("Fwd:", "FW:", "Doorgestuurd:"): het "citaat" is dan de inhoud zelf.
+    public static func isForward(subject: String) -> Bool {
+        let lower = subject.trimmingCharacters(in: .whitespaces).lowercased()
+        return ["fwd:", "fw:", "doorgestuurd:", "wg:", "tr:"].contains { lower.hasPrefix($0) }
+    }
+
+    /// Tekst die een doorgestuurd bericht aankondigt (Gmail, Apple Mail, Outlook in NL en EN).
+    private static let forwardMarker = #"(?i)(-{3,}\s*(forwarded message|doorgestuurd bericht|oorspronkelijk bericht)|begin (forwarded message|doorgestuurd bericht))"#
+
+    /// Splitst, behalve bij een doorgestuurde mail: daar hoort het doorgestuurde bericht gewoon bij de inhoud.
+    public static func split(html: String, subject: String) -> (main: String, history: String?) {
+        if isForward(subject: subject) { return (html, nil) }
+        let result = split(html: html)
+        if let history = result.history {
+            let start = MIMEBody.htmlToText(String(history.prefix(3_000)))
+            if start.range(of: forwardMarker, options: .regularExpression) != nil { return (html, nil) }
+        }
+        return result
+    }
+
     public static func split(html: String) -> (main: String, history: String?) {
         if let plain = splitPlain(html) { return plain }
         var cut: String.Index?

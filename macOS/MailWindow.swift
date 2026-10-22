@@ -429,8 +429,9 @@ private struct ThreadMailCard: View {
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            AutoHeightMailWebView(html: mail.mainHTML, height: $bodyHeight)
+            AutoHeightMailWebView(html: mail.mainHTML, height: $bodyHeight, margin: "12px 14px")
                 .frame(height: bodyHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             if let history = mail.historyHTML {
                 Button {
@@ -442,8 +443,9 @@ private struct ThreadMailCard: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(ThingsColor.accent)
                 if showHistory {
-                    AutoHeightMailWebView(html: history, height: $historyHeight)
+                    AutoHeightMailWebView(html: history, height: $historyHeight, margin: "12px 14px")
                         .frame(height: historyHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 }
             }
 
@@ -619,6 +621,8 @@ private struct ThreadAnalysisView: View {
 struct AutoHeightMailWebView: NSViewRepresentable {
     let html: String
     @Binding var height: CGFloat
+    /// Ruimte rond de inhoud (CSS-marge van de body).
+    var margin = "0"
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -637,7 +641,7 @@ struct AutoHeightMailWebView: NSViewRepresentable {
         // Vergelijk de HTML zelf; het document eromheen pas bouwen als er echt iets anders te tonen is.
         guard context.coordinator.lastHTML != html else { return }
         context.coordinator.lastHTML = html
-        view.loadHTMLString(MailWebView.document(html, allowRemote: true, margin: "0"), baseURL: nil)
+        view.loadHTMLString(MailWebView.document(html, allowRemote: true, margin: margin, fitsContent: true), baseURL: nil)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
@@ -663,7 +667,9 @@ struct AutoHeightMailWebView: NSViewRepresentable {
 
         func measure() {
             // Script van de app zelf (niet van de mail): mag ook als JavaScript voor de inhoud uit staat.
-            webView?.evaluateJavaScript("Math.ceil(document.body.scrollHeight)", in: nil, in: .defaultClient) { [weak self] result in
+            // Inclusief de marges (body.scrollHeight telt die niet mee): anders blijft er een scrollbalk over.
+            let script = "Math.ceil(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))"
+            webView?.evaluateJavaScript(script, in: nil, in: .defaultClient) { [weak self] result in
                 guard let self, case .success(let value) = result else { return }
                 let height = (value as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
                 if height > 0, abs(height - self.parent.height) > 1 {
@@ -725,7 +731,7 @@ struct MailWebView: NSViewRepresentable {
         view.loadHTMLString(document, baseURL: nil)
     }
 
-    static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px") -> String {
+    static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
         let images = allowRemote ? "img-src data: https: http:" : "img-src data:"
         return """
         <!doctype html><html><head><meta charset="utf-8">
@@ -739,6 +745,7 @@ struct MailWebView: NSViewRepresentable {
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }
         blockquote { margin: 8px 0 8px 4px; padding-left: 12px; border-left: 3px solid #d0d0d5; color: #55555a; }
         table { max-width: 100%; }
+        \(fitsContent ? "html, body { overflow: hidden; }" : "")
         </style></head><body>\(inner)</body></html>
         """
     }

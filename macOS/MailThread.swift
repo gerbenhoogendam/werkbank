@@ -284,7 +284,7 @@ final class MailThreadModel {
             let raw = try await gmail.rawMessageData(id: id)
             let entry = await Task.detached(priority: .userInitiated) { () -> ParsedThreadMail in
                 let content = MailContentParser.parse(raw)
-                let split = QuoteSplitter.split(html: content.displayHTML)
+                let split = QuoteSplitter.split(html: content.displayHTML, subject: content.subject)
                 return ParsedThreadMail(content: content, main: split.main, history: split.history)
             }.value
             ParsedMailCache.put(id, entry)

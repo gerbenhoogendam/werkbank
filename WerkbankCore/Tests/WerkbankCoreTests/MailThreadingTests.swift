@@ -28,6 +28,16 @@ final class MailThreadingTests: XCTestCase {
         XCTAssertTrue(history?.contains("oud") ?? false)
     }
 
+    func testForwardsAreNotFolded() {
+        let html = #"<div>Kijk even hiernaar</div><div class="gmail_quote"><div class="gmail_attr">---------- Forwarded message ---------<br>Van: Jan</div><div>De inhoud</div></div>"#
+        XCTAssertNil(QuoteSplitter.split(html: html, subject: "Fwd: Surface").history)
+        // Ook zonder Fwd: in het onderwerp herkent hij het doorgestuurde bericht.
+        XCTAssertNil(QuoteSplitter.split(html: html, subject: "Surface").history)
+        // Een gewoon antwoord blijft ingeklapt.
+        let reply = #"<div>Prima</div><div class="gmail_quote"><div class="gmail_attr">Op di 20 okt schreef Jan:</div><blockquote>oud</blockquote></div>"#
+        XCTAssertNotNil(QuoteSplitter.split(html: reply, subject: "Re: Surface").history)
+    }
+
     func testDraftExtraction() {
         let answer = "## Samenvatting\nIets\n\n## Conceptantwoord\nBeste Jan,\n\nDank je.\n\n## Extra\nniet"
         XCTAssertEqual(ClaudeDraft.extract(from: answer), "Beste Jan,\n\nDank je.")
