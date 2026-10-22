@@ -142,7 +142,7 @@ struct BoardView: View {
         .onAppear {
             BoardService.ensureColumns(in: context)
             drag.onBoardDrop = { card, column, index in
-                BoardService.move(card, to: column, index: index, in: context)
+                BoardService.move(card, to: column, index: index, undoable: true, in: context)
             }
         }
         // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen, zwevende kaarten onderbrengen.

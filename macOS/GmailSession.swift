@@ -579,6 +579,38 @@ final class GmailSession {
         _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
     }
 
+    /// Zet een gesprek terug in de inbox (⌘Z na archiveren).
+    private func restoreToInbox(threadID: String) async {
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["INBOX"]])
+            _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
+            await reload()
+        } catch {
+            AppState.shared.announce("Terugzetten in de inbox mislukt")
+        }
+    }
+
+    private func recordArchive(threadID: String) {
+        UndoCenter.shared.record("Mail archiveren", undo: { [weak self] in
+            Task { await self?.restoreToInbox(threadID: threadID) }
+        }, redo: { [weak self] in
+            Task {
+                try? await self?.archive(threadID: threadID)
+                self?.removeThreadFromLists(threadID)
+            }
+        })
+    }
+
+    /// ⌘Z na een taak uit een mail: de kaart weg en (als hij gearchiveerd was) de mail terug in de inbox.
+    private func recordCardFromMail(cardID: UUID, threadID: String, archived: Bool, context: ModelContext) {
+        UndoCenter.shared.record(archived ? "Taak van mail maken" : "Mail naar taak", undo: { [weak self] in
+            if let card = BoardService.card(withID: cardID, in: context) {
+                BoardService.delete(card, undoable: false, in: context)
+            }
+            if archived { Task { await self?.restoreToInbox(threadID: threadID) } }
+        })
+    }
+
     // MARK: Openklappen en archiveren vanuit de lijst
 
     /// De tekst van een mail (alleen text, geen opmaak of bijlagen), voor het openklappen in het paneel.
@@ -598,6 +630,7 @@ final class GmailSession {
             try await archive(threadID: message.threadID)
             removeThreadFromLists(message.threadID)
             bodyCache[message.id] = nil
+            recordArchive(threadID: message.threadID)
             appState.showToast("Mail gearchiveerd in Gmail")
         } catch {
             appState.showToast("Archiveren mislukt: \(error.localizedDescription)", seconds: 5)
@@ -634,6 +667,7 @@ final class GmailSession {
             try await archive(threadID: message.threadID)
             removeThreadFromLists(message.threadID)
             bodyCache[message.id] = nil
+            recordCardFromMail(cardID: card.id, threadID: message.threadID, archived: true, context: context)
             appState.showToast("Taak gemaakt in \(columnTitle)\(timeNote); mail gearchiveerd in Gmail", seconds: 3)
         } catch {
             appState.showToast("Taak gemaakt\(timeNote), maar archiveren in Gmail mislukte: \(error.localizedDescription)", seconds: 6)
@@ -666,6 +700,7 @@ final class GmailSession {
         let columnTitle = BoardService.title(of: BoardService.resolve(column, in: context), in: context)
 
         guard shouldArchive else {
+            recordCardFromMail(cardID: card.id, threadID: payload.threadID, archived: false, context: context)
             appState.showToast("Mail van \(sender) toegevoegd aan \(columnTitle)", seconds: 3)
             return card
         }
@@ -673,6 +708,7 @@ final class GmailSession {
         do {
             try await archive(threadID: payload.threadID)
             removeThreadFromLists(payload.threadID)
+            recordCardFromMail(cardID: card.id, threadID: payload.threadID, archived: true, context: context)
             appState.showToast("Mail van \(sender) toegevoegd aan \(columnTitle) en gearchiveerd in Gmail", seconds: 3)
         } catch {
             appState.showToast("Kaart gemaakt, maar archiveren in Gmail mislukte: \(error.localizedDescription)", seconds: 6)

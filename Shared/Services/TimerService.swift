@@ -163,13 +163,32 @@ enum TimerService {
         entry.status = .finished
         context.insert(entry)
         save(context)
+        let snapshot = TimeEntrySnapshot(entry)
+        UndoCenter.shared.record("Afspraak naar Tijd schrijven", undo: {
+            if let entry = TimerService.entry(withID: snapshot.id, in: context) {
+                context.delete(entry)
+                save(context)
+            }
+        }, redo: { snapshot.recreate(in: context) })
         return entry
     }
 
+    static func entry(withID id: UUID, in context: ModelContext) -> TimeEntry? {
+        allEntries(in: context).first { $0.id == id }
+    }
+
     static func setWritten(_ entry: TimeEntry, _ value: Bool, in context: ModelContext) {
-        guard entry.status == .finished else { return }
+        guard entry.status == .finished, entry.isWritten != value else { return }
         entry.isWritten = value
         save(context)
+        let id = entry.id
+        let set: @MainActor (Bool) -> Void = { flag in
+            guard let entry = TimerService.entry(withID: id, in: context) else { return }
+            entry.isWritten = flag
+            save(context)
+        }
+        UndoCenter.shared.record(value ? "Als geschreven markeren" : "Markering geschreven weghalen",
+                                 undo: { set(!value) }, redo: { set(value) })
     }
 
     // MARK: Hulpjes
@@ -195,8 +214,15 @@ enum TimerService {
 
     /// Verwijdert een tijdregel zonder die te bewaren (bijv. vanuit de stopsheet).
     static func discard(_ entry: TimeEntry, in context: ModelContext) {
+        let snapshot = TimeEntrySnapshot(entry)
         context.delete(entry)
         save(context)
+        UndoCenter.shared.record("Tijdregel verwijderen", undo: { snapshot.recreate(in: context) }, redo: {
+            if let entry = TimerService.entry(withID: snapshot.id, in: context) {
+                context.delete(entry)
+                save(context)
+            }
+        })
     }
 
     /// Som van afgeronde, niet-geschreven regels.

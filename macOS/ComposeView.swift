@@ -456,7 +456,7 @@ struct ComposeView: View {
         do {
             try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
             SendSound.play()
-            appState.showToast("Mail verzonden")
+            appState.announce("Mail verzonden")
             if embedded {
                 bodyBinding.wrappedValue = ""
                 attachments = []

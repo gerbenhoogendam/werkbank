@@ -145,6 +145,7 @@ final class CalendarService {
         event.calendar = calendar
         try store.save(event, span: .thisEvent)
         revision += 1
+        recordCreated("Inplannen", identifier: event.eventIdentifier)
     }
 
     /// Zet een afspraak in een andere agenda. Bij een herhalende afspraak kiest `thisAndFuture` of alleen
@@ -155,6 +156,8 @@ final class CalendarService {
         guard target.allowsContentModifications else { throw CalendarError.targetReadOnly }
         guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
         guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        let oldCalendarID = ek.calendar.calendarIdentifier
+        let undoable = !thisAndFuture && !ek.hasRecurrenceRules
         ek.calendar = target
         do {
             try store.save(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
@@ -163,6 +166,40 @@ final class CalendarService {
             throw error
         }
         revision += 1
+        if undoable, let identifier = ek.eventIdentifier {
+            UndoCenter.shared.record("Andere agenda kiezen", undo: { [weak self] in
+                self?.moveBack(identifier: identifier, toCalendarID: oldCalendarID)
+            })
+        }
+    }
+
+    // MARK: Ongedaan maken (alleen afspraken die niet herhalen)
+
+    private func removeEvent(identifier: String) {
+        guard let ek = store.event(withIdentifier: identifier), ek.calendar.allowsContentModifications else { return }
+        do {
+            try store.remove(ek, span: .thisEvent)
+            revision += 1
+        } catch {
+            store.reset()
+        }
+    }
+
+    private func moveBack(identifier: String, toCalendarID calendarID: String) {
+        guard let ek = store.event(withIdentifier: identifier), let target = store.calendar(withIdentifier: calendarID),
+              target.allowsContentModifications else { return }
+        ek.calendar = target
+        do {
+            try store.save(ek, span: .thisEvent)
+            revision += 1
+        } catch {
+            store.reset()
+        }
+    }
+
+    private func recordCreated(_ name: String, identifier: String?) {
+        guard let identifier else { return }
+        UndoCenter.shared.record(name, undo: { [weak self] in self?.removeEvent(identifier: identifier) })
     }
 
     // MARK: Kleuren
@@ -227,6 +264,7 @@ final class CalendarService {
     func saveEvent(_ event: AgendaEvent, edit: EventEdit, original: EventEdit, thisAndFuture: Bool) throws {
         guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
         guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        let undoable = !thisAndFuture && original.repeatOption == .none && edit.repeatOption == .none
         if edit.calendarID != ek.calendar.calendarIdentifier {
             guard let target = store.calendar(withIdentifier: edit.calendarID) else { throw CalendarError.calendarNotFound }
             guard target.allowsContentModifications else { throw CalendarError.targetReadOnly }
@@ -240,10 +278,36 @@ final class CalendarService {
             throw error
         }
         revision += 1
+        if undoable, let identifier = ek.eventIdentifier {
+            UndoCenter.shared.record("Afspraak wijzigen", undo: { [weak self] in
+                self?.restore(identifier: identifier, to: original, from: edit)
+            })
+        }
+    }
+
+    private func restore(identifier: String, to original: EventEdit, from current: EventEdit) {
+        guard let ek = store.event(withIdentifier: identifier), ek.calendar.allowsContentModifications else { return }
+        if original.calendarID != ek.calendar.calendarIdentifier,
+           let calendar = store.calendar(withIdentifier: original.calendarID), calendar.allowsContentModifications {
+            ek.calendar = calendar
+        }
+        do {
+            try apply(original, to: ek, originalRepeat: current.repeatOption, originalAlert: current.alert)
+            try store.save(ek, span: .thisEvent)
+            revision += 1
+        } catch {
+            store.reset()
+        }
     }
 
     /// Maakt een nieuwe afspraak met alle velden van het bewerkformulier.
     func createEvent(edit: EventEdit) throws {
+        let identifier = try insert(edit: edit)
+        recordCreated("Afspraak maken", identifier: identifier)
+    }
+
+    @discardableResult
+    private func insert(edit: EventEdit) throws -> String? {
         guard let calendar = store.calendar(withIdentifier: edit.calendarID) else { throw CalendarError.calendarNotFound }
         guard calendar.allowsContentModifications else { throw CalendarError.targetReadOnly }
         let ek = EKEvent(eventStore: store)
@@ -256,6 +320,7 @@ final class CalendarService {
             throw error
         }
         revision += 1
+        return ek.eventIdentifier
     }
 
     /// Zet de velden van het formulier op een EKEvent. Herhaling en herinnering worden alleen aangeraakt als ze
@@ -314,6 +379,8 @@ final class CalendarService {
     func deleteEvent(_ event: AgendaEvent, thisAndFuture: Bool) throws {
         guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
         guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        // Voor ⌘Z: de velden van een losse afspraak (deelnemers kunnen niet terug).
+        let snapshot = ek.hasRecurrenceRules ? nil : editableEvent(for: event)
         do {
             try store.remove(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
         } catch {
@@ -321,6 +388,9 @@ final class CalendarService {
             throw error
         }
         revision += 1
+        if let snapshot {
+            UndoCenter.shared.record("Afspraak verwijderen", undo: { [weak self] in _ = try? self?.insert(edit: snapshot) })
+        }
     }
 
     private func ekEvent(for event: AgendaEvent) -> EKEvent? {

@@ -142,16 +142,24 @@ struct MiniTimerView: View {
             .max { ($0.pausedAt ?? .distantPast) < ($1.pausedAt ?? .distantPast) }
     }
 
+    private var isShown: Bool { current != nil || appState.hudMessage != nil }
+
     var body: some View {
         Group {
-            if let entry = current {
+            if let message = appState.hudMessage {
+                // Een melding gaat even voor de timer.
+                messageContent(message)
+                    .padding(12)
+                    .transition(.opacity)
+            } else if let entry = current {
                 content(entry)
                     .padding(12)   // ruimte voor de schaduw; moet gelijk zijn aan MiniTimerController.margin
             } else {
                 Color.clear.frame(width: 1, height: 1)
             }
         }
-        .onChange(of: current?.id, initial: true) { _, id in onVisibilityChange(id != nil) }
+        .animation(.easeOut(duration: 0.2), value: appState.hudMessage)
+        .onChange(of: isShown, initial: true) { _, shown in onVisibilityChange(shown) }
         .onChange(of: sizeRaw) { _, _ in onResize() }
     }
 
@@ -195,6 +203,25 @@ struct MiniTimerView: View {
                 appState.requestStop(entry, in: context)
                 WindowRouter.showMain()
             }
+        }
+        .padding(.horizontal, size.gap + 6)
+        .frame(width: size.width, height: size.height)
+        .background(Capsule().fill(Color.black.opacity(0.82)))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
+    }
+
+    private func messageContent(_ message: String) -> some View {
+        HStack(spacing: size.gap) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: size.titleFont + 2, weight: .semibold))
+                .foregroundStyle(Color(hex: 0x3CCB5F))
+            Text(message)
+                .font(.system(size: size.titleFont, weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, size.gap + 6)
         .frame(width: size.width, height: size.height)

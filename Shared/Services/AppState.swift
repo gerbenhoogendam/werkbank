@@ -17,10 +17,23 @@ final class AppState {
     static let shared = AppState()
 
     var toast: String?
+    /// Korte melding in de zwevende timer-pil (bijvoorbeeld "Taak afronden ongedaan", "Mail verzonden").
+    var hudMessage: String?
     var stopContext: StopContext?
     var isDropTargeted = false
 
     @ObservationIgnored private var toastTask: Task<Void, Never>?
+    @ObservationIgnored private var hudTask: Task<Void, Never>?
+
+    func announce(_ message: String, seconds: Double = 2.5) {
+        hudMessage = message
+        hudTask?.cancel()
+        hudTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.hudMessage = nil
+        }
+    }
 
     func showToast(_ message: String, seconds: Double = 2) {
         toast = message

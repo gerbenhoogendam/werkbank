@@ -34,6 +34,29 @@ enum BoardService {
         return addCard(title: parsed.title, column: column, label: parsed.label, in: context)
     }
 
+    static func card(withID id: UUID, in context: ModelContext) -> TodoCard? {
+        let descriptor = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.id == id })
+        return try? context.fetch(descriptor).first
+    }
+
+    /// Verplaatst een kaart (slepen op het board); ⌘Z zet hem terug.
+    static func move(_ card: TodoCard, to column: BoardColumn, index: Int, undoable: Bool, in context: ModelContext) {
+        let before = CardPlace(card)
+        move(card, to: column, index: index, in: context)
+        guard undoable, before.columnRaw != card.columnRaw || before.sortOrder != card.sortOrder else { return }
+        let id = card.id
+        let after = CardPlace(card)
+        UndoCenter.shared.record("Taak verplaatsen", undo: {
+            guard let card = BoardService.card(withID: id, in: context) else { return }
+            before.restore(card)
+            try? context.save()
+        }, redo: {
+            guard let card = BoardService.card(withID: id, in: context) else { return }
+            after.restore(card)
+            try? context.save()
+        })
+    }
+
     /// Verplaatst een kaart naar `column` op positie `index` binnen de andere kaarten van die kolom.
     static func move(_ card: TodoCard, to column: BoardColumn, index: Int, in context: ModelContext) {
         let others = allCards(in: context).filter { $0.column == column && $0.id != card.id }
@@ -55,6 +78,20 @@ enum BoardService {
 
     /// Rondt een taak af: hij verdwijnt van het board en staat in het archief.
     static func complete(_ card: TodoCard, in context: ModelContext) {
+        let before = CardPlace(card)
+        markDone(card, in: context)
+        let id = card.id
+        UndoCenter.shared.record("Taak afronden", undo: {
+            guard let card = BoardService.card(withID: id, in: context) else { return }
+            before.restore(card)
+            try? context.save()
+        }, redo: {
+            guard let card = BoardService.card(withID: id, in: context) else { return }
+            markDone(card, in: context)
+        })
+    }
+
+    private static func markDone(_ card: TodoCard, in context: ModelContext) {
         card.columnRaw = BoardColumn.doneID
         card.completedAt = .now
         card.isNew = false
@@ -63,11 +100,35 @@ enum BoardService {
 
     /// Zet een afgeronde taak terug bovenaan de Inbox (of de eerste kolom).
     static func reopen(_ card: TodoCard, in context: ModelContext) {
+        let before = CardPlace(card)
         card.completedAt = nil
         move(card, to: resolve(.inbox, in: context), index: 0, in: context)
+        let id = card.id
+        let after = CardPlace(card)
+        UndoCenter.shared.record("Taak terugzetten", undo: {
+            guard let card = BoardService.card(withID: id, in: context) else { return }
+            before.restore(card)
+            try? context.save()
+        }, redo: {
+            guard let card = BoardService.card(withID: id, in: context) else { return }
+            after.restore(card)
+            try? context.save()
+        })
     }
 
-    static func delete(_ card: TodoCard, in context: ModelContext) {
+    /// Verwijdert een kaart met subtaken. `undoable: false` voor een lege nieuwe kaart die je annuleert.
+    static func delete(_ card: TodoCard, undoable: Bool = true, in context: ModelContext) {
+        let snapshot = CardSnapshot(card, subtasks: subtasks(of: card, in: context))
+        remove(card, in: context)
+        guard undoable else { return }
+        UndoCenter.shared.record("Taak verwijderen", undo: {
+            snapshot.recreate(in: context)
+        }, redo: {
+            if let card = BoardService.card(withID: snapshot.id, in: context) { remove(card, in: context) }
+        })
+    }
+
+    private static func remove(_ card: TodoCard, in context: ModelContext) {
         for subtask in subtasks(of: card, in: context) { context.delete(subtask) }
         context.delete(card)
         try? context.save()
@@ -94,14 +155,36 @@ enum BoardService {
         return subtask
     }
 
+    private static func subtask(withID id: UUID, in context: ModelContext) -> Subtask? {
+        let descriptor = FetchDescriptor<Subtask>(predicate: #Predicate { $0.id == id })
+        return try? context.fetch(descriptor).first
+    }
+
     static func toggle(_ subtask: Subtask, in context: ModelContext) {
         subtask.isDone.toggle()
         try? context.save()
+        let id = subtask.id
+        let flip: @MainActor () -> Void = {
+            guard let subtask = BoardService.subtask(withID: id, in: context) else { return }
+            subtask.isDone.toggle()
+            try? context.save()
+        }
+        UndoCenter.shared.record(subtask.isDone ? "Subtaak afvinken" : "Subtaak openzetten", undo: flip, redo: flip)
     }
 
     static func delete(_ subtask: Subtask, in context: ModelContext) {
+        let snapshot = SubtaskSnapshot(subtask)
         context.delete(subtask)
         try? context.save()
+        UndoCenter.shared.record("Subtaak verwijderen", undo: {
+            snapshot.recreate(in: context)
+            try? context.save()
+        }, redo: {
+            if let subtask = BoardService.subtask(withID: snapshot.id, in: context) {
+                context.delete(subtask)
+                try? context.save()
+            }
+        })
     }
 
     // MARK: Kolommen
@@ -204,6 +287,16 @@ enum BoardService {
 
     /// Zet een kolom op positie `index` onder de overige kolommen en nummert de volgorde opnieuw.
     static func moveColumn(key: String, toIndex index: Int, in context: ModelContext) {
+        let oldIndex = columnRecords(in: context).firstIndex { $0.key == key }
+        reorderColumn(key: key, toIndex: index, in: context)
+        guard let oldIndex, let newIndex = columnRecords(in: context).firstIndex(where: { $0.key == key }),
+              newIndex != oldIndex else { return }
+        UndoCenter.shared.record("Kolom verplaatsen",
+                                 undo: { reorderColumn(key: key, toIndex: oldIndex, in: context) },
+                                 redo: { reorderColumn(key: key, toIndex: newIndex, in: context) })
+    }
+
+    private static func reorderColumn(key: String, toIndex index: Int, in context: ModelContext) {
         let records = columnRecords(in: context)
         let order = ColumnOrdering.moving(records.map(\.key), key: key, toIndex: index)
         guard order != records.map(\.key) else { return }
@@ -223,6 +316,21 @@ enum BoardService {
         let cards = allCards(in: context)
         var next = (cards.filter { $0.columnRaw == destination.key }.map(\.sortOrder).max() ?? -1) + 1
         let moving = cards.filter { $0.columnRaw == record.key }.sorted { $0.sortOrder < $1.sortOrder }
+        // Voor ⌘Z: de kolom zelf en waar de kaarten stonden.
+        let saved = (key: record.key, title: record.title, sortOrder: record.sortOrder, colorIndex: record.colorIndex,
+                     symbol: record.symbol)
+        let places = moving.map { ($0.id, CardPlace($0)) }
+        defer {
+            UndoCenter.shared.record("Kolom verwijderen", undo: {
+                let restored = ColumnRecord(key: saved.key, title: saved.title, sortOrder: saved.sortOrder,
+                                            colorIndex: saved.colorIndex, symbol: saved.symbol)
+                context.insert(restored)
+                for (id, place) in places {
+                    if let card = BoardService.card(withID: id, in: context) { place.restore(card) }
+                }
+                try? context.save()
+            })
+        }
         for card in moving {
             card.columnRaw = destination.key
             card.sortOrder = next

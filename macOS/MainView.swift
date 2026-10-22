@@ -7,6 +7,7 @@ struct MainView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
     @Environment(DragCoordinator.self) private var drag
+    @Environment(\.undoManager) private var undoManager
 
     // Verdeling van het venster; bewaard tussen sessies. Dubbelklik op een scheidingslijn zet hem terug.
     @AppStorage("layout.boardFraction") private var boardFraction = Self.defaultBoardFraction
@@ -110,6 +111,8 @@ struct MainView: View {
                 .accessibilityHidden(true)
         }
         .coordinateSpace(.named("main"))
+        // ⌘Z voor handelingen in de app loopt via de UndoManager van dit venster.
+        .onChange(of: undoManager, initial: true) { _, manager in UndoCenter.shared.manager = manager }
         // Nergens scrollbalken: ze nemen alleen maar ruimte in.
         .scrollIndicators(.hidden)
         .background(ThingsColor.backgroundContent)

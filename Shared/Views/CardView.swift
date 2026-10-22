@@ -391,7 +391,7 @@ struct CardView: View {
     private func cancelEditing() {
         let wasEmptyNewCard = editing && card.title.isEmpty
         finishEditing()
-        if wasEmptyNewCard { BoardService.delete(card, in: context) }
+        if wasEmptyNewCard { BoardService.delete(card, undoable: false, in: context) }
     }
 
     private func finishEditing() {
