@@ -66,4 +66,9 @@ jobs:
           if-no-files-found: warn
       - name: Fouten samenvatten
         if: failure()
-        run: grep -E "error:" build.log | sort -u | head -100 || true
+        run: |
+          grep -E "error:" build.log | sort -u | head -100 || true
+          # Ook als annotatie, zodat de fouten zonder het volledige log te lezen zijn.
+          grep -E ": error:" build.log | sed -E 's#^.*/(Werkbank|werkbank)/##' | sort -u | head -30 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done

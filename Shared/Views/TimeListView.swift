@@ -27,6 +27,7 @@ struct TimeListView: View {
     @State private var isExporting = false
 
     /// De regels in één keer verdeeld (niet per onderdeel van de weergave opnieuw filteren en sorteren).
+    @MainActor
     private struct Parts {
         var running: TimeEntry?
         /// Nog te schrijven: bovenaan. Afgevinkte regels gaan naar "Al geschreven" onderaan.
