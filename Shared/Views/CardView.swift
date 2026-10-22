@@ -48,7 +48,6 @@ struct CardView: View {
         VStack(alignment: .leading, spacing: 5) {
             titleRow
             if editing { minutesRow }
-            labelRow
             if let sender = senderName {
                 Text(sender)
                     .font(.system(size: 11))
@@ -69,6 +68,12 @@ struct CardView: View {
         .padding(.top, 10)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Klein en onopvallend rechtsboven: de mail bij deze taak.
+        .overlay(alignment: .topTrailing) {
+            if hasBody {
+                mailButton.padding(.top, 5).padding(.trailing, 5)
+            }
+        }
         .background(
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
                 .fill(ThingsColor.backgroundContent)
@@ -117,8 +122,8 @@ struct CardView: View {
                     .accessibilityLabel("Nieuw")
             }
             if let domain = card.logoDomain {
-                LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 18)
-                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 4 }
+                LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 15)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 }
             }
             if editing {
                 TextField("Titel", text: $titleDraft, axis: .vertical)
@@ -139,6 +144,7 @@ struct CardView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(.trailing, hasBody ? 14 : 0)   // ruimte voor het mailicoontje rechtsboven
         .onChange(of: focus) { _, new in
             // Focus weg uit alle velden = klaar met bewerken.
             if new == nil && editing { commitEditing() }
@@ -207,12 +213,6 @@ struct CardView: View {
         .cardFont(.meta)
     }
 
-    @ViewBuilder private var labelRow: some View {
-        if let label = card.clientLabel {
-            TagPill(name: label)
-        }
-    }
-
     /// De tekst van de mail, klein en binnen de kaart; lange teksten scrollen.
     private func bodyView(_ text: String) -> some View {
         ScrollView {
@@ -259,31 +259,24 @@ struct CardView: View {
 
     /// Onderste rij: afronden, timer en (bij een mail) de mailtekst lezen. Op de Mac verschijnt rechts
     /// "Subtaak" zodra je boven de kaart zweeft.
-    /// Onderaan: timer links, de mail in het midden, afvinken rechts.
+    /// Onderaan: subtaak toevoegen links (bij aanwijzen), timer en afvinken rechts.
     private var actionRow: some View {
-        HStack(spacing: 0) {
-            HStack(spacing: 2) {
-                TimerButton(isRunning: isTimerRunning, action: onStartTimer)
-                #if os(macOS)
-                if isEditable && !addingSubtask { addSubtaskButton }
-                #endif
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if hasBody { mailButton }
-            Group {
-                if !editing { completeButton }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+        HStack(spacing: 2) {
+            #if os(macOS)
+            if isEditable && !addingSubtask { addSubtaskButton }
+            #endif
+            Spacer(minLength: 4)
+            TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+            if !editing { completeButton }
         }
     }
 
     private var mailButton: some View {
         Button(action: toggleExpanded) {
             Image(systemName: expanded ? "envelope.open" : "envelope")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(expanded ? ThingsColor.accent : ThingsColor.textSecondary)
-                .frame(width: 24, height: 24)
-                .frame(width: ThingsMetrics.minTapTarget * 0.6, height: ThingsMetrics.minTapTarget * 0.6)
+                .font(.system(size: 9))
+                .foregroundStyle(expanded ? ThingsColor.accent : ThingsColor.textTertiary)
+                .frame(width: 18, height: 18)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
