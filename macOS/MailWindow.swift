@@ -326,11 +326,8 @@ struct MailWindowView: View {
                         suggestion: draft.flatMap { $0.id == usedDraftID ? nil : $0.text },
                         onSuggestionDone: { usedDraftID = model.latestDraft?.id },
                         onSent: {
-                            Task {
-                                try? await Task.sleep(for: .seconds(1.5))
-                                await model.load()
-                                if let newest = model.mails.last { self.replyRef = composeRef(.replyAll, for: newest) }
-                            }
+                            // Verstuurd: het gesprek klapt weg.
+                            PanelStore.shared.foldAway(id: PanelKind.mail(ref).id)
                         },
                         onDiscard: {
                             usedDraftID = model.latestDraft?.id

@@ -25,6 +25,10 @@ final class PanelStore {
     static let shared = PanelStore()
 
     private(set) var panels: [PanelKind] = []
+    /// Panelen die nu wegklappen (na het versturen van een mail).
+    private(set) var foldingIDs: Set<String> = []
+
+    static let foldDuration = 0.45
 
     func open(_ panel: PanelKind) {
         withAnimation(.easeOut(duration: 0.18)) {
@@ -41,6 +45,18 @@ final class PanelStore {
     func closeMail(messageID: String) {
         withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { $0.id == "mail-\(messageID)" } }
     }
+
+    /// Klapt een paneel van boven naar achteren weg (zoals een blad dat omvalt) en haalt het daarna weg.
+    func foldAway(id: String) {
+        guard panels.contains(where: { $0.id == id }), !foldingIDs.contains(id) else { return }
+        withAnimation(.easeIn(duration: Self.foldDuration)) { _ = foldingIDs.insert(id) }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.foldDuration + 0.05))
+            panels.removeAll { $0.id == id }
+            foldingIDs.remove(id)
+        }
+    }
+
 }
 
 /// Legt de open panelen in het midden van het venster: één paneel met ±20% ruimte links en rechts,
@@ -55,6 +71,7 @@ struct PanelOverlay: View {
             HStack(spacing: 12) {
                 ForEach(store.panels) { panel in
                     PanelChrome(panel: panel)
+                        .modifier(FoldAwayEffect(angle: store.foldingIDs.contains(panel.id) ? 90 : 0))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 }
@@ -111,5 +128,23 @@ private struct PanelChrome: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(ThingsColor.separator))
         .shadow(color: ThingsColor.cardShadow, radius: 18, x: 0, y: 6)
+    }
+}
+
+/// Wegklappen naar achteren rond de onderrand; hoe verder, hoe donkerder (zelfde stijl als de Maandagenda).
+private struct FoldAwayEffect: ViewModifier, Animatable {
+    var angle: Double
+
+    var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(Color.black.opacity(0.3 * min(angle / 90, 1)).allowsHitTesting(false))
+            .opacity(angle >= 89 ? 0 : 1)
+            .rotation3DEffect(.degrees(angle), axis: (x: 1, y: 0, z: 0), anchor: .bottom, anchorZ: 0, perspective: 0.35)
+            .allowsHitTesting(angle == 0)
     }
 }

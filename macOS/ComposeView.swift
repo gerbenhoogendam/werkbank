@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WerkbankCore
@@ -454,16 +455,36 @@ struct ComposeView: View {
         defer { isSending = false }
         do {
             try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
+            SendSound.play()
             appState.showToast("Mail verzonden")
             if embedded {
                 bodyBinding.wrappedValue = ""
                 attachments = []
                 onSent?()
             } else {
-                PanelStore.shared.close(.compose(ref))
+                PanelStore.shared.foldAway(id: PanelKind.compose(ref).id)
             }
         } catch {
             errorText = "Versturen mislukt: \(error.localizedDescription)"
         }
+    }
+}
+
+/// Het verzendgeluid van Mail; is dat niet te vinden, dan een systeemgeluid.
+enum SendSound {
+    private static var current: NSSound?   // vasthouden zolang hij speelt
+
+    static func play() {
+        let candidates = ["/System/Applications/Mail.app/Contents/Resources/Mail Sent.aiff",
+                          "/Applications/Mail.app/Contents/Resources/Mail Sent.aiff"]
+        for path in candidates where FileManager.default.fileExists(atPath: path) {
+            if let sound = NSSound(contentsOfFile: path, byReference: true) {
+                current = sound
+                sound.play()
+                return
+            }
+        }
+        current = NSSound(named: "Pop")
+        current?.play()
     }
 }
