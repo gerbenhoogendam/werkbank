@@ -57,6 +57,7 @@ struct ComposeView: View {
     @State private var importing = false
     @State private var errorText: String?
     @State private var suggestionDismissed = false
+    @State private var signatureHeight: CGFloat = 60
 
     private static let maxAttachmentBytes = 18_000_000
 
@@ -187,6 +188,15 @@ struct ComposeView: View {
                 .padding(.horizontal, 17)
                 .padding(.bottom, 8)
             }
+            if useSignature, let signature = MailSignatures.preview(for: fromAccount) {
+                // De handtekening zoals hij onder de mail komt (niet te bewerken; dat doe je in Voorkeuren › Mail).
+                AutoHeightMailWebView(html: signature, height: $signatureHeight)
+                    .frame(height: min(signatureHeight, 180))
+                    .padding(.horizontal, 17)
+                    .padding(.bottom, 8)
+                    .allowsHitTesting(false)
+                    .opacity(0.85)
+            }
             if !embedded, let original, !original.quotableText.isEmpty {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
                 ScrollView {
@@ -256,8 +266,8 @@ struct ComposeView: View {
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(isSending || isLoading)
                     .help("Versturen (⌘↩ of ⇧⌘D)")
-                // ⇧⌘D: versturen, net als in Mail.
-                Button("") { validateThenConfirm() }
+                // ⇧⌘D: direct versturen, net als in Mail.
+                Button("") { sendDirectly() }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
                     .disabled(isSending || isLoading)
                     .opacity(0)
@@ -324,6 +334,16 @@ struct ComposeView: View {
     // MARK: Versturen
 
     private func validateThenConfirm() {
+        if validate() { confirmSend = true }
+    }
+
+    /// ⇧⌘D: meteen versturen, zonder bevestiging.
+    private func sendDirectly() {
+        guard !isSending, !isLoading, validate() else { return }
+        Task { await send() }
+    }
+
+    private func validate() -> Bool {
         errorText = nil
         let to = MailAddress.parse(toText), cc = MailAddress.parse(ccText), bcc = MailAddress.parse(bccText)
         let invalid = to.invalid + cc.invalid + bcc.invalid
@@ -334,8 +354,9 @@ struct ComposeView: View {
         } else if fromAccount.isEmpty {
             errorText = "Er is geen mailbox om vanaf te versturen."
         } else {
-            confirmSend = true
+            return true
         }
+        return false
     }
 
     private func send() async {

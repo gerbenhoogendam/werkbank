@@ -57,6 +57,21 @@ enum MailSignatures {
         UserDefaults.standard.set(all, forKey: logoKey)
     }
 
+    /// De handtekening zoals de ontvanger hem ziet: `cid:` wijst naar het logo als data-URL (alleen voor de weergave).
+    static func previewHTML(_ html: String, logo: Data?) -> String {
+        guard let logo else { return html }
+        let type = imageType(of: logo).mediaType
+        return html.replacingOccurrences(of: #"cid:[^"'\s>)]+"#,
+                                         with: "data:\(type);base64,\(logo.base64EncodedString())",
+                                         options: .regularExpression)
+    }
+
+    /// Voorbeeld voor het opstelvenster van een mailbox (met terugval op de standaard).
+    static func preview(for account: String?) -> String? {
+        guard let html = html(for: account) else { return nil }
+        return previewHTML(html, logo: logo(for: account)?.data)
+    }
+
     static func imageType(of data: Data) -> (mediaType: String, ext: String) {
         if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return ("image/png", "png") }
         if data.starts(with: [0x47, 0x49, 0x46]) { return ("image/gif", "gif") }

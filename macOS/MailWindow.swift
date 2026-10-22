@@ -320,7 +320,7 @@ struct MailWindowView: View {
                             }
                         })
                 .id(replyRef.id)
-                .frame(height: 430)
+                .frame(height: 560)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.accent.opacity(0.5)))
         }

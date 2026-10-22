@@ -134,12 +134,5 @@ struct SignaturePreferences: View {
         logo = MailSignatures.ownLogo(key)
     }
 
-    /// De HTML zoals de ontvanger hem ziet; `cid:` wijst hier naar het gekozen logo.
-    private var previewHTML: String {
-        guard let logo else { return html }
-        let type = MailSignatures.imageType(of: logo).mediaType
-        return html.replacingOccurrences(of: #"cid:[^"'\s>)]+"#,
-                                         with: "data:\(type);base64,\(logo.base64EncodedString())",
-                                         options: .regularExpression)
-    }
+    private var previewHTML: String { MailSignatures.previewHTML(html, logo: logo) }
 }
