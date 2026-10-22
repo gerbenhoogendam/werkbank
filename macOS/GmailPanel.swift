@@ -78,7 +78,8 @@ struct GmailPanel: View {
         HStack(spacing: 8) {
             Image(systemName: "envelope.fill")
                 .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.accent)
-            Text(gmail.isCombined ? "Alle mailboxen" : (gmail.accounts.count > 1 ? "Mail" : "Gmail"))
+            Text(headerTitle)
+                .lineLimit(1)
                 .thingsFont(.heading)
                 .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.textPrimary)
             Spacer()
@@ -109,23 +110,32 @@ struct GmailPanel: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
-        // Gecombineerde weergave (⌘0): de balk is donker, zodat je ziet dat het niet één mailbox is.
+        // Gecombineerde weergave: de balk is blauw, zodat je ziet dat het niet één mailbox is.
         .background(gmail.isCombined ? Color(red: 0x1A / 255, green: 0x7C / 255, blue: 0xF9 / 255) : Color.clear)
+    }
+
+    private var headerTitle: String {
+        if gmail.isAllCombined { return "Alle mailboxen" }
+        if gmail.isCombined { return gmail.combinedAccounts.map(gmail.displayName).joined(separator: " + ") }
+        return gmail.accounts.count > 1 ? "Mail" : "Gmail"
     }
 
     // MARK: Tabs
 
+    /// Een eigen selectie (niet alles): die mailboxen staan samen in één blauwe pil vooraan.
+    private var hasPartialCombination: Bool { gmail.isCombined && !gmail.isAllCombined }
+
     private var tabs: some View {
         HStack(spacing: 4) {
-            ForEach(gmail.accounts, id: \.self) { email in
+            if hasPartialCombination { combinedPill }
+            ForEach(gmail.accounts.filter { !hasPartialCombination || !gmail.combinedAccounts.contains($0) }, id: \.self) { email in
                 tab(title: gmail.displayName(email),
                     isOn: !gmail.isCombined && gmail.activeAccount == email) {
-                    selection.selectedID = nil
-                    Task { await gmail.switchAccount(to: email) }
+                    select(email)
                 }
-                .help(email)
+                .help("\(email) · ⌘-klik om te combineren")
             }
-            tab(title: "Alles", isOn: gmail.isCombined) {
+            tab(title: "Alles", isOn: gmail.isAllCombined) {
                 selection.selectedID = nil
                 Task { await gmail.showCombined() }
             }
@@ -134,6 +144,39 @@ struct GmailPanel: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+    }
+
+    /// Klik: alleen deze mailbox. ⌘-klik: erbij zetten of eruit halen.
+    private func select(_ email: String) {
+        selection.selectedID = nil
+        if NSEvent.modifierFlags.contains(.command) {
+            Task { await gmail.toggleInCombination(email) }
+        } else {
+            Task { await gmail.switchAccount(to: email) }
+        }
+    }
+
+    private var combinedPill: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(gmail.combinedAccounts.enumerated()), id: \.element) { index, email in
+                if index > 0 {
+                    Text("+").foregroundStyle(Color.white.opacity(0.7))
+                }
+                Button { select(email) } label: {
+                    Text(gmail.displayName(email))
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("\(email) · ⌘-klik om uit de combinatie te halen")
+            }
+        }
+        .font(.system(size: 11.5, weight: .semibold))
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 3)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(ThingsColor.accent))
     }
 
     private func tab(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
@@ -201,7 +244,7 @@ struct GmailPanel: View {
             HStack(spacing: 4) {
                 Image(systemName: "person.crop.circle")
                 if gmail.accounts.count > 1, let email = gmail.activeAccount {
-                    Text(gmail.isCombined ? "Alles" : gmail.displayName(email))
+                    Text(gmail.isAllCombined ? "Alles" : (gmail.isCombined ? "\(gmail.combinedAccounts.count) mailboxen" : gmail.displayName(email)))
                         .thingsFont(.metadata)
                         .lineLimit(1)
                 }

@@ -24,9 +24,12 @@ struct ComposeView: View {
     var suggestion: String?
     var onSuggestionDone: (() -> Void)?
     var onSent: (() -> Void)?
+    /// In een gesprek: het concept weggooien (prullenbak onderaan).
+    var onDiscard: (() -> Void)?
 
     init(ref: ComposeRef, embedded: Bool = false, preloaded: MailContent? = nil, externalBody: Binding<String>? = nil,
-         suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil) {
+         suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil,
+         onDiscard: (() -> Void)? = nil) {
         self.ref = ref
         self.embedded = embedded
         self.preloaded = preloaded
@@ -34,6 +37,7 @@ struct ComposeView: View {
         self.suggestion = suggestion
         self.onSuggestionDone = onSuggestionDone
         self.onSent = onSent
+        self.onDiscard = onDiscard
     }
 
     @Environment(AppState.self) private var appState
@@ -58,6 +62,8 @@ struct ComposeView: View {
     @State private var errorText: String?
     @State private var suggestionDismissed = false
     @State private var signatureHeight: CGFloat = 60
+    @State private var showCc = false
+    @State private var showBcc = false
 
     private static let maxAttachmentBytes = 18_000_000
 
@@ -70,13 +76,17 @@ struct ComposeView: View {
     var body: some View {
         VStack(spacing: 0) {
             fields
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
             if isLoading {
-                ProgressView("Mail ophalen…").frame(maxWidth: .infinity, maxHeight: embedded ? 160 : .infinity)
+                ProgressView("Mail ophalen…")
+                    .frame(maxWidth: .infinity, minHeight: 120, maxHeight: embedded ? 120 : .infinity)
+            } else if embedded {
+                // In een gesprek groeit het opstelblok mee; het gesprek eromheen scrolt.
+                editorContent
             } else {
-                editor
+                ScrollView { editorContent }
+                    .scrollIndicators(.hidden)
+                quotePreview
             }
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
             footer
         }
         .background(ThingsColor.backgroundContent)
@@ -106,45 +116,85 @@ struct ComposeView: View {
 
     private var fields: some View {
         VStack(spacing: 0) {
-            Text(titleText)
-                .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 16)
-                .padding(.trailing, 36)
-                .padding(.vertical, embedded ? 8 : 10)
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
-            row("Van") {
-                if gmail.accounts.count > 1 {
-                    Picker("Van", selection: $fromAccount) {
-                        ForEach(gmail.accounts, id: \.self) { Text($0).tag($0) }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 260, alignment: .leading)
-                } else {
-                    Text(fromAccount).foregroundStyle(ThingsColor.textSecondary)
-                }
+            if embedded {
+                Text(titleText)
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+            } else {
+                Text(titleText)
+                    .thingsFont(.heading)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 20)
+                    .padding(.trailing, 36)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
             }
-            row("Aan") { TextField("", text: $toText).focused($focus, equals: .to) }
-            row("Cc") { TextField("", text: $ccText) }
-            row("Bcc") { TextField("", text: $bccText) }
+            row("Aan") {
+                TextField("", text: $toText).focused($focus, equals: .to)
+            } trailing: {
+                if !showCc && ccText.isEmpty { fieldToggle("Cc") { showCc = true } }
+                if !showBcc && bccText.isEmpty { fieldToggle("Bcc") { showBcc = true } }
+            }
+            if showCc || !ccText.isEmpty { row("Cc") { TextField("", text: $ccText) } }
+            if showBcc || !bccText.isEmpty { row("Bcc") { TextField("", text: $bccText) } }
+            row("Van") { fromField }
             row("Onderwerp") { TextField("", text: $subject) }
         }
     }
 
-    private func row<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 8) {
-            Text(label)
-                .thingsFont(.metadata)
+    /// Eén regel zoals in een mailprogramma: label en veld, met een dunne lijn die niet tot de randen loopt.
+    private func row<Content: View, Trailing: View>(_ label: String, @ViewBuilder content: () -> Content,
+                                                    @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 6) {
+            Text(label + ":")
                 .foregroundStyle(ThingsColor.textTertiary)
-                .frame(width: 68, alignment: .trailing)
             content()
                 .textFieldStyle(.plain)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            trailing()
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 30)
-        .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator.opacity(0.6)).frame(height: 1) }
+        .font(.system(size: 13))
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator.opacity(0.5)).frame(height: 0.5) }
+        .padding(.horizontal, 20)
+    }
+
+    private func row<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        row(label, content: content, trailing: { EmptyView() })
+    }
+
+    private func fieldToggle(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .foregroundStyle(ThingsColor.accent)
+    }
+
+    @ViewBuilder private var fromField: some View {
+        if gmail.accounts.count > 1 {
+            Menu {
+                ForEach(gmail.accounts, id: \.self) { email in
+                    Button(fromLabel(email)) { fromAccount = email }
+                }
+            } label: {
+                Text(fromLabel(fromAccount))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(ThingsColor.accent)
+        } else {
+            Text(fromLabel(fromAccount)).foregroundStyle(ThingsColor.accent)
+        }
+    }
+
+    private func fromLabel(_ email: String) -> String {
+        guard !email.isEmpty else { return "—" }
+        let name = MailSignatures.senderName(for: email).flatMap { $0.isEmpty ? nil : $0 } ?? gmail.displayName(email)
+        return "\(name) (\(email))"
     }
 
     private var titleText: String {
@@ -164,16 +214,17 @@ struct ComposeView: View {
         return suggestion
     }
 
-    private var editor: some View {
-        VStack(spacing: 0) {
+    /// Tekst, eventuele suggestie en de handtekening direct eronder, zoals in een mailprogramma.
+    private var editorContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
             ReplyTextView(text: bodyBinding,
                           suggestion: bodyText.isEmpty ? activeSuggestion : nil,
                           focusOnAppear: isReply,
+                          minHeight: embedded ? 90 : 160,
                           onTab: acceptSuggestion,
                           onTyped: { if activeSuggestion != nil { dismissSuggestion() } })
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minHeight: embedded ? 180 : nil)
+                .padding(.horizontal, 15)
+                .padding(.top, 10)
             if !bodyText.isEmpty, let activeSuggestion {
                 // Er staat al tekst: de suggestie eronder, Tab voegt hem toe.
                 VStack(alignment: .leading, spacing: 4) {
@@ -185,31 +236,35 @@ struct ComposeView: View {
                         .foregroundStyle(ThingsColor.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 17)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 6)
             }
             if useSignature, let signature = MailSignatures.preview(for: fromAccount) {
-                // De handtekening zoals hij onder de mail komt (niet te bewerken; dat doe je in Voorkeuren › Mail).
+                // De handtekening zoals hij onder de mail komt (bewerken doe je in Voorkeuren › Mail).
                 AutoHeightMailWebView(html: signature, height: $signatureHeight)
-                    .frame(height: min(signatureHeight, 180))
-                    .padding(.horizontal, 17)
-                    .padding(.bottom, 8)
+                    .frame(height: signatureHeight)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
                     .allowsHitTesting(false)
-                    .opacity(0.85)
             }
-            if !embedded, let original, !original.quotableText.isEmpty {
-                Rectangle().fill(ThingsColor.separator).frame(height: 1)
-                ScrollView {
-                    Text(original.quotableText)
-                        .font(.system(size: 12))
-                        .foregroundStyle(ThingsColor.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .textSelection(.enabled)
-                }
-                .frame(maxHeight: 130)
-                .background(ThingsColor.backgroundSidebar)
+        }
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder private var quotePreview: some View {
+        if let original, !original.quotableText.isEmpty {
+            Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            ScrollView {
+                Text(original.quotableText)
+                    .font(.system(size: 12))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .textSelection(.enabled)
             }
+            .frame(maxHeight: 130)
+            .background(ThingsColor.backgroundSidebar)
         }
     }
 
@@ -259,6 +314,16 @@ struct ComposeView: View {
                 Toggle("Handtekening", isOn: $useSignature)
                     .toggleStyle(.checkbox)
                     .disabled(MailSignatures.html(for: fromAccount) == nil)
+                if let onDiscard {
+                    Button {
+                        bodyBinding.wrappedValue = ""
+                        attachments = []
+                        onDiscard()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .help("Concept verwijderen")
+                }
                 Spacer()
                 if isSending { ProgressView().controlSize(.small) }
                 Button("Verstuur") { validateThenConfirm() }
@@ -275,7 +340,9 @@ struct ComposeView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { Rectangle().fill(ThingsColor.separator.opacity(0.5)).frame(height: 0.5).padding(.horizontal, 20) }
     }
 
     // MARK: Voorbereiden

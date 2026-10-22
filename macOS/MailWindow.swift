@@ -97,7 +97,7 @@ struct MailWindowView: View {
         taskTitle = ref.subject
         wasInList = gmail.messages.contains { $0.threadID == ref.threadID }
         await model.load()
-        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.reply, for: newest) }
+        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.replyAll, for: newest) }
         if ref.analyze, ClaudeKeychain.read() != nil {
             model.analyze(messageID: model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID))
         }
@@ -295,6 +295,19 @@ struct MailWindowView: View {
             }
             .scrollIndicators(.hidden)
             .background(ThingsColor.backgroundSidebar)
+            .background {
+                // ⌘R: allen beantwoorden op de nieuwste mail.
+                Button("") {
+                    guard let newest = model.mails.last else { return }
+                    replyRef = composeRef(.replyAll, for: newest)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation { proxy.scrollTo("reply", anchor: .center) }
+                    }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .opacity(0)
+                .accessibilityHidden(true)
+            }
             .onChange(of: model.mails.count) { _, count in
                 guard count > 0 else { return }
                 // Naar de nieuwste mail.
@@ -316,19 +329,22 @@ struct MailWindowView: View {
                             Task {
                                 try? await Task.sleep(for: .seconds(1.5))
                                 await model.load()
-                                if let newest = model.mails.last { self.replyRef = composeRef(.reply, for: newest) }
+                                if let newest = model.mails.last { self.replyRef = composeRef(.replyAll, for: newest) }
                             }
+                        },
+                        onDiscard: {
+                            usedDraftID = model.latestDraft?.id
+                            self.replyRef = nil
                         })
                 .id(replyRef.id)
-                .frame(height: 560)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.accent.opacity(0.5)))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
         }
     }
 
     /// "Concept in antwoord": voegt de tekst toe onder wat er al staat.
     private func insertIntoReply(_ text: String) {
-        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.reply, for: newest) }
+        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.replyAll, for: newest) }
         let current = replyBody.trimmingCharacters(in: .whitespacesAndNewlines)
         replyBody = current.isEmpty ? text : replyBody + "\n\n" + text
         usedDraftID = model.latestDraft?.id

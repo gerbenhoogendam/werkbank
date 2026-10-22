@@ -66,5 +66,10 @@ final class MailComposerTests: XCTestCase {
         XCTAssertEqual(all.to.map(\.address), ["a@x.nl"])
         XCTAssertEqual(all.cc.map(\.address), ["b@x.nl", "c@x.nl"])
         XCTAssertEqual(ReplyBuilder.references(old: "<1@x>", messageID: "<2@x>"), "<1@x> <2@x>")
+        // Eigen verzonden mail: antwoord gaat naar de oorspronkelijke ontvangers.
+        let own = ReplyBuilder.recipients(from: "Ik <me@x.nl>", replyTo: "", to: "klant@y.nl", cc: "collega@x.nl",
+                                          myAddresses: ["me@x.nl"], replyAll: true)
+        XCTAssertEqual(own.to.map(\.address), ["klant@y.nl"])
+        XCTAssertEqual(own.cc.map(\.address), ["collega@x.nl"])
     }
 }

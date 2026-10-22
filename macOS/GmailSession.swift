@@ -102,8 +102,10 @@ final class GmailSession {
     private(set) var accounts: [String] = []
     private(set) var activeAccount: String?
     var emailAddress: String? { activeAccount }
-    /// `true`: alle gekoppelde mailboxen samen in één lijst (⌘0).
-    private(set) var isCombined = false
+    /// Mailboxen die samen in één lijst staan (⌘-klik op de tabs, of ⌘0 voor alle). Minder dan twee: gewoon de actieve.
+    private(set) var combinedAccounts: [String] = []
+    var isCombined: Bool { combinedAccounts.count > 1 }
+    var isAllCombined: Bool { isCombined && Set(combinedAccounts) == Set(accounts) }
     /// `true` terwijl het inlogvenster voor een (extra) account open staat.
     private(set) var isAddingAccount = false
     private(set) var messages: [GmailMessageSummary] = []
@@ -126,7 +128,8 @@ final class GmailSession {
     private static let legacyAccount = "refreshToken"
     private static let accountsKey = "gmail.accounts"
     private static let activeKey = "gmail.activeAccount"
-    private static let combinedKey = "gmail.combined"
+    private static let combinedKey = "gmail.combined"          // oud: alles of niets
+    private static let combinedAccountsKey = "gmail.combinedAccounts"
     private static let inboxPageSize = "40"
 
     private static func tokenAccount(_ email: String) -> String { "refreshToken:\(email)" }
@@ -138,7 +141,10 @@ final class GmailSession {
         }
         let saved = defaults.string(forKey: Self.activeKey)
         activeAccount = saved.flatMap { accounts.contains($0) ? $0 : nil } ?? accounts.first
-        isCombined = defaults.bool(forKey: Self.combinedKey) && accounts.count > 1
+        let savedCombination = defaults.stringArray(forKey: Self.combinedAccountsKey)
+            ?? (defaults.bool(forKey: Self.combinedKey) ? accounts : [])
+        let combination = accounts.filter(savedCombination.contains)
+        combinedAccounts = combination.count > 1 ? combination : []
         if hasAnyAccount { state = .signedIn }
     }
 
@@ -178,7 +184,7 @@ final class GmailSession {
     /// Wat het paneel toont: de mailbox zelf, of alle mailboxen op datum.
     private func refreshVisible() {
         if isCombined {
-            messages = accounts.flatMap { messageCache[$0] ?? [] }
+            messages = combinedAccounts.flatMap { messageCache[$0] ?? [] }
                 .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
         } else {
             messages = messageCache[activeAccount ?? ""] ?? []
@@ -194,7 +200,8 @@ final class GmailSession {
         let defaults = UserDefaults.standard
         defaults.set(accounts, forKey: Self.accountsKey)
         defaults.set(activeAccount, forKey: Self.activeKey)
-        defaults.set(isCombined, forKey: Self.combinedKey)
+        defaults.set(combinedAccounts, forKey: Self.combinedAccountsKey)
+        defaults.removeObject(forKey: Self.combinedKey)
     }
 
     // MARK: Configuratie
@@ -252,7 +259,7 @@ final class GmailSession {
             Keychain.write(refresh, account: Self.tokenAccount(email))
             if !accounts.contains(email) { accounts.append(email) }
             activeAccount = email
-            isCombined = false
+            combinedAccounts = []
             persistAccounts()
             tokenCache[email] = (tokens.accessToken, Date().addingTimeInterval(tokens.expiresIn))
             refreshVisible()
@@ -270,7 +277,7 @@ final class GmailSession {
     func switchAccount(to email: String) async {
         guard accounts.contains(email), email != activeAccount || isCombined else { return }
         activeAccount = email
-        isCombined = false
+        combinedAccounts = []
         persistAccounts()
         refreshVisible()
         lastError = nil
@@ -279,8 +286,31 @@ final class GmailSession {
 
     /// Alle mailboxen samen in één lijst.
     func showCombined() async {
-        guard accounts.count > 1, !isCombined else { return }
-        isCombined = true
+        guard accounts.count > 1, !isAllCombined else { return }
+        combinedAccounts = accounts
+        persistAccounts()
+        refreshVisible()
+        lastError = nil
+        await reload()
+    }
+
+    /// ⌘-klik op een tab: zet de mailbox erbij in de gecombineerde lijst, of haalt hem eruit.
+    /// Blijft er één over, dan is dat gewoon weer de actieve mailbox.
+    func toggleInCombination(_ email: String) async {
+        guard accounts.contains(email) else { return }
+        var selection = isCombined ? combinedAccounts : [activeAccount].compactMap { $0 }
+        if selection.contains(email) {
+            selection.removeAll { $0 == email }
+        } else {
+            selection.append(email)
+        }
+        selection = accounts.filter(selection.contains)   // vaste volgorde, zoals de tabs
+        if selection.count > 1 {
+            combinedAccounts = selection
+        } else {
+            combinedAccounts = []
+            if let only = selection.first { activeAccount = only }
+        }
         persistAccounts()
         refreshVisible()
         lastError = nil
@@ -304,7 +334,8 @@ final class GmailSession {
         messageCache[email] = nil
         tokenCache[email] = nil
         if activeAccount == email { activeAccount = accounts.first }
-        if accounts.count < 2 { isCombined = false }
+        combinedAccounts.removeAll { $0 == email }
+        if combinedAccounts.count < 2 { combinedAccounts = [] }
         state = hasAnyAccount ? .signedIn : .signedOut
         persistAccounts()
         refreshVisible()
@@ -452,7 +483,7 @@ final class GmailSession {
     /// Haalt de inbox (nieuwste eerst, één rij per gesprek) opnieuw op; in de gecombineerde weergave van alle mailboxen.
     func reload() async {
         guard state == .signedIn else { return }
-        let keys = isCombined ? accounts : [activeAccount ?? ""]
+        let keys = isCombined ? combinedAccounts : [activeAccount ?? ""]
         await withTaskGroup(of: Void.self) { group in
             for key in keys { group.addTask { await self.reload(key: key) } }
         }

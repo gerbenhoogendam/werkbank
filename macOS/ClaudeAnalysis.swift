@@ -216,7 +216,7 @@ enum ClaudeRequest {
         Wat ontbreekt om het op te lossen.
         ## Conceptantwoord
         Altijd als laatste kopje. Alleen de tekst van de mail zelf, zoals die verstuurd kan worden: in dezelfde taal en toon als de klant, \
-        met aanhef en afsluiting maar zonder naam of handtekening eronder (die voegen wij zelf toe), en zonder Markdown \
+        met aanhef maar zonder afsluitende groet, naam of handtekening (onze handtekening begint al met "Met vriendelijke groet,"), en zonder Markdown \
         (geen kopjes, geen vet, geen opsommingstekens met * of -; genummerde stappen mogen als 1. 2. 3.).
         """
     }

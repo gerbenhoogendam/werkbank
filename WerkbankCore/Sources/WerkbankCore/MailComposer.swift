@@ -327,17 +327,20 @@ public enum ReplyBuilder {
     }
 
     /// Ontvangers van een antwoord. Bij "allen" gaat de rest van Aan en Cc mee, zonder jezelf en zonder dubbelen.
+    /// Is de mail door jezelf verstuurd, dan gaat het antwoord naar de oorspronkelijke ontvangers (zoals in Mail).
     public static func recipients(from: String, replyTo: String, to: String, cc: String, myAddresses: [String],
                                   replyAll: Bool) -> (to: [MailAddress], cc: [MailAddress]) {
         let mine = Set(myAddresses.map { $0.lowercased() })
-        let primary = MailAddress.parse(replyTo.isEmpty ? from : replyTo).valid
-        guard replyAll else { return (primary, []) }
+        let sender = MailAddress.parse(replyTo.isEmpty ? from : replyTo).valid
+        let fromMe = !sender.isEmpty && sender.allSatisfy { mine.contains($0.address.lowercased()) }
+        let primary = fromMe ? MailAddress.parse(to).valid : sender
         var seen = Set(mine)
         func unique(_ list: [MailAddress]) -> [MailAddress] {
             list.filter { seen.insert($0.address.lowercased()).inserted }
         }
+        guard replyAll else { return (unique(primary), []) }
         let toList = unique(primary)
-        let ccList = unique(MailAddress.parse(to).valid + MailAddress.parse(cc).valid)
+        let ccList = unique((fromMe ? [] : MailAddress.parse(to).valid) + MailAddress.parse(cc).valid)
         return (toList, ccList)
     }
 
