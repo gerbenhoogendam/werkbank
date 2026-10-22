@@ -66,6 +66,7 @@ struct ComposeView: View {
     /// De handtekening van de gekozen mailbox, één keer opgebouwd (niet bij elke toetsaanslag).
     @State private var signaturePreview: String?
     @State private var showCc = false
+    @State private var reviewer = MailReviewer()
     @State private var showBcc = false
 
     private static let maxAttachmentBytes = 18_000_000
@@ -90,6 +91,7 @@ struct ComposeView: View {
                     .scrollIndicators(.never)
                 quotePreview
             }
+            reviewSection
             footer
         }
         .background(ThingsColor.backgroundContent)
@@ -279,6 +281,104 @@ struct ComposeView: View {
         PanelStore.shared.markEngaged(PanelKind.compose(ref).id)
     }
 
+    // MARK: Controle door Claude
+
+    @ViewBuilder private var reviewSection: some View {
+        switch reviewer.phase {
+        case .idle:
+            EmptyView()
+        case .running:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Claude controleert…").thingsFont(.metadata).foregroundStyle(ThingsColor.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+        case .failed(let message):
+            Text(message)
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.deadline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+        case .done:
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    ClaudeSpark().frame(width: 13, height: 13)
+                    Text(reviewer.issues.isEmpty ? "Geen opmerkingen" : "\(reviewer.issues.count) opmerking\(reviewer.issues.count == 1 ? "" : "en")")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    Spacer()
+                    if reviewer.issues.contains(where: { canApply($0) }) {
+                        Button("Alles toepassen") {
+                            for issue in reviewer.issues where canApply(issue) { apply(issue) }
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    Button { reviewer.reset() } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.borderless)
+                }
+                ForEach(reviewer.issues) { issue in reviewRow(issue) }
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(ThingsColor.backgroundSidebar))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func reviewRow(_ issue: ReviewIssue) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(issue.isLanguage ? "Taal" : "Inhoud")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(issue.isLanguage ? Color.fieldLabel : Color.orange))
+                Text(issue.explanation)
+                    .font(.system(size: 12))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if canApply(issue) {
+                    Button("Toepassen") { apply(issue) }
+                        .buttonStyle(.borderless)
+                }
+                Button("Negeer") { reviewer.dismiss(issue) }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+            if !issue.quote.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(issue.quote)
+                        .strikethrough(!issue.replacement.isEmpty)
+                        .foregroundStyle(ThingsColor.textSecondary)
+                    if !issue.replacement.isEmpty {
+                        Image(systemName: "arrow.right").font(.system(size: 9)).foregroundStyle(ThingsColor.textTertiary)
+                        Text(issue.replacement).foregroundStyle(Color.green)
+                    }
+                }
+                .font(.system(size: 12))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 2)
+            }
+        }
+    }
+
+    private func canApply(_ issue: ReviewIssue) -> Bool {
+        !issue.replacement.isEmpty && !issue.quote.isEmpty && bodyText.contains(issue.quote)
+    }
+
+    /// Vervangt het aangewezen stuk (de eerste keer dat het voorkomt) en haalt de opmerking weg.
+    private func apply(_ issue: ReviewIssue) {
+        guard let range = bodyText.range(of: issue.quote) else { return }
+        bodyBinding.wrappedValue = bodyText.replacingCharacters(in: range, with: issue.replacement)
+        reviewer.dismiss(issue)
+    }
+
     private func acceptSuggestion() -> Bool {
         guard let activeSuggestion else { return false }
         let current = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -325,6 +425,17 @@ struct ComposeView: View {
                 Toggle("Handtekening", isOn: $useSignature)
                     .toggleStyle(.checkbox)
                     .disabled(signaturePreview == nil)
+                Button {
+                    reviewer.run(draft: bodyText, subject: subject, original: original)
+                } label: {
+                    HStack(spacing: 5) {
+                        ClaudeSpark().frame(width: 13, height: 13)
+                        Text("Controleer")
+                    }
+                }
+                .disabled(bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || reviewer.phase == .running)
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .help("Taal en inhoud laten controleren (⇧⌘K)")
                 if let onDiscard {
                     Button {
                         bodyBinding.wrappedValue = ""
