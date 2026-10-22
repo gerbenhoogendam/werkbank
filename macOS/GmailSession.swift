@@ -554,13 +554,19 @@ final class GmailSession {
         defer { busyMessageIDs.remove(busyKey) }
 
         do {
+            // Concepten en wat al in de prullenbak of spam ligt gaan niet mee.
             let items = try await threadMessages(threadID: threadID, account: source)
-            guard !items.isEmpty else { return }
+                .filter { Set($0.labels).isDisjoint(with: ["DRAFT", "TRASH", "SPAM"]) }
+            guard let newest = items.last else { return }
+            let keep: Set<String> = ["INBOX", "UNREAD", "STARRED", "IMPORTANT"]
+            let inInbox = items.contains { $0.labels.contains("INBOX") }
             var inserted: [String] = []
             var targetThread: String?
             for item in items {
                 let raw = try await rawMessage(id: item.id)
-                let labels = ["INBOX"] + (item.isUnread ? ["UNREAD"] : [])
+                var labels = item.labels.filter(keep.contains)
+                // Een gearchiveerd gesprek komt in de andere mailbox gewoon in de inbox terecht.
+                if !inInbox, item.id == newest.id { labels.append("INBOX") }
                 let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
                 inserted.append(result.id)
                 targetThread = targetThread ?? result.threadID
