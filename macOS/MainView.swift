@@ -115,7 +115,7 @@ struct MainView: View {
         // ⌘Z voor handelingen in de app loopt via de UndoManager van dit venster.
         .onChange(of: undoManager, initial: true) { _, manager in UndoCenter.shared.manager = manager }
         // Nergens scrollbalken: ze nemen alleen maar ruimte in.
-        .scrollIndicators(.hidden)
+        .scrollIndicators(.never)
         .background(ThingsColor.backgroundContent)
         .onDrop(of: [.emailMessage, .fileURL, .gmailMessage], isTargeted: $state.isDropTargeted) { providers in
             if GmailDrop.accepts(providers) {

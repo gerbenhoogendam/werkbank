@@ -51,7 +51,7 @@ struct ArchiveView: View {
             }
         }
         .background(ThingsColor.backgroundContent)
-        .scrollIndicators(.hidden)
+        .scrollIndicators(.never)
     }
 }
 

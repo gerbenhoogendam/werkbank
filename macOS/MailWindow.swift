@@ -295,7 +295,7 @@ struct MailWindowView: View {
                 }
                 .padding(14)
             }
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
             .background(ThingsColor.backgroundSidebar)
             .background {
                 // ⌘R: allen beantwoorden op de nieuwste mail.

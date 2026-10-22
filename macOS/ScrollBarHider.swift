@@ -1,7 +1,7 @@
 import AppKit
 
 /// Zet de scrollbalken uit van alle scrollvensters in de vensters van Werkbank.
-/// `.scrollIndicators(.hidden)` in SwiftUI is niet altijd genoeg: met een muis of de systeeminstelling
+/// `.scrollIndicators(.never)` in SwiftUI is niet altijd genoeg: met een muis of de systeeminstelling
 /// "Scrollbalken tonen: altijd" tekent macOS ze toch en ze nemen dan ruimte in. Scrollen met trackpad,
 /// muiswiel of toetsen blijft gewoon werken; alleen de balk zelf verdwijnt.
 @MainActor

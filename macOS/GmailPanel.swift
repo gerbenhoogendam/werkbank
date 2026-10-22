@@ -450,16 +450,25 @@ private struct GmailRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Dubbelklik om de mail te openen, of sleep hem naar een kolom")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        // De knoppen zweven over de rij (rechtsonder) in plaats van altijd ruimte in te nemen.
+        .overlay(alignment: .bottomTrailing) {
+            if isHovering || isSelected { hoverActions }
+        }
+    }
 
+    private var hoverActions: some View {
+        HStack(spacing: 0) {
             Button(action: analyze) {
                 ClaudeSpark()
                     .frame(width: 14, height: 14)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 26, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
-            .opacity(isHovering || isSelected ? 1 : 0)
             .help("Laat Claude deze mail analyseren")
             .accessibilityLabel("Analyseer mail van \(message.senderDisplay) met Claude")
 
@@ -467,18 +476,18 @@ private struct GmailRow: View {
                 Image(systemName: "archivebox")
                     .font(.system(size: 12))
                     .foregroundStyle(ThingsColor.textSecondary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 26, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
-            .opacity(isHovering || isSelected ? 1 : 0)
             .help("Archiveren in Gmail")
             .accessibilityLabel("Archiveer mail van \(message.senderDisplay)")
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 6)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 2)
+        .background(Capsule().fill(ThingsColor.backgroundContent).shadow(color: ThingsColor.cardShadow, radius: 3, y: 1))
+        .padding(.trailing, 8)
+        .padding(.bottom, 6)
     }
 
     /// Opent het gesprek en zet er een analyse van deze mail in.

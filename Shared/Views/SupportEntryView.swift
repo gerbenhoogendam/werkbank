@@ -4,6 +4,8 @@ import SwiftUI
 /// Snelle support-invoer: klant, case, uitgevoerd en duur (zoals de regel in het boekhoudpakket komt). Wordt gebruikt in de menubalk (macOS),
 /// het "+"-popover van Tijd schrijven en het invoerblad op iOS.
 struct SupportEntryView: View {
+    /// Snelle invoer (⌥⌘T): meteen in het klantveld beginnen.
+    var autofocusClient = false
     var onFinished: () -> Void = {}
 
     @Environment(\.modelContext) private var context
@@ -105,9 +107,16 @@ struct SupportEntryView: View {
                 Spacer()
                 Button("Log \(minutes) min") { submit(startTimer: false) }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help("Loggen (⌘↩)")
             }
         }
         .padding(2)
+        .task {
+            guard autofocusClient else { return }
+            try? await Task.sleep(for: .milliseconds(80))   // het paneel wordt net key
+            clientFocused = true
+        }
         .onChange(of: customMinutes) { _, new in
             let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
             if digits != new { customMinutes = digits }
@@ -180,10 +189,10 @@ struct SupportEntryView: View {
         guard !caseError, !performedError else { return }
         if startTimer {
             TimerService.startSupport(client: client, caseTitle: title, performed: done, in: context)
-            appState.showToast("Timer gestart: \(title)")
+            appState.announce("Timer gestart: \(title)")
         } else {
             TimerService.logSupport(client: client, caseTitle: title, performed: done, minutes: minutes, in: context)
-            appState.showToast("\(minutes) min support gelogd")
+            appState.announce("\(minutes) min gelogd: \(title)")
         }
         client = ""
         caseTitle = ""

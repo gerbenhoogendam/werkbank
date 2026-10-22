@@ -87,7 +87,7 @@ struct ComposeView: View {
                 editorContent
             } else {
                 ScrollView { editorContent }
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.never)
                 quotePreview
             }
             footer

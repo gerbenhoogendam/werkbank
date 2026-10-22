@@ -180,7 +180,7 @@ struct ClaudeAnalysisView: View {
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
             .onChange(of: analyzer.liveAnswer) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
             .onChange(of: analyzer.turns.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }

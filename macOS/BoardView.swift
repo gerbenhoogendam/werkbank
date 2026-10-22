@@ -291,7 +291,7 @@ struct BoardView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 4)
             }
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(

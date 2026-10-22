@@ -156,7 +156,7 @@ struct AgendaView: View {
                         .padding(.trailing, 4)
                         .padding(.bottom, 48)
                     }
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.never)
                     .onAppear {
                         scrollHour = min(max(calendar.component(.hour, from: .now) - 1, startHour), max(startHour, endHour - 1))
                         proxy.scrollTo("hour-\(scrollHour)", anchor: .top)
