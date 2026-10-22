@@ -1,0 +1,101 @@
+# Overdracht
+
+Stand van 22 oktober 2026, commit `dd37b1d`. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
+zelf kan bouwen, starten en bedienen. Tot nu toe is alles gebouwd vanuit een Linux-container zonder Xcode: alleen CI
+controleerde of het compileerde, en de eigenaar testte het gedrag.
+
+## Werken met de eigenaar
+
+- Nederlands, to the point, geen complimenten en geen onterecht gelijk. Zeg hoe het zit, ook als iets niet werkt of
+  niet getest is.
+- Korte genummerde stappen. Vraag om context als een verzoek onduidelijk is, in plaats van te gokken.
+- De app is alleen voor eigen gebruik: zie `CLAUDE.md` (geen helpteksten, labels in `Color.fieldLabel`, meldingen
+  via `AppState.announce`).
+- Geef aan wat je echt gezien of getest hebt en wat niet.
+
+## Bouwen en testen op de Mac
+
+- Bijwerken, bouwen en starten: `./Scripts/update-and-run.sh` (git pull, XcodeGen, Debug-build in `DerivedData/`,
+  oude Werkbank afsluiten, nieuwe openen).
+- Alleen bouwen, zonder pull:
+  `xcodegen generate --quiet && xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug -derivedDataPath DerivedData -quiet build`
+- Logica-tests: `cd WerkbankCore && swift test` (94 tests).
+- Schermafbeelding: `screencapture -x /tmp/werkbank.png`.
+- Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
+- `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.
+- CI (GitHub Actions, `.github/workflows/werkbank.yml`) bouwt macOS en iOS en draait de tests bij elke push naar
+  `main`. Na een push moet die groen zijn.
+- Er werkt soms ook een cloudsessie aan dezelfde repo. Commit en push je eigen werk voordat je stopt, en begin met
+  `git pull`. Anders faalt het `--ff-only` in het script.
+
+## Testregels (echte gegevens)
+
+De app draait met de echte Gmail-mailboxen, agenda's, kaarten en tijdregels van de eigenaar.
+
+- Niets versturen, archiveren, verplaatsen naar een andere mailbox of naar de prullenbak in echte mailboxen.
+- Geen kaarten afvinken, verwijderen of verplaatsen op het echte board. Een testkaart maken mag; ruim die weer op.
+- Geen afspraken maken, wijzigen of verplaatsen in echte agenda's.
+- Geen tijdregels toevoegen of wijzigen, behalve testregels die je daarna weer verwijdert (⌘Z werkt).
+- Claude-aanroepen in de app kosten geld: alleen waar de test het nodig heeft.
+- Wijst de eigenaar een testmailbox of testagenda aan, dan mag daar wel alles.
+- Twijfel je: eerst vragen.
+
+## Wat getest moet worden
+
+Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
+
+1. **Wacht op klant** (`macOS/WaitingWatcher.swift`). Kaarten uit een Gmail-mail onthouden `mailThreadID` en
+   `mailAccount`. Antwoord (⌘R of beantwoorden) in dat gesprek: kaart naar de kolom met sleutel `waiting`, de pil
+   zegt "Mail verzonden · kaart naar …". Mailt iemand anders daarna in het gesprek, dan binnen 3 minuten naar `todo`
+   met blauwe stip en melding "Antwoord: …". Alleen te testen met een testmailbox of met toestemming.
+2. **Dag afsluiten** (`macOS/DayClose.swift`, ⇧⌘E of het Claude-icoon in de kop van Tijd schrijven). Claude krijgt
+   afspraken, verzonden mails, afgeronde taken en bestaande tijdregels en stelt regels voor. Controleer: komt het
+   venster open, laden de voorstellen, kloppen de bronnen, is alles aanpasbaar, voegt Toevoegen alleen het
+   aangevinkte toe, haalt ⌘Z alles weer weg.
+3. **Inactiviteit** (`macOS/IdleWatcher.swift`). Timer loopt, 10 minuten of langer geen invoer, of slaapstand: bij
+   terugkomst toont de pil "x min weg" met Eraf en Laten. Om te testen kun je `IdleWatcher.threshold` tijdelijk
+   verlagen (niet committen).
+4. **Verplaatskaart** bij het slepen van een mail naar de tabs (`macOS/MailMoveZone.swift`): oplichten werkt volgens
+   de eigenaar. Nog na te gaan: knippert de kaart bij de overgang van de tabs naar een vlak, en werkt hij ook bij
+   slepen vanaf de greep van een geopend gesprek.
+
+## Open punten
+
+- Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in
+  `WerkbankCore/Sources/WerkbankCore/MailThreading.swift`). Een .eml van zo'n mail helpt; klantmails niet committen.
+- Standaardfavicons worden herkend op URL, niet op beeld (`SenderAvatar.swift`, `SiteIcons.swift`).
+- Wijzigingen aan herhalende afspraken zijn niet met ⌘Z terug te draaien.
+- Na verplaatsen naar een andere mailbox staan eigen antwoorden daar niet onder Verzonden.
+- Wacht op klant werkt alleen voor kaarten die sinds `dd37b1d` uit Gmail zijn gemaakt.
+- De drempel voor inactiviteit staat vast op 10 minuten; eventueel instelbaar maken in Voorkeuren.
+- TestFlight: na de nieuwe velden op `TodoCard` moet het CloudKit-schema opnieuw naar Production.
+- `DropInfo.location` gaf in `MailMoveZone` geen bruikbare posities; vandaar per vlak een eigen `onDrop`.
+
+## Ideeën die nog openstaan
+
+Klein: afspraak voorbij → tijd schrijven met één klik; regels per afzender (altijd verplaatsen of archiveren); kaart
+uit mail met titel, klant en subtaken van Claude. Middel: klantdossier; ⌘K zoeken en doen; opvolgen en later
+versturen; timer op het iPhone-vergrendelscherm. Groot: rechtstreeks boeken in het urensysteem (welk systeem is nog
+onbekend); plan mijn dag.
+
+## Waar wat zit
+
+| Onderdeel | Bestanden |
+|---|---|
+| Hoofdvenster, panelen, blur | `macOS/MainView.swift`, `macOS/PanelHost.swift` |
+| Board en slepen | `macOS/BoardView.swift`, `macOS/DragCoordinator.swift`, `Shared/Services/BoardService.swift`, `Shared/Views/CardView.swift` |
+| Agenda | `macOS/AgendaView.swift`, `macOS/EventDetailView.swift`, `Shared/Services/CalendarService.swift` |
+| Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift` |
+| Gmail | `macOS/GmailSession.swift` (API, mailboxen, verplaatsen), `macOS/GmailPanel.swift`, `macOS/MailWindow.swift`, `macOS/MailThread.swift`, `macOS/ComposeView.swift` |
+| Claude | `macOS/ClaudeAnalysis.swift` (aanvraag, streaming), `macOS/MailReview.swift`, `macOS/DayClose.swift` |
+| Ongedaan maken | `Shared/Services/UndoCenter.swift` |
+| Logica met tests | `WerkbankCore/` |
+
+## Valkuilen
+
+- Swift 5-modus; nieuwe UI-code is `@MainActor`.
+- Geen `try` of `await` rechts van `? :`; dat compileert niet.
+- Een `DropDelegate` kan tijdens één sleepactie verouderde waarden vasthouden. Gebruik `onDrop(isTargeted:)` per
+  vlak of een referentiemodel. Geneste dropzones: de binnenste wint.
+- Kolommen hebben vaste sleutels (`inbox`, `todo`, `doing`, `waiting`); de namen zijn aanpasbaar.
+- `GmailSession.api(_:query:method:body:account:)` regelt het token per mailbox en één nieuwe poging bij 401.
