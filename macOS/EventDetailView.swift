@@ -47,6 +47,10 @@ struct EventDetailView: View {
             }
         }
         .background(ThingsColor.backgroundContent)
+        // Klik buiten het venster sluit het (niet als je wijzigingen hebt die nog niet zijn opgeslagen).
+        .background(OutsideClickCatcher {
+            if !isEditing || draft == original { onClose() }
+        })
         .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
@@ -352,5 +356,55 @@ struct EventDetailView: View {
             }
         }
         .thingsFont(.notes)
+    }
+}
+
+/// Meldt een muisklik in hetzelfde venster maar buiten deze view (menu's en kalenderpopovers zijn eigen vensters
+/// en tellen dus niet mee).
+struct OutsideClickCatcher: NSViewRepresentable {
+    let onOutsideClick: () -> Void
+
+    func makeNSView(context: Context) -> CatcherView {
+        let view = CatcherView()
+        view.onOutsideClick = onOutsideClick
+        return view
+    }
+
+    func updateNSView(_ view: CatcherView, context: Context) {
+        view.onOutsideClick = onOutsideClick
+    }
+
+    static func dismantleNSView(_ view: CatcherView, coordinator: ()) {
+        view.stopMonitoring()
+    }
+
+    final class CatcherView: NSView {
+        var onOutsideClick: (() -> Void)?
+        private var monitor: Any?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stopMonitoring()
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                guard let self, let window = self.window, event.window === window else { return event }
+                let point = self.convert(event.locationInWindow, from: nil)
+                if !self.bounds.contains(point) {
+                    DispatchQueue.main.async { self.onOutsideClick?() }
+                }
+                return event
+            }
+        }
+
+        func stopMonitoring() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+
+        deinit {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
     }
 }
