@@ -138,3 +138,24 @@ final class GmailTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(GmailDragPayload.self, from: data), payload)
     }
 }
+
+final class GmailThreadTests: XCTestCase {
+    func testThreadMetadataParsing() {
+        let json = """
+        {"id":"t1","messages":[
+          {"id":"b","labelIds":["INBOX","UNREAD"],"snippet":"Tot &amp; met","internalDate":"2000",
+           "payload":{"headers":[{"name":"From","value":"=?UTF-8?B?Sm9zw6k=?= <jose@x.nl>"},{"name":"To","value":"me@x.nl"},{"name":"Subject","value":"Re: Hoi"}]}},
+          {"id":"a","labelIds":["SENT"],"snippet":"Hoi","internalDate":"1000",
+           "payload":{"headers":[{"name":"From","value":"me@x.nl"},{"name":"Cc","value":"c@x.nl"},{"name":"Subject","value":"Hoi"}]}},
+          {"id":"d","labelIds":["DRAFT"],"internalDate":"3000","payload":{"headers":[]}}
+        ]}
+        """
+        let messages = GmailAPI.threadMessages(fromJSON: Data(json.utf8)) ?? []
+        XCTAssertEqual(messages.map(\.id), ["a", "b"])
+        XCTAssertTrue(messages[0].isSent)
+        XCTAssertEqual(messages[0].cc, "c@x.nl")
+        XCTAssertTrue(messages[1].isUnread)
+        XCTAssertEqual(messages[1].from, "José <jose@x.nl>")
+        XCTAssertEqual(messages[1].snippet, "Tot & met")
+    }
+}

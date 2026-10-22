@@ -2,14 +2,60 @@ import Foundation
 import Observation
 import WerkbankCore
 
-/// Eén mail in een gesprek, met het nieuwe deel en de ingeklapte geschiedenis los.
+/// Eén mail in een gesprek. De koppen en de snippet zijn er meteen; de inhoud (`content`) pas als de mail
+/// open wordt geklapt.
 struct ThreadMail: Identifiable {
     let id: String
     let date: Date
-    let content: MailContent
-    let mainHTML: String
-    let historyHTML: String?
     let isSent: Bool
+    let isUnread: Bool
+    let from: String
+    let to: String
+    let cc: String
+    let subject: String
+    let snippet: String
+    var content: MailContent?
+    var mainHTML = ""
+    var historyHTML: String?
+    var loadError: String?
+
+    init(_ message: GmailThreadMessage) {
+        id = message.id
+        date = message.date
+        isSent = message.isSent
+        isUnread = message.isUnread
+        from = message.from
+        to = message.to
+        cc = message.cc
+        subject = message.subject
+        snippet = message.snippet
+    }
+}
+
+/// Uitgelezen mails, zodat een gesprek opnieuw openen niets opnieuw hoeft te verwerken.
+/// Een uitgelezen mail: inhoud plus het nieuwe deel en de geschiedenis los.
+struct ParsedThreadMail {
+    let content: MailContent
+    let main: String
+    let history: String?
+}
+
+@MainActor
+private enum ParsedMailCache {
+    typealias Entry = ParsedThreadMail
+
+    private static var entries: [String: Entry] = [:]
+    private static var order: [String] = []
+    private static let limit = 40
+
+    static func get(_ id: String) -> Entry? { entries[id] }
+
+    static func put(_ id: String, _ entry: Entry) {
+        entries[id] = entry
+        order.removeAll { $0 == id }
+        order.append(id)
+        while order.count > limit { entries[order.removeFirst()] = nil }
+    }
 }
 
 // MARK: - Bewaarde analyses
@@ -111,8 +157,14 @@ final class ThreadAnalysisBlock: Identifiable {
     }
 
     /// Eerste analyse of een vervolgvraag. `mails` oudste eerst; `focus` is de mail waar het om gaat.
+    /// De mails worden nog opgehaald voordat de aanvraag weg kan.
+    func markPreparing(question: String? = nil) {
+        liveQuestion = question
+        phase = .preparing
+    }
+
     func run(mails: [MailContent], focus: Int, followUp: String? = nil) {
-        guard !phase.isBusy else { return }
+        guard phase != .waiting, phase != .answering else { return }
         guard let key = ClaudeKeychain.read() else {
             phase = .failed("Er is nog geen API-sleutel ingesteld (Voorkeuren › Claude).")
             return
@@ -160,16 +212,19 @@ final class ThreadAnalysisBlock: Identifiable {
 
 // MARK: - Gesprek
 
-/// Laadt een Gmail-gesprek met de bijbehorende analyses.
+/// Laadt een Gmail-gesprek met de bijbehorende analyses. Eerst de lijst (één lichte aanvraag), daarna alleen de
+/// inhoud van de mails die open staan: de nieuwste, de aangeklikte en de ongelezen.
 @MainActor
 @Observable
 final class MailThreadModel {
     let ref: MailRef
     private(set) var mails: [ThreadMail] = []
+    private(set) var expanded: Set<String> = []
     private(set) var analyses: [ThreadAnalysisBlock] = []
     private(set) var isLoading = false
     private(set) var loadError: String?
 
+    @ObservationIgnored private var loadingIDs: Set<String> = []
     private let gmail = GmailSession.shared
 
     init(ref: MailRef) {
@@ -180,49 +235,107 @@ final class MailThreadModel {
 
     func load() async {
         isLoading = true
-        defer { isLoading = false }
         gmail.note(account: ref.account, forMessageID: ref.messageID)
         gmail.note(account: ref.account, forMessageID: ref.threadID)
         do {
             let items = try await gmail.threadMessages(threadID: ref.threadID, account: ref.account)
-            let loaded = try await withThrowingTaskGroup(of: (Int, ThreadMail).self) { group -> [ThreadMail] in
-                for (index, item) in items.enumerated() {
-                    group.addTask {
-                        let raw = try await self.gmail.rawMessageData(id: item.id)
-                        let mail = await Task.detached(priority: .userInitiated) { () -> ThreadMail in
-                            let content = MailContentParser.parse(raw)
-                            let split = QuoteSplitter.split(html: content.displayHTML)
-                            return ThreadMail(id: item.id, date: item.date, content: content, mainHTML: split.main,
-                                              historyHTML: split.history, isSent: item.labels.contains("SENT"))
-                        }.value
-                        return (index, mail)
-                    }
-                }
-                var result: [(Int, ThreadMail)] = []
-                for try await pair in group { result.append(pair) }
-                return result.sorted { $0.0 < $1.0 }.map(\.1)
+            mails = items.map { item in
+                var mail = ThreadMail(item)
+                if let cached = ParsedMailCache.get(item.id) { Self.fill(&mail, with: cached) }
+                return mail
             }
-            mails = loaded
             loadError = nil
+            var open = Set(items.filter(\.isUnread).map(\.id))
+            if let newest = items.last { open.insert(newest.id) }
+            if items.contains(where: { $0.id == ref.messageID }) { open.insert(ref.messageID) }
+            expanded.formUnion(open)
+            isLoading = false
+            await withTaskGroup(of: Void.self) { group in
+                for id in open { group.addTask { await self.loadContent(id) } }
+            }
         } catch {
+            isLoading = false
             loadError = "Gesprek ophalen uit Gmail mislukt: \(error.localizedDescription)"
         }
+    }
+
+    func isExpanded(_ id: String) -> Bool { expanded.contains(id) }
+
+    /// Klik op een mail: open- of dichtklappen (de inhoud wordt bij openen opgehaald).
+    func toggle(_ id: String) {
+        if expanded.contains(id) {
+            expanded.remove(id)
+        } else {
+            expanded.insert(id)
+            Task { await loadContent(id) }
+        }
+    }
+
+    func loadContent(_ id: String) async {
+        guard let index = mails.firstIndex(where: { $0.id == id }), mails[index].content == nil,
+              !loadingIDs.contains(id) else { return }
+        loadingIDs.insert(id)
+        defer { loadingIDs.remove(id) }
+        if let cached = ParsedMailCache.get(id) {
+            Self.fill(&mails[index], with: cached)
+            return
+        }
+        do {
+            let raw = try await gmail.rawMessageData(id: id)
+            let entry = await Task.detached(priority: .userInitiated) { () -> ParsedThreadMail in
+                let content = MailContentParser.parse(raw)
+                let split = QuoteSplitter.split(html: content.displayHTML)
+                return ParsedThreadMail(content: content, main: split.main, history: split.history)
+            }.value
+            ParsedMailCache.put(id, entry)
+            if let current = mails.firstIndex(where: { $0.id == id }) { Self.fill(&mails[current], with: entry) }
+        } catch {
+            if let current = mails.firstIndex(where: { $0.id == id }) {
+                mails[current].loadError = "Mail ophalen mislukt: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private static func fill(_ mail: inout ThreadMail, with entry: ParsedThreadMail) {
+        mail.content = entry.content
+        mail.mainHTML = entry.main
+        mail.historyHTML = entry.history
+        mail.loadError = nil
+    }
+
+    /// Alle mails met inhoud (voor Claude): haalt wat nog ontbreekt eerst op.
+    private func loadAll() async -> (contents: [MailContent], ids: [String]) {
+        await withTaskGroup(of: Void.self) { group in
+            for mail in mails where mail.content == nil { group.addTask { await self.loadContent(mail.id) } }
+        }
+        let loaded = mails.filter { $0.content != nil }
+        return (loaded.compactMap(\.content), loaded.map(\.id))
     }
 
     /// Start een analyse van één mail in de context van het hele gesprek; het blok komt direct na die mail.
     @discardableResult
     func analyze(messageID: String) -> ThreadAnalysisBlock? {
-        guard let focus = mails.firstIndex(where: { $0.id == messageID }) else { return nil }
+        guard mails.contains(where: { $0.id == messageID }) else { return nil }
         let block = ThreadAnalysisBlock(anchorMessageID: messageID)
         block.onChange = { [weak self] in self?.persist() }
         analyses.append(block)
-        block.run(mails: mails.map(\.content), focus: focus)
+        block.markPreparing()
+        Task {
+            let all = await loadAll()
+            let focus = all.ids.firstIndex(of: messageID) ?? max(0, all.ids.count - 1)
+            guard !all.contents.isEmpty else { return }
+            block.run(mails: all.contents, focus: focus)
+        }
         return block
     }
 
     func ask(_ question: String, in block: ThreadAnalysisBlock) {
-        let focus = mails.firstIndex { $0.id == block.anchorMessageID } ?? max(0, mails.count - 1)
-        block.run(mails: mails.map(\.content), focus: focus, followUp: question)
+        block.markPreparing(question: question)
+        Task {
+            let all = await loadAll()
+            let focus = all.ids.firstIndex(of: block.anchorMessageID) ?? max(0, all.ids.count - 1)
+            block.run(mails: all.contents, focus: focus, followUp: question)
+        }
     }
 
     func remove(_ block: ThreadAnalysisBlock) {

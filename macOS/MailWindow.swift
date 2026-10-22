@@ -104,9 +104,9 @@ struct MailWindowView: View {
     }
 
     private func composeRef(_ mode: ComposeRef.Mode, for mail: ThreadMail) -> ComposeRef {
-        let sender = MailAddress.parse(mail.content.from).valid.first
+        let sender = MailAddress.parse(mail.from).valid.first
         let source = MailRef(messageID: mail.id, threadID: ref.threadID,
-                             subject: mail.content.subject.isEmpty ? ref.subject : mail.content.subject,
+                             subject: mail.subject.isEmpty ? ref.subject : mail.subject,
                              fromName: sender?.name, fromAddress: sender?.address, account: ref.account)
         return ComposeRef(mode: mode, source: source)
     }
@@ -271,6 +271,8 @@ struct MailWindowView: View {
                         switch entry {
                         case .mail(let mail):
                             ThreadMailCard(mail: mail,
+                                           isExpanded: model.isExpanded(mail.id),
+                                           onToggle: { model.toggle(mail.id) },
                                            onReply: { mode in
                                                replyRef = composeRef(mode, for: mail)
                                                withAnimation { proxy.scrollTo("reply", anchor: .center) }
@@ -352,6 +354,8 @@ struct MailWindowView: View {
 
 private struct ThreadMailCard: View {
     let mail: ThreadMail
+    let isExpanded: Bool
+    let onToggle: () -> Void
     let onReply: (ComposeRef.Mode) -> Void
     let onAnalyze: () -> Void
 
@@ -360,10 +364,10 @@ private struct ThreadMailCard: View {
     @State private var historyHeight: CGFloat = 40
 
     private var sender: (name: String, address: String) {
-        if let first = MailAddress.parse(mail.content.from).valid.first {
+        if let first = MailAddress.parse(mail.from).valid.first {
             return (first.name ?? first.address, first.address)
         }
-        return (mail.content.from, "")
+        return (mail.from, "")
     }
 
     var body: some View {
@@ -385,10 +389,37 @@ private struct ThreadMailCard: View {
                             .thingsFont(.metadata)
                             .foregroundStyle(ThingsColor.textTertiary)
                     }
-                    recipients
+                    if isExpanded {
+                        recipients
+                    } else {
+                        Text(mail.snippet)
+                            .thingsFont(.metadata)
+                            .foregroundStyle(ThingsColor.textSecondary)
+                            .lineLimit(1)
+                    }
                 }
             }
+            // Klik op de kop klapt de mail open of dicht.
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onToggle)
 
+            if isExpanded { expandedBody }
+        }
+        .padding(isExpanded ? 14 : 10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.backgroundContent))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
+    }
+
+    @ViewBuilder private var expandedBody: some View {
+        if let error = mail.loadError {
+            Text(error)
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.deadline)
+        } else if mail.content == nil {
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
             AutoHeightMailWebView(html: mail.mainHTML, height: $bodyHeight)
                 .frame(height: bodyHeight)
 
@@ -424,14 +455,11 @@ private struct ThreadMailCard: View {
                 Spacer()
             }
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.backgroundContent))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
     }
 
     @ViewBuilder private var recipients: some View {
-        let to = mail.content.to
-        let cc = mail.content.cc
+        let to = mail.to
+        let cc = mail.cc
         if !to.isEmpty || !cc.isEmpty {
             Text([to.isEmpty ? nil : "Aan: \(Self.names(to))", cc.isEmpty ? nil : "Cc: \(Self.names(cc))"]
                 .compactMap { $0 }.joined(separator: "   "))

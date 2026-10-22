@@ -116,6 +116,35 @@ public enum GmailAPI {
                                    isUnread: message.labelIds?.contains("UNREAD") ?? false)
     }
 
+    /// Antwoord van `users.threads.get` met `format=metadata`: per mail de koppen en de snippet, zonder inhoud.
+    /// Oudste eerst; concepten (label DRAFT) vallen weg.
+    public static func threadMessages(fromJSON data: Data) -> [GmailThreadMessage]? {
+        struct Header: Decodable { let name: String; let value: String }
+        struct Message: Decodable {
+            struct Payload: Decodable { let headers: [Header]? }
+            let id: String
+            let labelIds: [String]?
+            let snippet: String?
+            let internalDate: String?
+            let payload: Payload?
+        }
+        struct Thread: Decodable { let messages: [Message]? }
+        guard let thread = try? JSONDecoder().decode(Thread.self, from: data) else { return nil }
+        return (thread.messages ?? []).compactMap { message -> GmailThreadMessage? in
+            let labels = message.labelIds ?? []
+            guard !labels.contains("DRAFT") else { return nil }
+            func header(_ name: String) -> String {
+                let value = message.payload?.headers?.first { $0.name.lowercased() == name }?.value ?? ""
+                return EMLParser.decodeEncodedWords(value).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let millis = message.internalDate.flatMap(Double.init) ?? 0
+            return GmailThreadMessage(id: message.id, date: Date(timeIntervalSince1970: millis / 1000), labels: labels,
+                                      from: header("from"), to: header("to"), cc: header("cc"),
+                                      subject: header("subject"), snippet: decodeEntities(message.snippet ?? ""))
+        }
+        .sorted { $0.date < $1.date }
+    }
+
     /// Antwoord van `users.messages.get` met `format=raw`: de complete RFC 822-mail.
     public static func rawMessage(fromJSON data: Data) -> Data? {
         struct Raw: Decodable { let raw: String? }
@@ -212,4 +241,30 @@ public enum GoogleOAuth {
         guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return nil }
         return OAuthError(code: body.error, description: body.error_description)
     }
+}
+
+/// Eén mail in een gesprek zoals `threads.get` (metadata) hem geeft: genoeg voor een ingeklapte rij.
+public struct GmailThreadMessage: Equatable {
+    public var id: String
+    public var date: Date
+    public var labels: [String]
+    public var from: String
+    public var to: String
+    public var cc: String
+    public var subject: String
+    public var snippet: String
+
+    public init(id: String, date: Date, labels: [String], from: String, to: String, cc: String, subject: String, snippet: String) {
+        self.id = id
+        self.date = date
+        self.labels = labels
+        self.from = from
+        self.to = to
+        self.cc = cc
+        self.subject = subject
+        self.snippet = snippet
+    }
+
+    public var isUnread: Bool { labels.contains("UNREAD") }
+    public var isSent: Bool { labels.contains("SENT") }
 }

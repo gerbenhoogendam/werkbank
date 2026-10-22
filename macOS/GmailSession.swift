@@ -114,6 +114,9 @@ final class GmailSession {
     private(set) var lastError: String?
 
     @ObservationIgnored private var bodyCache: [String: String] = [:]
+    @ObservationIgnored private var rawCache: [String: Data] = [:]
+    @ObservationIgnored private var rawCacheOrder: [String] = []
+    private static let rawCacheLimit = 40
     /// Laatst opgehaalde inbox per mailbox, zodat schakelen direct iets toont.
     @ObservationIgnored private var messageCache: [String: [GmailMessageSummary]] = [:]
     @ObservationIgnored private var loadingKeys: Set<String> = []
@@ -544,32 +547,34 @@ final class GmailSession {
         _ = try await api("messages/send", method: "POST", body: body, account: account)
     }
 
-    /// De mails van een gesprek (oudste eerst, zonder concepten): id, ontvangstmoment en labels.
-    func threadMessages(threadID: String, account: String?) async throws -> [(id: String, date: Date, labels: [String])] {
+    /// De mails van een gesprek (oudste eerst, zonder concepten): koppen en snippet, nog zonder inhoud.
+    /// Eén lichte aanvraag; de inhoud per mail volgt pas als hij open wordt geklapt.
+    func threadMessages(threadID: String, account: String?) async throws -> [GmailThreadMessage] {
         note(account: account, forMessageID: threadID)
-        let data = try await api("threads/\(threadID)", query: [URLQueryItem(name: "format", value: "minimal")],
-                                 account: account ?? messageAccount[threadID])
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let list = json["messages"] as? [[String: Any]] else { throw GmailError.invalidResponse }
-        var result: [(id: String, date: Date, labels: [String])] = []
-        for item in list {
-            guard let id = item["id"] as? String else { continue }
-            let labels = item["labelIds"] as? [String] ?? []
-            if labels.contains("DRAFT") { continue }
-            let millis = Double(item["internalDate"] as? String ?? "") ?? 0
-            note(account: account ?? messageAccount[threadID], forMessageID: id)
-            result.append((id, Date(timeIntervalSince1970: millis / 1000), labels))
-        }
-        return result.sorted { $0.date < $1.date }
+        let owner = account ?? messageAccount[threadID]
+        let query = [URLQueryItem(name: "format", value: "metadata")]
+            + ["From", "To", "Cc", "Subject"].map { URLQueryItem(name: "metadataHeaders", value: $0) }
+        let data = try await api("threads/\(threadID)", query: query, account: owner)
+        guard let messages = GmailAPI.threadMessages(fromJSON: data) else { throw GmailError.invalidResponse }
+        for message in messages { note(account: owner, forMessageID: message.id) }
+        return messages
     }
 
     /// De ruwe mail (RFC 822), bijvoorbeeld voor de analyse met Claude.
     func rawMessageData(id: String) async throws -> Data { try await rawMessage(id: id) }
 
     private func rawMessage(id: String) async throws -> Data {
+        if let cached = rawCache[id] { return cached }
         let data = try await api("messages/\(id)", query: [URLQueryItem(name: "format", value: "raw")],
                                  account: messageAccount[id])
         guard let raw = GmailAPI.rawMessage(fromJSON: data) else { throw GmailError.invalidResponse }
+        // Een mail verandert niet meer: bewaren, zodat opnieuw openen, antwoorden en analyseren niet opnieuw downloaden.
+        rawCache[id] = raw
+        rawCacheOrder.removeAll { $0 == id }
+        rawCacheOrder.append(id)
+        while rawCacheOrder.count > Self.rawCacheLimit {
+            rawCache[rawCacheOrder.removeFirst()] = nil
+        }
         return raw
     }
 
