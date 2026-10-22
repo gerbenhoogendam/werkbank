@@ -158,4 +158,20 @@ final class GmailThreadTests: XCTestCase {
         XCTAssertEqual(messages[1].from, "José <jose@x.nl>")
         XCTAssertEqual(messages[1].snippet, "Tot & met")
     }
+
+    func testSingleMessageMetadata() {
+        let json = """
+        {"id":"m1","threadId":"t1","labelIds":["SENT"],"snippet":"Ik kijk er morgen naar","internalDate":"1700000000000",
+         "payload":{"headers":[{"name":"To","value":"Jan <jan@klant.nl>"},{"name":"Subject","value":"=?UTF-8?Q?Re:_Caf=C3=A9?="}]}}
+        """
+        let message = GmailAPI.threadMessage(fromMessageJSON: Data(json.utf8))
+        XCTAssertEqual(message?.id, "m1")
+        XCTAssertEqual(message?.to, "Jan <jan@klant.nl>")
+        XCTAssertEqual(message?.subject, "Re: Café")
+        XCTAssertEqual(message?.isSent, true)
+        XCTAssertEqual(message?.date, Date(timeIntervalSince1970: 1_700_000_000))
+
+        let draft = #"{"id":"d","labelIds":["DRAFT"],"internalDate":"1","payload":{"headers":[]}}"#
+        XCTAssertNil(GmailAPI.threadMessage(fromMessageJSON: Data(draft.utf8)))
+    }
 }

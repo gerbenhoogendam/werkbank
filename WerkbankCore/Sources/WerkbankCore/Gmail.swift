@@ -145,6 +145,13 @@ public enum GmailAPI {
         .sorted { $0.date < $1.date }
     }
 
+    /// Antwoord van `users.messages.get` met `format=metadata`: één mail, zoals in een gesprek. `nil` voor een concept.
+    public static func threadMessage(fromMessageJSON data: Data) -> GmailThreadMessage? {
+        guard let message = try? JSONSerialization.jsonObject(with: data),
+              let wrapped = try? JSONSerialization.data(withJSONObject: ["messages": [message]]) else { return nil }
+        return threadMessages(fromJSON: wrapped)?.first
+    }
+
     /// Antwoord van `users.messages.get` met `format=raw`: de complete RFC 822-mail.
     public static func rawMessage(fromJSON data: Data) -> Data? {
         struct Raw: Decodable { let raw: String? }

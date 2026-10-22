@@ -588,7 +588,9 @@ struct ComposeView: View {
         do {
             try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
             SendSound.play()
-            appState.announce("Mail verzonden")
+            // Een antwoord in het gesprek van een kaart: die wacht nu op de klant.
+            let waiting = isReply ? ref.source.flatMap { WaitingWatcher.shared.didReply(threadID: $0.threadID) } : nil
+            appState.announce(waiting.map { "Mail verzonden · kaart naar \($0)" } ?? "Mail verzonden")
             if embedded {
                 bodyBinding.wrappedValue = ""
                 attachments = []

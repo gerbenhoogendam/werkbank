@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScrollBarHider.start()
         BoardService.ensureColumns(in: Persistence.container.mainContext)
         MiniTimerController.shared.start()
+        WaitingWatcher.shared.start()
+        IdleWatcher.shared.start()
 
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
         KeyboardShortcuts.onKeyUp(for: .quickEntry) {

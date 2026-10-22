@@ -60,6 +60,9 @@ struct CardSnapshot {
     let notes: String
     let place: CardPlace
     let createdAt: Date
+    let mailThreadID: String?
+    let mailAccount: String?
+    let waitingSince: Date?
     let subtasks: [SubtaskSnapshot]
 
     @MainActor
@@ -73,6 +76,9 @@ struct CardSnapshot {
         notes = card.notes
         place = CardPlace(card)
         createdAt = card.createdAt
+        mailThreadID = card.mailThreadID
+        mailAccount = card.mailAccount
+        waitingSince = card.waitingSince
         self.subtasks = subtasks.map(SubtaskSnapshot.init)
     }
 
@@ -84,6 +90,9 @@ struct CardSnapshot {
         card.bodyText = bodyText
         card.notes = notes
         card.createdAt = createdAt
+        card.mailThreadID = mailThreadID
+        card.mailAccount = mailAccount
+        card.waitingSince = waitingSince
         place.restore(card)
         context.insert(card)
         for subtask in subtasks { subtask.recreate(in: context) }

@@ -141,11 +141,16 @@ struct MiniTimerView: View {
             .max { ($0.pausedAt ?? .distantPast) < ($1.pausedAt ?? .distantPast) }
     }
 
-    private var isShown: Bool { current != nil || appState.hudMessage != nil }
+    private var isShown: Bool { current != nil || appState.hudMessage != nil || appState.idlePrompt != nil }
 
     var body: some View {
         Group {
-            if let message = appState.hudMessage {
+            if let prompt = appState.idlePrompt {
+                // Blijft staan tot er gekozen is.
+                idleContent(prompt)
+                    .padding(12)
+                    .transition(.opacity)
+            } else if let message = appState.hudMessage {
                 // Een melding gaat even voor de timer.
                 messageContent(message)
                     .padding(12)
@@ -158,6 +163,7 @@ struct MiniTimerView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: appState.hudMessage)
+        .animation(.easeOut(duration: 0.2), value: appState.idlePrompt)
         .onChange(of: isShown, initial: true) { _, shown in onVisibilityChange(shown) }
         .onChange(of: sizeRaw) { _, _ in onResize() }
     }
@@ -205,6 +211,45 @@ struct MiniTimerView: View {
         .frame(width: size.width, height: size.height)
         .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3))
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+    }
+
+    private func idleContent(_ prompt: IdlePrompt) -> some View {
+        HStack(spacing: size.gap) {
+            Image(systemName: "moon.zzz.fill")
+                .font(.system(size: size.titleFont + 2, weight: .semibold))
+                .foregroundStyle(Color.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(prompt.minutes) min weg")
+                    .font(.system(size: size.titleFont + 1, weight: .semibold))
+                    .foregroundStyle(.white)
+                if size != .small {
+                    Text("\(prompt.start.formatted(date: .omitted, time: .shortened))–\(prompt.end.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: size.titleFont - 2))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            textButton("Eraf", prominent: true) { IdleWatcher.shared.subtract(prompt) }
+            textButton("Laten", prominent: false) { IdleWatcher.shared.keep() }
+        }
+        .padding(.horizontal, size.gap + 6)
+        .frame(width: size.width, height: size.height)
+        .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+    }
+
+    private func textButton(_ title: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: size.titleFont, weight: .semibold))
+                .foregroundStyle(prominent ? Color.black : Color.white)
+                .padding(.horizontal, size.gap + 2)
+                .frame(height: size.buttonSize)
+                .background(Capsule().fill(prominent ? Color.white : Color.white.opacity(0.18)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func messageContent(_ message: String) -> some View {

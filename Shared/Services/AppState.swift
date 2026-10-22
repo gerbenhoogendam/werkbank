@@ -9,6 +9,16 @@ struct StopContext: Identifiable, Equatable {
     let defaultEnd: Date
 }
 
+/// Was de Mac een tijd niet in gebruik terwijl de timer liep: die tijd aftrekken of laten staan.
+struct IdlePrompt: Equatable {
+    let entryID: UUID
+    let start: Date
+    let end: Date
+
+    var duration: TimeInterval { end.timeIntervalSince(start) }
+    var minutes: Int { Int((duration / 60).rounded()) }
+}
+
 /// Globale UI-status die door hoofdvenster, menubalk en snelle invoer gedeeld wordt.
 @MainActor
 @Observable
@@ -19,6 +29,8 @@ final class AppState {
     var toast: String?
     /// Korte melding in de zwevende timer-pil (bijvoorbeeld "Taak afronden ongedaan", "Mail verzonden").
     var hudMessage: String?
+    /// Vraag in de timer-pil na inactiviteit (macOS); blijft staan tot er gekozen is.
+    var idlePrompt: IdlePrompt?
     var stopContext: StopContext?
     var isDropTargeted = false
 

@@ -539,6 +539,29 @@ final class GmailSession {
         return GmailAPI.summary(fromMessageJSON: data)
     }
 
+    // MARK: Verzonden mails (dagafsluiting)
+
+    /// Verzonden mails tussen `start` en `end` uit alle gekoppelde mailboxen, oudste eerst.
+    func sentMails(from start: Date, to end: Date) async -> [(account: String?, mail: GmailThreadMessage)] {
+        let keys: [String?] = accounts.isEmpty ? [activeAccount] : accounts.map { $0 }
+        let q = "in:sent after:\(Int(start.timeIntervalSince1970)) before:\(Int(end.timeIntervalSince1970))"
+        let headers = ["To", "Cc", "Subject"].map { URLQueryItem(name: "metadataHeaders", value: $0) }
+        var found: [(account: String?, mail: GmailThreadMessage)] = []
+        for account in keys {
+            guard let list = try? await api("messages", query: [URLQueryItem(name: "q", value: q),
+                                                                 URLQueryItem(name: "maxResults", value: "40")],
+                                            account: account) else { continue }
+            for ref in GmailAPI.messageRefs(fromListJSON: list).refs {
+                guard let data = try? await api("messages/\(ref.id)",
+                                                query: [URLQueryItem(name: "format", value: "metadata")] + headers,
+                                                account: account),
+                      let mail = GmailAPI.threadMessage(fromMessageJSON: data) else { continue }
+                found.append((account, mail))
+            }
+        }
+        return found.sorted { $0.mail.date < $1.mail.date }
+    }
+
     // MARK: Verplaatsen naar een andere mailbox
 
     /// Verplaatst een heel gesprek naar een andere gekoppelde mailbox: elke mail wordt daar ingevoegd alsof hij daar
@@ -573,12 +596,14 @@ final class GmailSession {
             }
             try await trash(threadID: threadID, account: source)
             removeThreadFromLists(threadID)
+            if let targetThread { WaitingWatcher.shared.relink(threadID: threadID, to: targetThread, account: target) }
             for id in inserted { note(account: target, forMessageID: id) }
             if let targetThread { note(account: target, forMessageID: targetThread) }
             if isCombined || activeAccount == target { await reload() }
             appState.announce("Verplaatst naar \(displayName(target))")
 
             UndoCenter.shared.record("Mail verplaatsen", undo: { [weak self] in
+                if let targetThread { WaitingWatcher.shared.relink(threadID: targetThread, to: threadID, account: source) }
                 Task { await self?.undoMove(threadID: threadID, source: source, inserted: inserted, target: target) }
             })
         } catch {
@@ -710,6 +735,13 @@ final class GmailSession {
     }
 
     /// ⌘Z na een taak uit een mail: de kaart weg en (als hij gearchiveerd was) de mail terug in de inbox.
+    /// Onthoudt bij de kaart uit welk gesprek (en welke mailbox) hij komt, voor Wacht op klant.
+    private func link(_ card: TodoCard, threadID: String, messageID: String, context: ModelContext) {
+        card.mailThreadID = threadID
+        card.mailAccount = account(for: messageID)
+        try? context.save()
+    }
+
     private func recordCardFromMail(cardID: UUID, threadID: String, archived: Bool, context: ModelContext) {
         UndoCenter.shared.record(archived ? "Taak van mail maken" : "Mail naar taak", undo: { [weak self] in
             if let card = BoardService.card(withID: cardID, in: context) {
@@ -766,6 +798,7 @@ final class GmailSession {
                               fromName: message.fromName, fromAddress: message.fromAddress,
                               bodyText: text.isEmpty ? nil : text)
         let card = BoardService.addMail(mail, column: column, in: context)
+        link(card, threadID: message.threadID, messageID: message.id, context: context)
         let logged = max(0, min(minutes, 24 * 60))
         if logged > 0 { TimerService.logPriorTime(for: card, minutes: logged, in: context) }
 
@@ -802,6 +835,7 @@ final class GmailSession {
         }
 
         let card = BoardService.addMail(EMLParser.parse(raw), column: column, in: context)
+        link(card, threadID: payload.threadID, messageID: payload.messageID, context: context)
         // De titel van een nieuwe mailkaart wil je altijd nakijken (zelfde gedrag als bij een gesleept .eml-bestand).
         InlineEditing.pendingEditID = card.id
         let sender = card.clientLabel ?? "onbekende afzender"

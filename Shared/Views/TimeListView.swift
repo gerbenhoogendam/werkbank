@@ -28,6 +28,9 @@ struct TimeListView: View {
     /// "Al geschreven" is standaard ingeklapt; de keuze blijft bewaard.
     @AppStorage("timeList.writtenExpanded") private var showWritten = false
     @State private var showSupport = false
+    #if os(macOS)
+    @State private var showDayClose = false
+    #endif
     @State private var exportDocument = CSVDocument(data: Data())
     @State private var isExporting = false
 
@@ -137,6 +140,22 @@ struct TimeListView: View {
                     .monospacedDigit()
             }
             Spacer()
+            #if os(macOS)
+            Button { showDayClose = true } label: {
+                ClaudeSpark()
+                    .frame(width: 15, height: 15)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .help("Dag afsluiten (⇧⌘E)")
+            .accessibilityLabel("Dag afsluiten")
+            .sheet(isPresented: $showDayClose) {
+                DayCloseView()
+                    .environment(appState)
+            }
+            #endif
             Menu {
                 Button("Alle afgeronde regels") { export(onlyUnwritten: false) }
                 Button("Alleen nog niet geschreven") { export(onlyUnwritten: true) }

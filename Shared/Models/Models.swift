@@ -78,6 +78,12 @@ final class TodoCard {
     /// Blauwe stip tot de kaart uit de Inbox is gesleept.
     var isNew: Bool = true
     var createdAt: Date = Date()
+    /// Het Gmail-gesprek waar de kaart uit komt, en de mailbox. Antwoord je in dat gesprek, dan gaat de kaart naar
+    /// Wacht op klant; antwoordt de klant, dan komt hij terug (zie `WaitingWatcher`).
+    var mailThreadID: String?
+    var mailAccount: String?
+    /// Sinds wanneer de kaart in Wacht op klant op een antwoord wacht.
+    var waitingSince: Date?
 
     init(title: String,
          clientLabel: String? = nil,
