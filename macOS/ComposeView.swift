@@ -368,6 +368,17 @@ struct ComposeView: View {
             }
             original = mail
             subject = ReplyBuilder.subject(mail.subject.isEmpty ? source.subject : mail.subject, forward: ref.mode == .forward)
+            if ref.mode == .forward, attachments.isEmpty {
+                // Doorsturen: de bijlagen van de oorspronkelijke mail gaan mee (zolang ze samen binnen de grens passen).
+                var total = 0
+                for file in mail.files where total + file.data.count <= Self.maxAttachmentBytes {
+                    attachments.append(file)
+                    total += file.data.count
+                }
+                if attachments.count < mail.files.count {
+                    errorText = "Niet alle bijlagen passen in één mail (maximaal \(Self.maxAttachmentBytes / 1_000_000) MB); de grootste zijn weggelaten."
+                }
+            }
             if isReply {
                 let recipients = ReplyBuilder.recipients(from: mail.from, replyTo: mail.replyTo, to: mail.to, cc: mail.cc,
                                                          myAddresses: gmail.accounts, replyAll: ref.mode == .replyAll)

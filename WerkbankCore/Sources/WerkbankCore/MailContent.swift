@@ -42,6 +42,8 @@ public struct MailContent: Equatable {
     public var references: String = ""
     public var replyTo: String = ""
     public var quotableText: String = ""
+    /// Echte bijlagen: alles wat niet als afbeelding in de tekst staat (`cid:`), in de volgorde van de mail.
+    public var files: [MailAttachment] = []
 
     /// Kop van de mail als platte tekst (alleen ingevulde regels).
     public var headerText: String {
@@ -118,7 +120,8 @@ public enum MailContentParser {
                            date: field("date"), blocks: limitImages(blocks),
                            displayHTML: displayHTML(html: walked.html, plain: walked.plain, attachments: attachments),
                            messageID: field("message-id"), references: field("references"),
-                           replyTo: field("reply-to"), quotableText: quotable)
+                           replyTo: field("reply-to"), quotableText: quotable,
+                           files: files(attachments, html: walked.html))
     }
 
     // MARK: - Structuur
@@ -259,6 +262,23 @@ public enum MailContentParser {
             result.replaceSubrange(range, with: "data:\(attachment.mediaType);base64,\(attachment.data.base64EncodedString())")
         }
         return result
+    }
+
+    /// Bijlagen die niet via `cid:` in de HTML staan (en niet leeg zijn).
+    static func files(_ attachments: [MailAttachment], html: String?) -> [MailAttachment] {
+        var referenced = Set<String>()
+        if let html {
+            let ns = NSString(string: html)
+            for match in cidReference.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+                let raw = ns.substring(with: match.range(at: 1))
+                referenced.insert((raw.removingPercentEncoding ?? raw).trimmingCharacters(in: CharacterSet(charactersIn: "<> ")).lowercased())
+            }
+        }
+        return attachments.filter { attachment in
+            guard !attachment.data.isEmpty else { return false }
+            guard let cid = attachment.contentID?.lowercased() else { return true }
+            return !referenced.contains(cid)
+        }
     }
 
     static func escapeHTML(_ text: String) -> String {

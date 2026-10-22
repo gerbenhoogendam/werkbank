@@ -438,6 +438,10 @@ private struct ThreadMailCard: View {
                 }
             }
 
+            if let files = mail.content?.files, !files.isEmpty {
+                MailAttachmentsView(files: files, folderName: mail.id)
+            }
+
             HStack(spacing: 14) {
                 Spacer()
                 action("Beantwoorden", "arrowshape.turn.up.left") { onReply(.reply) }

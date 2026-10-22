@@ -36,6 +36,9 @@ final class MailComposerTests: XCTestCase {
         XCTAssertTrue(text.contains("Content-ID: <\(MailComposer.signatureContentID)>"))
         XCTAssertFalse(text.contains("cid:ABC123"))
         XCTAssertTrue(text.contains("name*=UTF-8''rapport%20%C3%A9.pdf"))
+        // Het logo staat in de tekst (cid), de pdf is een echte bijlage.
+        XCTAssertEqual(parsed.files.map(\.name), ["rapport é.pdf"])
+        XCTAssertEqual(parsed.files.first?.data.count, 5000)
     }
 
     func testSignatureImageDroppedWithoutLogo() {
