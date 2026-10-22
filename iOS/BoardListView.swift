@@ -41,7 +41,7 @@ struct BoardListView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
-    @Query(sort: \TodoCard.sortOrder) private var cards: [TodoCard]
+    @Query(filter: #Predicate<TodoCard> { $0.columnRaw != "done" }, sort: \TodoCard.sortOrder) private var cards: [TodoCard]
     @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
@@ -57,6 +57,10 @@ struct BoardListView: View {
     private var runningTodoID: UUID? { running.first?.todoID }
 
     var body: some View {
+        boardContent.providingSubtasks()
+    }
+
+    @ViewBuilder private var boardContent: some View {
         GeometryReader { geo in
             let width = columnWidth(in: geo.size.width)
             ScrollView(.horizontal, showsIndicators: false) {

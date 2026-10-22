@@ -63,6 +63,8 @@ struct ComposeView: View {
     @State private var errorText: String?
     @State private var suggestionDismissed = false
     @State private var signatureHeight: CGFloat = 60
+    /// De handtekening van de gekozen mailbox, één keer opgebouwd (niet bij elke toetsaanslag).
+    @State private var signaturePreview: String?
     @State private var showCc = false
     @State private var showBcc = false
 
@@ -93,6 +95,7 @@ struct ComposeView: View {
         .background(ThingsColor.backgroundContent)
         .task { await prepare() }
         .onChange(of: suggestion) { _, _ in suggestionDismissed = false }
+        .onChange(of: fromAccount, initial: true) { _, account in signaturePreview = MailSignatures.preview(for: account) }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -240,7 +243,7 @@ struct ComposeView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 6)
             }
-            if useSignature, let signature = MailSignatures.preview(for: fromAccount) {
+            if useSignature, let signature = signaturePreview {
                 // De handtekening zoals hij onder de mail komt (bewerken doe je in Voorkeuren › Mail).
                 AutoHeightMailWebView(html: signature, height: $signatureHeight)
                     .frame(height: signatureHeight)
@@ -314,7 +317,7 @@ struct ComposeView: View {
                 Button { importing = true } label: { Label("Bijlage", systemImage: "paperclip") }
                 Toggle("Handtekening", isOn: $useSignature)
                     .toggleStyle(.checkbox)
-                    .disabled(MailSignatures.html(for: fromAccount) == nil)
+                    .disabled(signaturePreview == nil)
                 if let onDiscard {
                     Button {
                         bodyBinding.wrappedValue = ""

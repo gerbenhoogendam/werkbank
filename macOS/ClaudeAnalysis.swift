@@ -288,6 +288,8 @@ enum ClaudeStreamer {
 
         var result = ClaudeStreamResult(text: "")
         var started = false
+        // Hooguit ~10 keer per seconde doorgeven: de weergave verwerkt bij elke update de hele tekst.
+        var lastEmit = Date.distantPast
         for try await line in bytes.lines {
             try Task.checkCancellation()
             guard line.hasPrefix("data:") else { continue }
@@ -307,7 +309,10 @@ enum ClaudeStreamer {
                    let text = delta["text"] as? String {
                     if !started { started = true; onFirstText() }
                     result.text += text
-                    onText(result.text)
+                    if Date().timeIntervalSince(lastEmit) >= 0.1 {
+                        lastEmit = Date()
+                        onText(result.text)
+                    }
                 }
             case "message_delta":
                 if let delta = json["delta"] as? [String: Any] {
@@ -322,6 +327,7 @@ enum ClaudeStreamer {
                 break
             }
         }
+        onText(result.text)
         return result
     }
 

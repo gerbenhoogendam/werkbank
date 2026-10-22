@@ -625,15 +625,15 @@ struct AutoHeightMailWebView: NSViewRepresentable {
 
     func updateNSView(_ view: PassthroughWebView, context: Context) {
         context.coordinator.parent = self
-        let document = MailWebView.document(html, allowRemote: true, margin: "0")
-        guard context.coordinator.lastDocument != document else { return }
-        context.coordinator.lastDocument = document
-        view.loadHTMLString(document, baseURL: nil)
+        // Vergelijk de HTML zelf; het document eromheen pas bouwen als er echt iets anders te tonen is.
+        guard context.coordinator.lastHTML != html else { return }
+        context.coordinator.lastHTML = html
+        view.loadHTMLString(MailWebView.document(html, allowRemote: true, margin: "0"), baseURL: nil)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var parent: AutoHeightMailWebView
-        var lastDocument = ""
+        var lastHTML: String?
         private weak var webView: WKWebView?
         private var lastWidth: CGFloat = 0
         private var observer: NSObjectProtocol?

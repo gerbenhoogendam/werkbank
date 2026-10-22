@@ -255,7 +255,7 @@ struct ClaudeAnalysisView: View {
 struct MarkdownLite: View {
     let text: String
 
-    private enum Line: Hashable {
+    enum Line: Hashable {
         case heading(Int, String)
         case bullet(String)
         case numbered(String, String)
@@ -292,6 +292,19 @@ struct MarkdownLite: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                MarkdownLine(line: line).equatable()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Eén regel; gelijk aan de vorige keer = niet opnieuw opgebouwd (scheelt veel bij een antwoord dat binnenstroomt).
+private struct MarkdownLine: View, Equatable {
+    let line: MarkdownLite.Line
+
+    var body: some View {
+        Group {
                 switch line {
                 case .heading(let level, let content):
                     inline(content)
@@ -322,9 +335,7 @@ struct MarkdownLite: View {
                 case .blank:
                     Color.clear.frame(height: 3)
                 }
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func inline(_ content: String) -> some View {

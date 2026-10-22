@@ -129,7 +129,6 @@ struct MiniTimerView: View {
     @AppStorage(SettingsKey.miniTimerSize) private var sizeRaw = MiniTimerSize.small.rawValue
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" || $0.statusRaw == "paused" })
     private var active: [TimeEntry]
-    @State private var pulse = false
 
     private var size: MiniTimerSize { MiniTimerSize(stored: sizeRaw) }
 
@@ -166,12 +165,10 @@ struct MiniTimerView: View {
     private func content(_ entry: TimeEntry) -> some View {
         let isRunning = entry.status == .running
         return HStack(spacing: size.gap) {
+            // Een stilstaande stip: een knipperende liet de pil de hele dag tientallen keren per seconde hertekenen.
             Circle()
                 .fill(isRunning ? Color(hex: 0x3CCB5F) : Color.orange)
                 .frame(width: size.dot, height: size.dot)
-                .opacity(isRunning && pulse ? 0.35 : 1)
-                .animation(isRunning ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default, value: pulse)
-                .onAppear { pulse = true }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.title)
@@ -206,9 +203,8 @@ struct MiniTimerView: View {
         }
         .padding(.horizontal, size.gap + 6)
         .frame(width: size.width, height: size.height)
-        .background(Capsule().fill(Color.black.opacity(0.82)))
+        .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3))
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
     }
 
     private func messageContent(_ message: String) -> some View {
@@ -225,9 +221,8 @@ struct MiniTimerView: View {
         }
         .padding(.horizontal, size.gap + 6)
         .frame(width: size.width, height: size.height)
-        .background(Capsule().fill(Color.black.opacity(0.82)))
+        .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3))
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
     }
 
     private func circleButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {

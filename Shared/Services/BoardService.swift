@@ -11,13 +11,20 @@ enum BoardService {
         (try? context.fetch(FetchDescriptor<TodoCard>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
     }
 
+    /// Alleen de kaarten van één kolom (niet het hele archief ophalen voor één kaart).
+    static func cards(inColumn key: String, in context: ModelContext) -> [TodoCard] {
+        let descriptor = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.columnRaw == key },
+                                                   sortBy: [SortDescriptor(\.sortOrder)])
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     /// Nieuwe kaart bovenaan een kolom (standaard de Inbox).
     @discardableResult
     static func addCard(title: String, column: BoardColumn = .inbox, label: String? = nil,
                         logoDomain: String? = nil, sender: String? = nil, body: String? = nil,
                         in context: ModelContext) -> TodoCard {
         let column = resolve(column, in: context)
-        let top = allCards(in: context).filter { $0.column == column }.map(\.sortOrder).min() ?? 0
+        let top = cards(inColumn: column.id, in: context).first?.sortOrder ?? 0
         let card = TodoCard(title: title, clientLabel: label, logoDomain: logoDomain, senderLine: sender,
                             column: column, sortOrder: top - 1, isNew: column == .inbox)
         card.bodyText = body
@@ -59,7 +66,7 @@ enum BoardService {
 
     /// Verplaatst een kaart naar `column` op positie `index` binnen de andere kaarten van die kolom.
     static func move(_ card: TodoCard, to column: BoardColumn, index: Int, in context: ModelContext) {
-        let others = allCards(in: context).filter { $0.column == column && $0.id != card.id }
+        let others = cards(inColumn: column.id, in: context).filter { $0.id != card.id }
         let i = min(max(index, 0), others.count)
         let newOrder: Double
         switch (i > 0 ? others[i - 1].sortOrder : nil, i < others.count ? others[i].sortOrder : nil) {

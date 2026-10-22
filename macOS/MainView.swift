@@ -110,6 +110,7 @@ struct MainView: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
+        .providingSubtasks()
         .coordinateSpace(.named("main"))
         // ⌘Z voor handelingen in de app loopt via de UndoManager van dit venster.
         .onChange(of: undoManager, initial: true) { _, manager in UndoCenter.shared.manager = manager }

@@ -26,18 +26,37 @@ struct TimeListView: View {
     @State private var exportDocument = CSVDocument(data: Data())
     @State private var isExporting = false
 
-    private var running: TimeEntry? { entries.first { $0.status == .running } }
-    private var others: [TimeEntry] { entries.filter { $0.status != .running } }
-    /// Nog te schrijven: bovenaan. Afgevinkte regels gaan naar "Al geschreven" onderaan.
-    private var toWrite: [TimeEntry] { others.filter { !$0.isWritten } }
-    private var written: [TimeEntry] {
-        others.filter(\.isWritten).sorted { ($0.finishedAt ?? $0.createdAt) > ($1.finishedAt ?? $1.createdAt) }
+    /// De regels in één keer verdeeld (niet per onderdeel van de weergave opnieuw filteren en sorteren).
+    private struct Parts {
+        var running: TimeEntry?
+        /// Nog te schrijven: bovenaan. Afgevinkte regels gaan naar "Al geschreven" onderaan.
+        var toWrite: [TimeEntry] = []
+        var written: [TimeEntry] = []
+        var outstanding: Double = 0
+
+        init(_ entries: [TimeEntry], sortWritten: Bool) {
+            for entry in entries {
+                switch (entry.status, entry.isWritten) {
+                case (.running, _): if running == nil { running = entry }
+                case (_, true): written.append(entry)
+                default: toWrite.append(entry)
+                }
+            }
+            outstanding = TimerService.outstandingHours(toWrite)
+            // Alleen sorteren als de lijst open staat; dicht is het aantal genoeg.
+            if sortWritten {
+                written.sort { ($0.finishedAt ?? $0.createdAt) > ($1.finishedAt ?? $1.createdAt) }
+            }
+        }
     }
-    private var outstanding: Double { TimerService.outstandingHours(entries) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        let parts = Parts(entries, sortWritten: showWritten)
+        let running = parts.running
+        let toWrite = parts.toWrite
+        let written = parts.written
+        return VStack(spacing: 0) {
+            header(outstanding: parts.outstanding)
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
 
             if entries.isEmpty {
@@ -53,7 +72,7 @@ struct TimeListView: View {
                             TimeEntryRow(entry: entry)
                         }
                         if !written.isEmpty {
-                            writtenHeader
+                            writtenHeader(count: written.count)
                             if showWritten {
                                 ForEach(written) { entry in
                                     TimeEntryRow(entry: entry)
@@ -62,7 +81,7 @@ struct TimeListView: View {
                         }
                     }
                     .animation(ThingsMotion.reorder, value: toWrite.map(\.id))
-                    .animation(ThingsMotion.reorder, value: written.map(\.id))
+                    .animation(ThingsMotion.reorder, value: showWritten ? written.map(\.id) : [])
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
@@ -76,7 +95,7 @@ struct TimeListView: View {
     }
 
     /// Uitklapbare kop onder de regels die nog geschreven moeten worden.
-    private var writtenHeader: some View {
+    private func writtenHeader(count: Int) -> some View {
         Button {
             withAnimation(ThingsMotion.reorder) { showWritten.toggle() }
         } label: {
@@ -86,7 +105,7 @@ struct TimeListView: View {
                     .rotationEffect(.degrees(showWritten ? 90 : 0))
                 Text("Al geschreven")
                     .thingsFont(.heading)
-                Text("\(written.count)")
+                Text("\(count)")
                     .thingsFont(.metadata)
                     .monospacedDigit()
                 Spacer()
@@ -97,10 +116,10 @@ struct TimeListView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
-        .accessibilityLabel("Al geschreven, \(written.count) regels, \(showWritten ? "uitgeklapt" : "ingeklapt")")
+        .accessibilityLabel("Al geschreven, \(count) regels, \(showWritten ? "uitgeklapt" : "ingeklapt")")
     }
 
-    private var header: some View {
+    private func header(outstanding: Double) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Tijd schrijven")
@@ -180,16 +199,12 @@ struct RunningTimerRow: View {
     let entry: TimeEntry
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
-    @State private var pulse = false
 
     var body: some View {
         HStack(spacing: 10) {
             Circle()
                 .fill(ThingsColor.running)
                 .frame(width: 9, height: 9)
-                .opacity(pulse ? 0.3 : 1)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-                .onAppear { pulse = true }
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {

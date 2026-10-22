@@ -16,7 +16,9 @@ struct CardView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
-    @Query private var subtasks: [Subtask]
+    /// Subtaken komen van één gedeelde query hoger in de boom (niet één query per kaart).
+    @Environment(\.subtasksByCard) private var subtasksByCard
+    private var subtasks: [Subtask] { subtasksByCard[card.id] ?? [] }
     @State private var editing = false
     @State private var titleDraft = ""
     @State private var minutesDraft = ""
@@ -38,8 +40,6 @@ struct CardView: View {
         self.isEditable = isEditable
         self.onStartTimer = onStartTimer
         self.onOpen = onOpen
-        let id = card.id
-        _subtasks = Query(filter: #Predicate<Subtask> { $0.cardID == id }, sort: \Subtask.sortOrder)
     }
 
     private var hasBody: Bool { !(card.bodyText ?? "").isEmpty }
@@ -467,4 +467,35 @@ struct TimerButton: View {
         .help(isRunning ? "Timer loopt" : "Start timer")
         .accessibilityLabel(isRunning ? "Timer loopt" : "Start timer")
     }
+}
+
+// MARK: - Subtaken per kaart
+
+private struct SubtasksByCardKey: EnvironmentKey {
+    static var defaultValue: [UUID: [Subtask]] { [:] }
+}
+
+extension EnvironmentValues {
+    /// Alle subtaken, gegroepeerd per kaart (gezet door het hoofdvenster en de boardlijst op iOS).
+    var subtasksByCard: [UUID: [Subtask]] {
+        get { self[SubtasksByCardKey.self] }
+        set { self[SubtasksByCardKey.self] = newValue }
+    }
+}
+
+/// Houdt de subtaken per kaart bij uit één query en geeft ze door aan alle kaarten eronder.
+struct SubtaskProvider: ViewModifier {
+    @Query(sort: \Subtask.sortOrder) private var all: [Subtask]
+    @State private var grouped: [UUID: [Subtask]] = [:]
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.subtasksByCard, grouped)
+            // Alleen bij toevoegen of verwijderen; afvinken werkt via het object zelf.
+            .onChange(of: all, initial: true) { _, new in grouped = Dictionary(grouping: new, by: \.cardID) }
+    }
+}
+
+extension View {
+    func providingSubtasks() -> some View { modifier(SubtaskProvider()) }
 }

@@ -42,9 +42,21 @@ final class CalendarService {
 
     private(set) var status: EKAuthorizationStatus
     private(set) var calendars: [AgendaCalendar] = []
-    private(set) var revision = 0
+    private(set) var revision = 0 {
+        didSet { eventCache.removeAll() }
+    }
 
     @ObservationIgnored private let store = EKEventStore()
+    /// Opgehaalde afspraken per periode, tot er iets verandert (`revision`). De agenda vraagt ze bij elke
+    /// herberekening van de weergave op; zo gaat dat niet telkens naar EventKit.
+    @ObservationIgnored private var eventCache: [EventQuery: [AgendaEvent]] = [:]
+    @ObservationIgnored private var changeTask: Task<Void, Never>?
+
+    private struct EventQuery: Hashable {
+        let start: Date
+        let end: Date
+        let hidden: Set<String>
+    }
     @ObservationIgnored private var observer: NSObjectProtocol?
 
     var hasAccess: Bool { status == .fullAccess }
@@ -70,6 +82,7 @@ final class CalendarService {
     }
 
     func refreshStatus() {
+        store.refreshSourcesIfNecessary()
         let new = EKEventStore.authorizationStatus(for: .event)
         guard new != status else { return }
         status = new
@@ -77,10 +90,15 @@ final class CalendarService {
         revision += 1
     }
 
+    /// Tijdens synchroniseren komen wijzigingen vaak in een reeks: één keer verversen, 250 ms na de laatste.
     private func storeChanged() {
-        store.refreshSourcesIfNecessary()
-        reloadCalendars()
-        revision += 1
+        changeTask?.cancel()
+        changeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, !Task.isCancelled else { return }
+            self.reloadCalendars()
+            self.revision += 1
+        }
     }
 
     private func reloadCalendars() {
@@ -95,6 +113,15 @@ final class CalendarService {
 
     func events(from start: Date, to end: Date, hiddenCalendarIDs: Set<String>) -> [AgendaEvent] {
         guard hasAccess else { return [] }
+        let key = EventQuery(start: start, end: end, hidden: hiddenCalendarIDs)
+        if let cached = eventCache[key] { return cached }
+        if eventCache.count > 12 { eventCache.removeAll() }
+        let result = fetchEvents(from: start, to: end, hiddenCalendarIDs: hiddenCalendarIDs)
+        eventCache[key] = result
+        return result
+    }
+
+    private func fetchEvents(from start: Date, to end: Date, hiddenCalendarIDs: Set<String>) -> [AgendaEvent] {
         let visible = store.calendars(for: .event).filter { !hiddenCalendarIDs.contains($0.calendarIdentifier) }
         guard !visible.isEmpty else { return [] }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: visible)
@@ -502,11 +529,18 @@ struct EventEdit: Equatable {
 // MARK: - Eigen agendakleuren
 
 /// Eigen kleur per agenda, alleen binnen Werkbank (UserDefaults). EventKit kent geen kleur per afspraak.
+@MainActor
 enum CalendarColors {
     private static let key = "calendar.colors"
 
+    /// Eén keer uit UserDefaults gelezen, daarna uit het geheugen (wordt per afspraak opgevraagd).
+    private static var cache: [String: [Double]]?
+
     private static var stored: [String: [Double]] {
-        UserDefaults.standard.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+        if let cache { return cache }
+        let loaded = UserDefaults.standard.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+        cache = loaded
+        return loaded
     }
 
     static var hasAny: Bool { !stored.isEmpty }
@@ -520,6 +554,7 @@ enum CalendarColors {
         var all = stored
         if let color, let components = rgb(color) { all[id] = components } else { all[id] = nil }
         UserDefaults.standard.set(all, forKey: key)
+        cache = all
     }
 
     private static func rgb(_ color: Color) -> [Double]? {

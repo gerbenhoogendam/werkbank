@@ -51,7 +51,8 @@ struct BoardView: View {
     @Environment(\.modelContext) private var context
     @Environment(DragCoordinator.self) private var drag
     @Environment(AppState.self) private var appState
-    @Query(sort: \TodoCard.sortOrder) private var cards: [TodoCard]
+    // Zonder het archief: afgeronde taken blijven in de database, maar horen niet op het board.
+    @Query(filter: #Predicate<TodoCard> { $0.columnRaw != "done" }, sort: \TodoCard.sortOrder) private var cards: [TodoCard]
     @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 

@@ -185,8 +185,10 @@ struct AgendaView: View {
         .onPreferenceChange(AgendaSizeKey.self) { agendaSize = $0 }
         .onPreferenceChange(DayFrameKey.self) { drag.agenda.dayFrames = $0 }
         .onPreferenceChange(DraftFrameKey.self) { draftFrame = $0 }
-        .overlay(alignment: .topLeading) { confirmPopover }
-        .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
+        // In een eigen view: zo rekent alleen de popover mee bij elke muisbeweging van het concept, niet de hele agenda.
+        .overlay(alignment: .topLeading) {
+            ScheduleConfirmLayer(draftFrame: draftFrame, agendaSize: agendaSize, onSchedule: schedule)
+        }
         .onAppear {
             drag.onAgendaDrop = { card, slot in
                 let end = Scheduling.defaultEnd(start: slot.start, dayEnd: dayEnd(slot.day))
@@ -379,14 +381,29 @@ struct AgendaView: View {
             appState.showToast("Inplannen mislukt: \(error.localizedDescription)")
         }
     }
+}
 
-    // MARK: Stap 3: popover
+// MARK: - Stap 3: popover
+
+/// Bevestigingspopover van een concept-afspraak. Leest zelf `drag.draft`, zodat de agenda eromheen niet bij elke
+/// muisbeweging opnieuw wordt opgebouwd.
+private struct ScheduleConfirmLayer: View {
+    let draftFrame: CGRect
+    let agendaSize: CGSize
+    let onSchedule: (ScheduleDraft, String, String) -> Void
+
+    @Environment(DragCoordinator.self) private var drag
+
+    var body: some View {
+        confirmPopover
+            .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
+    }
 
     @ViewBuilder private var confirmPopover: some View {
         if let draft = drag.draft, draft.step == .confirm, draftFrame != .zero {
             ScheduleConfirmView(todoTitle: draft.todoTitle, start: draft.start, end: draft.end,
                                 onCancel: { drag.draft = nil },
-                                onSchedule: { title, calendarID in schedule(draft, title: title, calendarID: calendarID) })
+                                onSchedule: { title, calendarID in onSchedule(draft, title, calendarID) })
                 .padding(14)
                 .frame(width: popoverWidth)
                 .background(
@@ -549,6 +566,7 @@ struct DayColumn: View {
                 }
             }
             .frame(width: width, height: totalHeight, alignment: .topLeading)
+            .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
             .onDrop(of: [.gmailMessage], delegate: MailDropDelegate(hoverY: $mailHoverY, perform: handleMailDrop))
             .background(
                 Color.clear.preference(key: DayFrameKey.self, value: [day: geo.frame(in: .main)])
