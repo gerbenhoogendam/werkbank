@@ -13,6 +13,9 @@ public enum ClientNaming {
     public static let freemailDomains: Set<String> = [
         "gmail.com", "outlook.com", "hotmail.com", "live.nl", "icloud.com", "me.com",
         "yahoo.com", "ziggo.nl", "kpnmail.nl", "hetnet.nl", "planet.nl", "xs4all.nl",
+        "googlemail.com", "outlook.nl", "hotmail.nl", "live.com", "msn.com", "mac.com", "yahoo.nl",
+        "proton.me", "protonmail.com", "gmx.net", "gmx.com", "web.de", "mail.com", "upcmail.nl",
+        "home.nl", "casema.nl", "chello.nl", "quicknet.nl", "telfort.nl", "caiway.nl", "zeelandnet.nl",
     ]
 
     /// Tweeledige extensies waarbij het registreerbare domein drie labels lang is (`bedrijf.co.uk`).

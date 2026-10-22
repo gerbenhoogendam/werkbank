@@ -277,6 +277,7 @@ struct MailWindowView: View {
                         switch entry {
                         case .mail(let mail):
                             ThreadMailCard(mail: mail,
+                                           showsHistoryByDefault: model.mails.first?.id == mail.id,
                                            isExpanded: model.isExpanded(mail.id),
                                            onToggle: { model.toggle(mail.id) },
                                            onReply: { mode in
@@ -363,6 +364,9 @@ struct MailWindowView: View {
 
 private struct ThreadMailCard: View {
     let mail: ThreadMail
+    /// Er staan geen eerdere mails als blok in het gesprek: dan is de geciteerde geschiedenis de enige plek waar
+    /// die te lezen is, en staat ze meteen open.
+    var showsHistoryByDefault = false
     let isExpanded: Bool
     let onToggle: () -> Void
     let onReply: (ComposeRef.Mode) -> Void
@@ -382,12 +386,7 @@ private struct ThreadMailCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                Circle()
-                    .fill(mail.isSent ? ThingsColor.accent : ThingsColor.textTertiary.opacity(0.5))
-                    .frame(width: 30, height: 30)
-                    .overlay(Text(String(sender.name.prefix(1)).uppercased())
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white))
+                SenderAvatar(name: sender.name, address: sender.address, isSent: mail.isSent)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Text(sender.name)
@@ -414,6 +413,7 @@ private struct ThreadMailCard: View {
 
             if isExpanded { expandedBody }
         }
+        .task(id: mail.id) { if showsHistoryByDefault { showHistory = true } }
         .padding(isExpanded ? 14 : 10)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.backgroundContent))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
