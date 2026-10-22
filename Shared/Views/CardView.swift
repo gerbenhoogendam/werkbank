@@ -49,12 +49,12 @@ struct CardView: View {
             titleRow
             if editing { minutesRow }
             labelRow
-            if let sender = card.senderLine {
+            if let sender = senderName {
                 Text(sender)
-                    .cardFont(.meta)
+                    .font(.system(size: 11))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
                     .contentShape(Rectangle())
                     .onTapGesture { if hasBody { toggleExpanded() } else { open() } }
             }
@@ -93,6 +93,13 @@ struct CardView: View {
         .accessibilityAction(named: "Open de taak") { open() }
     }
 
+    /// Alleen de naam van de afzender ("Naam · adres" → "Naam"); een kaal mailadres tonen we niet.
+    private var senderName: String? {
+        guard let line = card.senderLine, !line.isEmpty else { return nil }
+        if let name = line.components(separatedBy: " · ").first, line.contains(" · ") { return name }
+        return line.contains("@") ? nil : line
+    }
+
     /// Klik op de kaart opent de taak, behalve tijdens bewerken ter plekke.
     private func open() {
         guard !editing, !addingSubtask else { return }
@@ -108,6 +115,10 @@ struct CardView: View {
                     .fill(ThingsColor.accent)
                     .frame(width: 7, height: 7)
                     .accessibilityLabel("Nieuw")
+            }
+            if let domain = card.logoDomain {
+                LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 18)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 4 }
             }
             if editing {
                 TextField("Titel", text: $titleDraft, axis: .vertical)
@@ -197,15 +208,8 @@ struct CardView: View {
     }
 
     @ViewBuilder private var labelRow: some View {
-        if card.logoDomain != nil || card.clientLabel != nil {
-            HStack(spacing: 6) {
-                if let domain = card.logoDomain {
-                    LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 16)
-                }
-                if let label = card.clientLabel {
-                    TagPill(name: label)
-                }
-            }
+        if let label = card.clientLabel {
+            TagPill(name: label)
         }
     }
 
@@ -255,15 +259,21 @@ struct CardView: View {
 
     /// Onderste rij: afronden, timer en (bij een mail) de mailtekst lezen. Op de Mac verschijnt rechts
     /// "Subtaak" zodra je boven de kaart zweeft.
+    /// Onderaan: timer links, de mail in het midden, afvinken rechts.
     private var actionRow: some View {
-        HStack(spacing: 2) {
-            if !editing { completeButton }
-            TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+        HStack(spacing: 0) {
+            HStack(spacing: 2) {
+                TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+                #if os(macOS)
+                if isEditable && !addingSubtask { addSubtaskButton }
+                #endif
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if hasBody { mailButton }
-            Spacer(minLength: 4)
-            #if os(macOS)
-            if isEditable && !addingSubtask { addSubtaskButton }
-            #endif
+            Group {
+                if !editing { completeButton }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
