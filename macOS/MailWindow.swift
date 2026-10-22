@@ -67,6 +67,8 @@ struct MailWindowView: View {
     @State private var replyBody = ""
     /// Het conceptantwoord dat al is overgenomen of overgeslagen.
     @State private var usedDraftID: UUID?
+    /// Een blok waar het gesprek naartoe moet scrollen (bijv. een net gestarte analyse).
+    @State private var scrollTarget: String?
 
     init(ref: MailRef) {
         self.ref = ref
@@ -105,7 +107,8 @@ struct MailWindowView: View {
         await model.load()
         // Geen antwoordblok vooraf: dat komt pas bij ⌘R, Beantwoorden, Allen of Doorsturen.
         if ref.analyze, ClaudeKeychain.read() != nil {
-            model.analyze(messageID: model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID))
+            let target = model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID)
+            if let block = model.analyze(messageID: target) { scrollTarget = "analyse-\(block.id)" }
         }
     }
 
@@ -177,7 +180,9 @@ struct MailWindowView: View {
                 .help("Gesprek archiveren (⇧⌘A)")
 
                 Button {
-                    if let newest = model.mails.last { model.analyze(messageID: newest.id) }
+                    if let newest = model.mails.last, let block = model.analyze(messageID: newest.id) {
+                        scrollTarget = "analyse-\(block.id)"
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         ClaudeSpark().frame(width: 13, height: 13)
@@ -319,6 +324,14 @@ struct MailWindowView: View {
                 .keyboardShortcut("r", modifiers: .command)
                 .opacity(0)
                 .accessibilityHidden(true)
+            }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                // Even wachten tot het nieuwe blok in de lijst staat.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(target, anchor: .top) }
+                    scrollTarget = nil
+                }
             }
             .onChange(of: model.mails.count) { _, count in
                 guard count > 0 else { return }
