@@ -12,8 +12,10 @@ struct MailMoveZone: View {
 
     private let gmail = GmailSession.shared
     private let dragState = MailDragState.shared
-    @State private var hovered: String?
-    @State private var frames: [String: CGRect] = [:]
+    /// Een object en geen losse waarden: SwiftUI houdt tijdens één sleepactie dezelfde delegate vast, die moet dus
+    /// steeds de actuele posities van de vlakken zien.
+    @State private var model = MoveZoneModel()
+    private var hovered: String? { model.hovered }
     private static let space = "mailMoveZone"
 
     private var targets: [String] { gmail.accounts.filter { $0 != dragState.sourceAccount } }
@@ -31,9 +33,8 @@ struct MailMoveZone: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .contentShape(Rectangle())
         .coordinateSpace(name: Self.space)
-        .onPreferenceChange(TileFrames.self) { frames = $0 }
-        .onDrop(of: [.gmailMessage], delegate: MoveDelegate(isOpen: $isOpen, hovered: $hovered, frames: frames,
-                                                            onMove: onMove))
+        .onPreferenceChange(TileFrames.self) { [model] in model.frames = $0 }
+        .onDrop(of: [.gmailMessage], delegate: MoveDelegate(isOpen: $isOpen, model: model, onMove: onMove))
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: isOpen)
         .animation(.spring(response: 0.22, dampingFraction: 0.7), value: hovered)
     }
@@ -66,7 +67,7 @@ struct MailMoveZone: View {
         return HStack(spacing: 10) {
             ZStack {
                 Circle().fill(isOn ? Color.white.opacity(0.22) : ThingsColor.accent.opacity(0.12))
-                Image(systemName: "tray.fill")
+                Image(systemName: isOn ? "tray.and.arrow.down.fill" : "tray.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(isOn ? Color.white : ThingsColor.accent)
             }
@@ -91,15 +92,22 @@ struct MailMoveZone: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isOn ? Color.clear : ThingsColor.separator,
-                              style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                .strokeBorder(isOn ? ThingsColor.accent : ThingsColor.separator,
+                              style: StrokeStyle(lineWidth: isOn ? 2 : 1.5, dash: isOn ? [] : [5, 4]))
         )
         .background(GeometryReader { proxy in
             Color.clear.preference(key: TileFrames.self, value: [email: proxy.frame(in: .named(Self.space))])
         })
-        .scaleEffect(isOn ? 1.03 : 1)
-        .shadow(color: isOn ? ThingsColor.accent.opacity(0.35) : .clear, radius: 8, x: 0, y: 3)
+        .scaleEffect(isOn ? 1.04 : 1)
+        .shadow(color: isOn ? ThingsColor.accent.opacity(0.4) : .clear, radius: 10, x: 0, y: 3)
+        .opacity(hovered == nil || isOn ? 1 : 0.5)
     }
+}
+
+@Observable
+private final class MoveZoneModel {
+    var hovered: String?
+    @ObservationIgnored var frames: [String: CGRect] = [:]
 }
 
 private struct TileFrames: PreferenceKey {
@@ -111,8 +119,7 @@ private struct TileFrames: PreferenceKey {
 
 private struct MoveDelegate: DropDelegate {
     @Binding var isOpen: Bool
-    @Binding var hovered: String?
-    let frames: [String: CGRect]
+    let model: MoveZoneModel
     let onMove: (String, [NSItemProvider]) -> Bool
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.gmailMessage]) }
@@ -124,25 +131,25 @@ private struct MoveDelegate: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         update(info)
-        return DropProposal(operation: hovered == nil ? .cancel : .move)
+        return DropProposal(operation: model.hovered == nil ? .cancel : .move)
     }
 
     func dropExited(info: DropInfo) {
         isOpen = false
-        hovered = nil
+        model.hovered = nil
     }
 
     func performDrop(info: DropInfo) -> Bool {
         update(info)
-        let target = hovered
+        let target = model.hovered
         isOpen = false
-        hovered = nil
+        model.hovered = nil
         guard let target else { return false }
         return onMove(target, info.itemProviders(for: [.gmailMessage]))
     }
 
     private func update(_ info: DropInfo) {
-        let target = frames.first { $0.value.contains(info.location) }?.key
-        if target != hovered { hovered = target }
+        let target = model.frames.first { $0.value.contains(info.location) }?.key
+        if target != model.hovered { model.hovered = target }
     }
 }
