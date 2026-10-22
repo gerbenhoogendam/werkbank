@@ -77,11 +77,11 @@ struct GmailPanel: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "envelope.fill")
-                .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.accent)
+                .foregroundStyle(ThingsColor.accent)
             Text(headerTitle)
                 .lineLimit(1)
                 .thingsFont(.heading)
-                .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.textPrimary)
+                .foregroundStyle(ThingsColor.textPrimary)
             Spacer()
             if gmail.state == .signedIn {
                 if gmail.isLoading {
@@ -93,7 +93,7 @@ struct GmailPanel: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(gmail.isCombined ? Color.white.opacity(0.75) : ThingsColor.textSecondary)
+                    .foregroundStyle(ThingsColor.textSecondary)
                     .help("Inbox verversen")
                 }
                 Button {
@@ -102,7 +102,7 @@ struct GmailPanel: View {
                     Image(systemName: "square.and.pencil")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(gmail.isCombined ? Color.white.opacity(0.75) : ThingsColor.textSecondary)
+                .foregroundStyle(ThingsColor.textSecondary)
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .help("Nieuwe mail (⇧⌘N)")
                 accountMenu
@@ -110,8 +110,6 @@ struct GmailPanel: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
-        // Gecombineerde weergave: de balk is blauw, zodat je ziet dat het niet één mailbox is.
-        .background(gmail.isCombined ? Color(red: 0x1A / 255, green: 0x7C / 255, blue: 0xF9 / 255) : Color.clear)
     }
 
     private var headerTitle: String {
@@ -251,7 +249,7 @@ struct GmailPanel: View {
             }
         }
         .menuStyle(.borderlessButton)
-        .foregroundStyle(gmail.isCombined ? Color.white : ThingsColor.textPrimary)
+        .foregroundStyle(ThingsColor.textPrimary)
         .menuIndicator(.hidden)
         .fixedSize()
         .help(gmail.emailAddress ?? "Account")

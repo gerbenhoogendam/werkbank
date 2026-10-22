@@ -20,8 +20,13 @@ struct SignaturePreferences: View {
             Section {
                 ForEach(gmail.accounts, id: \.self) { email in
                     HStack {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(gmail.displayName(email))
+                        VStack(alignment: .leading, spacing: 2) {
+                            // Naam op de tab boven de maillijst (leeg = het deel vóór de @).
+                            TextField("", text: Binding(get: { gmail.displayNames[email] ?? "" },
+                                                        set: { gmail.rename(email, to: $0) }),
+                                      prompt: Text(GmailSession.shortName(email)))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 220)
                             Text(email).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
