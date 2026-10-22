@@ -13,6 +13,7 @@ struct SignaturePreferences: View {
     @State private var importing = false
     @State private var importError: String?
     @State private var disconnecting: String?
+    @AppStorage(MailSettings.newestAtBottomKey) private var newestAtBottom = true
 
     var body: some View {
         Form {
@@ -39,6 +40,13 @@ struct SignaturePreferences: View {
                 Text("Mailboxen")
             } footer: {
                 Text("De naam op de tab wijzig je via het persoonsicoon in de Mail-balk.")
+            }
+
+            Section("Gesprekken") {
+                Picker("Volgorde", selection: $newestAtBottom) {
+                    Text("Nieuwste mail onderaan").tag(true)
+                    Text("Nieuwste mail bovenaan").tag(false)
+                }
             }
 
             Section {

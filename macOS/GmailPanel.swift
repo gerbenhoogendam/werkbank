@@ -9,7 +9,7 @@ struct GmailPanel: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var context
     /// De mail die is aangeklikt (alleen markering; lezen doe je met dubbelklikken).
-    @State private var selectedID: String?
+    private let selection = MailSelection.shared
     /// Mailbox waarvan de tabnaam wordt gewijzigd.
     @State private var renaming: String?
     @State private var renameText = ""
@@ -58,14 +58,14 @@ struct GmailPanel: View {
     // MARK: Acties
 
     private func archive(_ message: GmailMessageSummary) {
-        if selectedID == message.id { selectedID = nil }
+        if selection.selectedID == message.id { selection.selectedID = nil }
         Task { await gmail.archiveMessage(message, appState: appState) }
     }
 
     /// Veeg naar rechts: een taak met het onderwerp als titel in de Inbox, zonder de mail te openen.
     /// Daarna wordt de mail gearchiveerd, net als bij slepen en bij "Maak taak".
     private func quickTask(_ message: GmailMessageSummary) {
-        if selectedID == message.id { selectedID = nil }
+        if selection.selectedID == message.id { selection.selectedID = nil }
         Task {
             await gmail.createTask(from: message, title: message.subject, minutes: 0, column: .inbox,
                                    context: context, appState: appState)
@@ -110,7 +110,7 @@ struct GmailPanel: View {
         .padding(.horizontal, 12)
         .frame(height: 38)
         // Gecombineerde weergave (⌘0): de balk is donker, zodat je ziet dat het niet één mailbox is.
-        .background(gmail.isCombined ? Color(white: 0.17) : Color.clear)
+        .background(gmail.isCombined ? Color(red: 0x1A / 255, green: 0x7C / 255, blue: 0xF9 / 255) : Color.clear)
     }
 
     // MARK: Tabs
@@ -120,13 +120,13 @@ struct GmailPanel: View {
             ForEach(gmail.accounts, id: \.self) { email in
                 tab(title: gmail.displayName(email),
                     isOn: !gmail.isCombined && gmail.activeAccount == email) {
-                    selectedID = nil
+                    selection.selectedID = nil
                     Task { await gmail.switchAccount(to: email) }
                 }
                 .help(email)
             }
             tab(title: "Alles", isOn: gmail.isCombined) {
-                selectedID = nil
+                selection.selectedID = nil
                 Task { await gmail.showCombined() }
             }
             Spacer(minLength: 0)
@@ -156,13 +156,13 @@ struct GmailPanel: View {
             ZStack {
                 ForEach(Array(gmail.accounts.prefix(9).enumerated()), id: \.element) { index, email in
                     Button("") {
-                        selectedID = nil
+                        selection.selectedID = nil
                         Task { await gmail.switchAccount(to: email) }
                     }
                     .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
                 }
                 Button("") {
-                    selectedID = nil
+                    selection.selectedID = nil
                     Task { await gmail.showCombined() }
                 }
                 .keyboardShortcut("0", modifiers: .command)
@@ -178,7 +178,7 @@ struct GmailPanel: View {
         Menu {
             ForEach(gmail.accounts, id: \.self) { email in
                 Button {
-                    selectedID = nil
+                    selection.selectedID = nil
                     Task { await gmail.switchAccount(to: email) }
                 } label: {
                     if email == gmail.activeAccount, !gmail.isCombined {
@@ -299,9 +299,9 @@ struct GmailPanel: View {
                         ForEach(gmail.messages) { message in
                             GmailRow(message: message,
                                      isBusy: gmail.busyMessageIDs.contains(message.id),
-                                     isSelected: selectedID == message.id,
+                                     isSelected: selection.selectedID == message.id,
                                      accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(gmail.displayName) : nil,
-                                     onSelect: { selectedID = message.id },
+                                     onSelect: { selection.selectedID = message.id },
                                      onArchive: { archive(message) },
                                      onDragStarted: { dragState.begin() })
                                 .trackpadSwipe(
@@ -397,6 +397,10 @@ private struct GmailRow: View {
             .contextMenu {
                 Button("Openen") { open() }
                 Button("Analyseer met Claude") { analyze() }
+                Button("Losse analyse (eigen venster)") {
+                    ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
+                    PanelStore.shared.open(.claude)
+                }
                 Divider()
                 Button("Archiveren", action: onArchive)
             }
@@ -434,9 +438,11 @@ private struct GmailRow: View {
         .padding(.vertical, 8)
     }
 
+    /// Opent het gesprek en zet er een analyse van deze mail in.
     private func analyze() {
-        ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
-        PanelStore.shared.open(.claude)
+        var ref = MailRef(message: message)
+        ref.analyze = true
+        PanelStore.shared.open(.mail(ref))
     }
 
     private static func dateText(_ date: Date) -> String {

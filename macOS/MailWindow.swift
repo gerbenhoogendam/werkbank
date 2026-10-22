@@ -4,7 +4,7 @@ import SwiftUI
 import WebKit
 import WerkbankCore
 
-/// Wat een mailvenster nodig heeft om zijn mail op te halen (waardeert als venster-id, dus één venster per mail).
+/// Wat een mailpaneel nodig heeft om zijn gesprek op te halen.
 struct MailRef: Codable, Hashable {
     var messageID: String
     var threadID: String
@@ -13,6 +13,8 @@ struct MailRef: Codable, Hashable {
     var fromAddress: String?
     /// De mailbox waaruit de mail komt; het paneel kan intussen naar een andere zijn geschakeld.
     var account: String?
+    /// Meteen een analyse door Claude starten van deze mail (slepen naar het Claude-icoon, knop in de lijst).
+    var analyze = false
 
     @MainActor
     init(message: GmailMessageSummary) {
@@ -24,28 +26,52 @@ struct MailRef: Codable, Hashable {
         account = GmailSession.shared.account(for: message.id)
     }
 
+    init(messageID: String, threadID: String, subject: String, fromName: String? = nil, fromAddress: String? = nil,
+         account: String?, analyze: Bool = false) {
+        self.messageID = messageID
+        self.threadID = threadID
+        self.subject = subject
+        self.fromName = fromName
+        self.fromAddress = fromAddress
+        self.account = account
+        self.analyze = analyze
+    }
+
     var summary: GmailMessageSummary {
         GmailMessageSummary(id: messageID, threadID: threadID, fromName: fromName, fromAddress: fromAddress, subject: subject)
     }
 }
 
-/// De mail als echte mailweergave in een paneel boven het hoofdvenster. Aan de drie streepjes bovenaan pak je hem vast en sleep je hem
-/// naar een kolom van het board, naar de agenda (taak plus inplannen) of naar het Claude-icoon in het Gmail-paneel.
+private let claudeTint = Color(red: 0.85, green: 0.47, blue: 0.34)
+
+/// Een heel mailgesprek: alle mails als blokken, analyses van Claude ertussen en onderaan (of bovenaan) het antwoord.
+/// Aan de drie streepjes bovenaan pak je het gesprek vast en sleep je het naar een kolom, de agenda of het Claude-icoon.
 struct MailWindowView: View {
     let ref: MailRef
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
     @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
+    @AppStorage(MailSettings.newestAtBottomKey) private var newestAtBottom = true
 
     private let gmail = GmailSession.shared
 
-    @State private var mail: MailContent?
-    @State private var loadError: String?
+    @State private var model: MailThreadModel
     @State private var wasInList = false
+    @State private var showTaskRow = false
     @State private var taskTitle = ""
     @State private var minutesText = ""
     @State private var targetColumnID = BoardColumn.inboxID
+    /// Op welke mail het antwoordblok antwoordt (en hoe).
+    @State private var replyRef: ComposeRef?
+    @State private var replyBody = ""
+    /// Het conceptantwoord dat al is overgenomen of overgeslagen.
+    @State private var usedDraftID: UUID?
+
+    init(ref: MailRef) {
+        self.ref = ref
+        _model = State(initialValue: MailThreadModel(ref: ref))
+    }
 
     private var isBusy: Bool { gmail.busyMessageIDs.contains(ref.messageID) }
 
@@ -53,20 +79,37 @@ struct MailWindowView: View {
         VStack(spacing: 0) {
             grabber
             header
+            if showTaskRow { taskRow }
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
-            content
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
-            actions
+            conversation
         }
         .background(ThingsColor.backgroundContent)
-        .task(id: ref) { await load() }
-        // Is de mail via slepen een kaart geworden (en dus gearchiveerd), dan is dit venster klaar.
+        .task(id: ref.messageID) { await start() }
+        // Is het gesprek gearchiveerd (of via slepen een kaart geworden en gearchiveerd), dan is dit paneel klaar.
         .onChange(of: gmail.messages) { _, new in
-            if wasInList, !new.contains(where: { $0.id == ref.messageID }) { dismiss() }
+            if wasInList, !new.contains(where: { $0.threadID == ref.threadID }) { dismiss() }
         }
     }
 
     private func dismiss() { PanelStore.shared.closeMail(messageID: ref.messageID) }
+
+    private func start() async {
+        taskTitle = ref.subject
+        wasInList = gmail.messages.contains { $0.threadID == ref.threadID }
+        await model.load()
+        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.reply, for: newest) }
+        if ref.analyze, ClaudeKeychain.read() != nil {
+            model.analyze(messageID: model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID))
+        }
+    }
+
+    private func composeRef(_ mode: ComposeRef.Mode, for mail: ThreadMail) -> ComposeRef {
+        let sender = MailAddress.parse(mail.content.from).valid.first
+        let source = MailRef(messageID: mail.id, threadID: ref.threadID,
+                             subject: mail.content.subject.isEmpty ? ref.subject : mail.content.subject,
+                             fromName: sender?.name, fromAddress: sender?.address, account: ref.account)
+        return ComposeRef(mode: mode, source: source)
+    }
 
     // MARK: Greep
 
@@ -108,89 +151,16 @@ struct MailWindowView: View {
     // MARK: Kop
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(ref.subject.isEmpty ? "(geen onderwerp)" : ref.subject)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(ThingsColor.textPrimary)
                 .textSelection(.enabled)
-            if let mail {
-                headerRow("Van", mail.from)
-                headerRow("Aan", mail.to)
-                headerRow("Cc", mail.cc)
-                headerRow("Datum", mail.date)
-            } else {
-                headerRow("Van", [ref.fromName, ref.fromAddress.map { "<\($0)>" }].compactMap { $0 }.joined(separator: " "))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 10)
-    }
-
-    @ViewBuilder private func headerRow(_ label: String, _ value: String) -> some View {
-        if !value.isEmpty {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(label)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textTertiary)
-                    .frame(width: 44, alignment: .trailing)
-                Text(value)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .textSelection(.enabled)
-                    .lineLimit(2)
-            }
-        }
-    }
-
-    // MARK: Inhoud
-
-    @ViewBuilder private var content: some View {
-        if let loadError {
-            Text(loadError)
-                .thingsFont(.notes)
-                .foregroundStyle(ThingsColor.deadline)
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else if let mail {
-            VStack(spacing: 0) {
-                MailWebView(html: mail.displayHTML, allowRemote: true)
-            }
-        } else {
-            ProgressView("Mail ophalen…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func load() async {
-        taskTitle = ref.subject
-        wasInList = gmail.messages.contains { $0.id == ref.messageID }
-        gmail.note(account: ref.account, forMessageID: ref.messageID)
-        gmail.note(account: ref.account, forMessageID: ref.threadID)
-        do {
-            let raw = try await gmail.rawMessageData(id: ref.messageID)
-            mail = await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value
-        } catch {
-            loadError = "Mail ophalen uit Gmail mislukt: \(error.localizedDescription)"
-        }
-    }
-
-    // MARK: Acties
-
-    private func composeButton(_ title: String, symbol: String, mode: ComposeRef.Mode) -> some View {
-        Button {
-            PanelStore.shared.open(.compose(ComposeRef(mode: mode, source: ref)))
-        } label: {
-            Label(title, systemImage: symbol)
-        }
-        .help(mode == .replyAll ? "Antwoord aan iedereen" : title)
-    }
-
-    private var actions: some View {
-        VStack(alignment: .leading, spacing: 8) {
+                .padding(.trailing, 28)
             HStack(spacing: 10) {
                 Button {
                     Task {
+                        gmail.note(account: ref.account, forMessageID: ref.threadID)
                         await gmail.archiveMessage(ref.summary, appState: appState)
                         dismiss()
                     }
@@ -198,54 +168,481 @@ struct MailWindowView: View {
                     Label("Archiveren", systemImage: "archivebox")
                 }
                 .disabled(isBusy)
+                .help("Gesprek archiveren (⇧⌘A)")
 
                 Button {
-                    ClaudeAnalyzer.shared.analyze(messageID: ref.messageID, subject: ref.subject)
-                    PanelStore.shared.open(.claude)
+                    if let newest = model.mails.last { model.analyze(messageID: newest.id) }
                 } label: {
                     HStack(spacing: 5) {
                         ClaudeSpark().frame(width: 13, height: 13)
-                        Text("Analyseer met Claude")
+                        Text("Analyseer gesprek")
                     }
                 }
-                .disabled(isBusy)
+                .disabled(model.mails.isEmpty)
 
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { showTaskRow.toggle() }
+                } label: {
+                    Label("Taak maken", systemImage: "checkmark.circle")
+                }
                 Spacer()
-
-                composeButton("Beantwoorden", symbol: "arrowshape.turn.up.left", mode: .reply)
-                composeButton("Allen", symbol: "arrowshape.turn.up.left.2", mode: .replyAll)
-                composeButton("Doorsturen", symbol: "arrowshape.turn.up.right", mode: .forward)
-            }
-
-            HStack(spacing: 8) {
-                TextField("Titel van de taak", text: $taskTitle)
-                    .textFieldStyle(.roundedBorder)
-                TextField("0", text: $minutesText)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 44)
-                Text("min")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                Picker("In kolom", selection: $targetColumnID) {
-                    ForEach(columnRecords) { Text($0.title).tag($0.key) }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 150)
-                Button("Maak taak") {
-                    let column = columnRecords.first { $0.key == targetColumnID }?.column ?? .inbox
-                    let minutes = Int(minutesText.trimmingCharacters(in: .whitespaces)) ?? 0
-                    Task {
-                        await gmail.createTask(from: ref.summary, title: taskTitle, minutes: minutes,
-                                               column: column, context: context, appState: appState)
-                        dismiss()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isBusy || taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if model.isLoading { ProgressView().controlSize(.small) }
             }
         }
-        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
+
+    private var taskRow: some View {
+        HStack(spacing: 8) {
+            TextField("Titel van de taak", text: $taskTitle)
+                .textFieldStyle(.roundedBorder)
+            TextField("0", text: $minutesText)
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 44)
+            Text("min")
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textSecondary)
+            Picker("In kolom", selection: $targetColumnID) {
+                ForEach(columnRecords) { Text($0.title).tag($0.key) }
+            }
+            .labelsHidden()
+            .frame(maxWidth: 150)
+            Button("Maak taak") {
+                let column = columnRecords.first { $0.key == targetColumnID }?.column ?? .inbox
+                let minutes = Int(minutesText.trimmingCharacters(in: .whitespaces)) ?? 0
+                Task {
+                    await gmail.createTask(from: ref.summary, title: taskTitle, minutes: minutes,
+                                           column: column, context: context, appState: appState)
+                    dismiss()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isBusy || taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: Gesprek
+
+    private enum Entry: Identifiable {
+        case mail(ThreadMail)
+        case analysis(ThreadAnalysisBlock)
+
+        var id: String {
+            switch self {
+            case .mail(let mail): "mail-\(mail.id)"
+            case .analysis(let block): "analyse-\(block.id)"
+            }
+        }
+    }
+
+    /// Mails op volgorde, met elke analyse direct na de mail waar hij over gaat.
+    private var entries: [Entry] {
+        var result: [Entry] = []
+        let known = Set(model.mails.map(\.id))
+        for mail in model.mails {
+            result.append(.mail(mail))
+            for block in model.analyses.filter({ $0.anchorMessageID == mail.id }).sorted(by: { $0.createdAt < $1.createdAt }) {
+                result.append(.analysis(block))
+            }
+        }
+        for block in model.analyses where !known.contains(block.anchorMessageID) && !model.mails.isEmpty {
+            result.append(.analysis(block))
+        }
+        return newestAtBottom ? result : result.reversed()
+    }
+
+    private var conversation: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 12) {
+                    if let error = model.loadError {
+                        Text(error)
+                            .thingsFont(.notes)
+                            .foregroundStyle(ThingsColor.deadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !newestAtBottom { replyBlock.id("reply") }
+                    ForEach(entries) { entry in
+                        switch entry {
+                        case .mail(let mail):
+                            ThreadMailCard(mail: mail,
+                                           onReply: { mode in
+                                               replyRef = composeRef(mode, for: mail)
+                                               withAnimation { proxy.scrollTo("reply", anchor: .center) }
+                                           },
+                                           onAnalyze: {
+                                               if let block = model.analyze(messageID: mail.id) {
+                                                   withAnimation { proxy.scrollTo("analyse-\(block.id)", anchor: .top) }
+                                               }
+                                           })
+                                .id(entry.id)
+                        case .analysis(let block):
+                            ThreadAnalysisView(block: block,
+                                               onAsk: { model.ask($0, in: block) },
+                                               onInsert: insertIntoReply,
+                                               onRemove: { model.remove(block) })
+                                .id(entry.id)
+                        }
+                    }
+                    if newestAtBottom { replyBlock.id("reply") }
+                }
+                .padding(14)
+            }
+            .scrollIndicators(.hidden)
+            .background(ThingsColor.backgroundSidebar)
+            .onChange(of: model.mails.count) { _, count in
+                guard count > 0 else { return }
+                // Naar de nieuwste mail.
+                let newest = model.mails.last.map { "mail-\($0.id)" } ?? "reply"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    proxy.scrollTo(newest, anchor: newestAtBottom ? .top : .bottom)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var replyBlock: some View {
+        if let replyRef, let mail = model.mails.first(where: { $0.id == replyRef.source?.messageID }) {
+            let draft = model.latestDraft
+            ComposeView(ref: replyRef, embedded: true, preloaded: mail.content, externalBody: $replyBody,
+                        suggestion: draft.flatMap { $0.id == usedDraftID ? nil : $0.text },
+                        onSuggestionDone: { usedDraftID = model.latestDraft?.id },
+                        onSent: {
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.5))
+                                await model.load()
+                                if let newest = model.mails.last { self.replyRef = composeRef(.reply, for: newest) }
+                            }
+                        })
+                .id(replyRef.id)
+                .frame(height: 430)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.accent.opacity(0.5)))
+        }
+    }
+
+    /// "Concept in antwoord": voegt de tekst toe onder wat er al staat.
+    private func insertIntoReply(_ text: String) {
+        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.reply, for: newest) }
+        let current = replyBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        replyBody = current.isEmpty ? text : replyBody + "\n\n" + text
+        usedDraftID = model.latestDraft?.id
+    }
+}
+
+// MARK: - Eén mail in het gesprek
+
+private struct ThreadMailCard: View {
+    let mail: ThreadMail
+    let onReply: (ComposeRef.Mode) -> Void
+    let onAnalyze: () -> Void
+
+    @State private var showHistory = false
+    @State private var bodyHeight: CGFloat = 40
+    @State private var historyHeight: CGFloat = 40
+
+    private var sender: (name: String, address: String) {
+        if let first = MailAddress.parse(mail.content.from).valid.first {
+            return (first.name ?? first.address, first.address)
+        }
+        return (mail.content.from, "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(mail.isSent ? ThingsColor.accent : ThingsColor.textTertiary.opacity(0.5))
+                    .frame(width: 30, height: 30)
+                    .overlay(Text(String(sender.name.prefix(1)).uppercased())
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(sender.name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(ThingsColor.textPrimary)
+                        Spacer()
+                        Text(Self.dateText(mail.date))
+                            .thingsFont(.metadata)
+                            .foregroundStyle(ThingsColor.textTertiary)
+                    }
+                    recipients
+                }
+            }
+
+            AutoHeightMailWebView(html: mail.mainHTML, height: $bodyHeight)
+                .frame(height: bodyHeight)
+
+            if let history = mail.historyHTML {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { showHistory.toggle() }
+                } label: {
+                    Label(showHistory ? "Verberg geschiedenis" : "Toon geschiedenis", systemImage: "clock.arrow.circlepath")
+                        .thingsFont(.metadata)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(ThingsColor.accent)
+                if showHistory {
+                    AutoHeightMailWebView(html: history, height: $historyHeight)
+                        .frame(height: historyHeight)
+                }
+            }
+
+            HStack(spacing: 14) {
+                Spacer()
+                action("Beantwoorden", "arrowshape.turn.up.left") { onReply(.reply) }
+                action("Allen", "arrowshape.turn.up.left.2") { onReply(.replyAll) }
+                action("Doorsturen", "arrowshape.turn.up.right") { onReply(.forward) }
+                Button(action: onAnalyze) {
+                    HStack(spacing: 4) {
+                        ClaudeSpark().frame(width: 12, height: 12)
+                        Text("Analyse").thingsFont(.metadata)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(ThingsColor.textSecondary)
+                .help("Laat Claude deze mail analyseren, met het hele gesprek als context")
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.backgroundContent))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
+    }
+
+    @ViewBuilder private var recipients: some View {
+        let to = mail.content.to
+        let cc = mail.content.cc
+        if !to.isEmpty || !cc.isEmpty {
+            Text([to.isEmpty ? nil : "Aan: \(Self.names(to))", cc.isEmpty ? nil : "Cc: \(Self.names(cc))"]
+                .compactMap { $0 }.joined(separator: "   "))
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.accent)
+                .lineLimit(2)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func action(_ title: String, _ symbol: String, perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
+            Label(title, systemImage: symbol).thingsFont(.metadata)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(ThingsColor.textSecondary)
+    }
+
+    private static func names(_ list: String) -> String {
+        let parsed = MailAddress.parse(list).valid
+        guard !parsed.isEmpty else { return list }
+        return parsed.map { $0.name ?? $0.address }.joined(separator: ", ")
+    }
+
+    private static func dateText(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).hour().minute().locale(Locale(identifier: "nl_NL")))
+    }
+}
+
+// MARK: - Analyse door Claude in het gesprek
+
+private struct ThreadAnalysisView: View {
+    let block: ThreadAnalysisBlock
+    let onAsk: (String) -> Void
+    let onInsert: (String) -> Void
+    let onRemove: () -> Void
+
+    @State private var question = ""
+    @State private var isExpanded = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ClaudeSpark().frame(width: 18, height: 18)
+                Text("Analyse door Claude")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                Text("\(block.modelTitle) · \(block.createdAt.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "nl_NL"))))")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textTertiary)
+                Spacer()
+                if block.phase.isBusy { ProgressView().controlSize(.small) }
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(ThingsColor.textSecondary)
+                Menu {
+                    if block.phase.isBusy { Button("Stoppen") { block.cancel() } }
+                    Button("Verwijder analyse", role: .destructive, action: onRemove)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+
+            if isExpanded {
+                ForEach(block.turns) { turn in
+                    if let q = turn.question { bubble(q) }
+                    MarkdownLite(text: turn.answer)
+                }
+                if let q = block.liveQuestion { bubble(q) }
+                status
+                if !block.liveAnswer.isEmpty { MarkdownLite(text: block.liveAnswer) }
+
+                if let usage = block.usage {
+                    Text(usage).thingsFont(.metadata).foregroundStyle(ThingsColor.textTertiary)
+                }
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Vervolgvraag of extra context…", text: $question, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...4)
+                        .onSubmit(send)
+                    Button("Stuur", action: send)
+                        .disabled(block.phase.isBusy || block.turns.isEmpty
+                                  || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if let draft = block.draft {
+                        Button {
+                            onInsert(draft)
+                        } label: {
+                            Label("Concept in antwoord", systemImage: "text.append")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(claudeTint)
+                        .help("Voegt het conceptantwoord toe aan je antwoord onderaan")
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(claudeTint.opacity(0.07)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(claudeTint.opacity(0.45)))
+    }
+
+    private func send() {
+        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !block.phase.isBusy, !block.turns.isEmpty else { return }
+        question = ""
+        onAsk(text)
+    }
+
+    private func bubble(_ text: String) -> some View {
+        Text(text)
+            .thingsFont(.notes)
+            .foregroundStyle(ThingsColor.textPrimary)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(ThingsColor.backgroundContent))
+    }
+
+    @ViewBuilder private var status: some View {
+        switch block.phase {
+        case .preparing, .waiting:
+            Label("Claude leest het gesprek en de bijlagen…", systemImage: "ellipsis.circle")
+                .thingsFont(.metadata).foregroundStyle(ThingsColor.textSecondary)
+        case .failed(let message):
+            Text(message)
+                .thingsFont(.notes)
+                .foregroundStyle(ThingsColor.deadline)
+                .textSelection(.enabled)
+        default:
+            EmptyView()
+        }
+    }
+}
+
+// MARK: - HTML met meegroeiende hoogte
+
+/// Mail-HTML in een gesprek: zo hoog als de inhoud (gemeten na het laden), scrollen gaat naar het gesprek eromheen.
+struct AutoHeightMailWebView: NSViewRepresentable {
+    let html: String
+    @Binding var height: CGFloat
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> PassthroughWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        let view = PassthroughWebView(frame: .zero, configuration: configuration)
+        view.navigationDelegate = context.coordinator
+        view.postsFrameChangedNotifications = true
+        context.coordinator.observe(view)
+        return view
+    }
+
+    func updateNSView(_ view: PassthroughWebView, context: Context) {
+        context.coordinator.parent = self
+        let document = MailWebView.document(html, allowRemote: true, margin: "0")
+        guard context.coordinator.lastDocument != document else { return }
+        context.coordinator.lastDocument = document
+        view.loadHTMLString(document, baseURL: nil)
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        var parent: AutoHeightMailWebView
+        var lastDocument = ""
+        private weak var webView: WKWebView?
+        private var lastWidth: CGFloat = 0
+        private var observer: NSObjectProtocol?
+
+        init(_ parent: AutoHeightMailWebView) { self.parent = parent }
+
+        deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
+
+        func observe(_ view: WKWebView) {
+            webView = view
+            observer = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: view,
+                                                              queue: .main) { [weak self] _ in
+                guard let self, let view = self.webView, abs(view.frame.width - self.lastWidth) > 1 else { return }
+                self.lastWidth = view.frame.width
+                self.measure()
+            }
+        }
+
+        func measure() {
+            // Script van de app zelf (niet van de mail): mag ook als JavaScript voor de inhoud uit staat.
+            webView?.evaluateJavaScript("Math.ceil(document.body.scrollHeight)", in: nil, in: .defaultClient) { [weak self] result in
+                guard let self, case .success(let value) = result else { return }
+                let height = (value as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
+                if height > 0, abs(height - self.parent.height) > 1 {
+                    DispatchQueue.main.async { self.parent.height = height + 4 }
+                }
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            measure()
+            // Afbeeldingen en lettertypen kunnen de hoogte nog veranderen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.measure() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.measure() }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if action.navigationType == .linkActivated {
+                if let url = action.request.url, ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") {
+                    NSWorkspace.shared.open(url)
+                }
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
+        }
+    }
+}
+
+/// WKWebView die scrollen doorgeeft aan het gesprek eromheen.
+final class PassthroughWebView: WKWebView {
+    override func scrollWheel(with event: NSEvent) {
+        nextResponder?.scrollWheel(with: event)
     }
 }
 
@@ -274,7 +671,7 @@ struct MailWebView: NSViewRepresentable {
         view.loadHTMLString(document, baseURL: nil)
     }
 
-    static func document(_ inner: String, allowRemote: Bool) -> String {
+    static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px") -> String {
         let images = allowRemote ? "img-src data: https: http:" : "img-src data:"
         return """
         <!doctype html><html><head><meta charset="utf-8">
@@ -282,7 +679,7 @@ struct MailWebView: NSViewRepresentable {
         <meta name="color-scheme" content="light">
         <style>
         html { color-scheme: light; }
-        body { margin: 18px 22px; background: #fff; color: #1d1d1f;
+        body { margin: \(margin); background: #fff; color: #1d1d1f;
                font: 14px -apple-system, "Helvetica Neue", sans-serif; line-height: 1.45; word-wrap: break-word; }
         img { max-width: 100%; height: auto; }
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }

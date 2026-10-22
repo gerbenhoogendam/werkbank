@@ -14,6 +14,27 @@ struct ComposeRef: Hashable {
 /// Mail opstellen als paneel boven het hoofdvenster. Verstuurt via de Gmail API, met de handtekening uit Voorkeuren.
 struct ComposeView: View {
     let ref: ComposeRef
+    /// In een gesprek: geen eigen titel en geen citaatvoorbeeld (het gesprek staat erboven).
+    var embedded = false
+    /// De mail waarop wordt geantwoord, als die al is opgehaald.
+    var preloaded: MailContent?
+    /// De tekst van de mail buiten dit venster bewaren (blijft staan als je een andere mail kiest om op te antwoorden).
+    var externalBody: Binding<String>?
+    /// Conceptantwoord van Claude, lichtgrijs; Tab neemt het over, zelf typen laat het vallen.
+    var suggestion: String?
+    var onSuggestionDone: (() -> Void)?
+    var onSent: (() -> Void)?
+
+    init(ref: ComposeRef, embedded: Bool = false, preloaded: MailContent? = nil, externalBody: Binding<String>? = nil,
+         suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil) {
+        self.ref = ref
+        self.embedded = embedded
+        self.preloaded = preloaded
+        self.externalBody = externalBody
+        self.suggestion = suggestion
+        self.onSuggestionDone = onSuggestionDone
+        self.onSent = onSent
+    }
 
     @Environment(AppState.self) private var appState
     private let gmail = GmailSession.shared
@@ -26,7 +47,7 @@ struct ComposeView: View {
     @State private var ccText = ""
     @State private var bccText = ""
     @State private var subject = ""
-    @State private var bodyText = ""
+    @State private var localBody = ""
     @State private var attachments: [MailAttachment] = []
     @State private var useSignature = true
     @State private var original: MailContent?
@@ -35,8 +56,12 @@ struct ComposeView: View {
     @State private var confirmSend = false
     @State private var importing = false
     @State private var errorText: String?
+    @State private var suggestionDismissed = false
 
     private static let maxAttachmentBytes = 18_000_000
+
+    private var bodyBinding: Binding<String> { externalBody ?? $localBody }
+    private var bodyText: String { bodyBinding.wrappedValue }
 
     private var totalAttachmentBytes: Int { attachments.reduce(0) { $0 + $1.data.count } }
     private var isReply: Bool { ref.mode == .reply || ref.mode == .replyAll }
@@ -46,7 +71,7 @@ struct ComposeView: View {
             fields
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
             if isLoading {
-                ProgressView("Mail ophalen…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView("Mail ophalen…").frame(maxWidth: .infinity, maxHeight: embedded ? 160 : .infinity)
             } else {
                 editor
             }
@@ -55,6 +80,7 @@ struct ComposeView: View {
         }
         .background(ThingsColor.backgroundContent)
         .task { await prepare() }
+        .onChange(of: suggestion) { _, _ in suggestionDismissed = false }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -85,7 +111,7 @@ struct ComposeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 16)
                 .padding(.trailing, 36)
-                .padding(.vertical, 10)
+                .padding(.vertical, embedded ? 8 : 10)
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
             row("Van") {
                 if gmail.accounts.count > 1 {
@@ -131,15 +157,37 @@ struct ComposeView: View {
 
     // MARK: Tekst
 
+    /// Staat de suggestie van Claude nog open (tot je Tab drukt of zelf begint te typen)?
+    private var activeSuggestion: String? {
+        guard let suggestion, !suggestion.isEmpty, !suggestionDismissed else { return nil }
+        return suggestion
+    }
+
     private var editor: some View {
         VStack(spacing: 0) {
-            TextEditor(text: $bodyText)
-                .font(.system(size: 13))
-                .scrollContentBackground(.hidden)
-                .focused($focus, equals: .body)
+            ReplyTextView(text: bodyBinding,
+                          suggestion: bodyText.isEmpty ? activeSuggestion : nil,
+                          focusOnAppear: isReply,
+                          onTab: acceptSuggestion,
+                          onTyped: { if activeSuggestion != nil { dismissSuggestion() } })
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-            if let original, !original.quotableText.isEmpty {
+                .frame(minHeight: embedded ? 180 : nil)
+            if !bodyText.isEmpty, let activeSuggestion {
+                // Er staat al tekst: de suggestie eronder, Tab voegt hem toe.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Suggestie van Claude · Tab voegt toe")
+                        .thingsFont(.metadata)
+                        .foregroundStyle(ThingsColor.textTertiary)
+                    Text(activeSuggestion)
+                        .font(.system(size: 13))
+                        .foregroundStyle(ThingsColor.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 17)
+                .padding(.bottom, 8)
+            }
+            if !embedded, let original, !original.quotableText.isEmpty {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
                 ScrollView {
                     Text(original.quotableText)
@@ -153,6 +201,20 @@ struct ComposeView: View {
                 .background(ThingsColor.backgroundSidebar)
             }
         }
+    }
+
+    private func acceptSuggestion() -> Bool {
+        guard let activeSuggestion else { return false }
+        let current = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        bodyBinding.wrappedValue = current.isEmpty ? activeSuggestion : bodyText + "\n\n" + activeSuggestion
+        suggestionDismissed = true
+        onSuggestionDone?()
+        return true
+    }
+
+    private func dismissSuggestion() {
+        suggestionDismissed = true
+        onSuggestionDone?()
     }
 
     // MARK: Onderkant
@@ -193,6 +255,14 @@ struct ComposeView: View {
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(isSending || isLoading)
+                    .help("Versturen (⌘↩ of ⇧⌘D)")
+                // ⇧⌘D: versturen, net als in Mail.
+                Button("") { validateThenConfirm() }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .disabled(isSending || isLoading)
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
             }
         }
         .padding(12)
@@ -206,13 +276,18 @@ struct ComposeView: View {
             focus = .to
             return
         }
-        isLoading = true
+        isLoading = preloaded == nil
         defer { isLoading = false }
         gmail.note(account: source.account, forMessageID: source.messageID)
         gmail.note(account: source.account, forMessageID: source.threadID)
         do {
-            let raw = try await gmail.rawMessageData(id: source.messageID)
-            let mail = await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value
+            let mail: MailContent
+            if let preloaded {
+                mail = preloaded
+            } else {
+                let raw = try await gmail.rawMessageData(id: source.messageID)
+                mail = await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value
+            }
             original = mail
             subject = ReplyBuilder.subject(mail.subject.isEmpty ? source.subject : mail.subject, forward: ref.mode == .forward)
             if isReply {
@@ -292,7 +367,13 @@ struct ComposeView: View {
         do {
             try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
             appState.showToast("Mail verzonden")
-            PanelStore.shared.close(.compose(ref))
+            if embedded {
+                bodyBinding.wrappedValue = ""
+                attachments = []
+                onSent?()
+            } else {
+                PanelStore.shared.close(.compose(ref))
+            }
         } catch {
             errorText = "Versturen mislukt: \(error.localizedDescription)"
         }

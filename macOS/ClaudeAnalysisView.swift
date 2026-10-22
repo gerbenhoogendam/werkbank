@@ -52,8 +52,10 @@ struct ClaudeDropTarget: View {
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
                     guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
                     Task { @MainActor in
-                        ClaudeAnalyzer.shared.analyze(messageID: payload.messageID, subject: payload.subject ?? "")
-                        PanelStore.shared.open(.claude)
+                        let ref = MailRef(messageID: payload.messageID, threadID: payload.threadID,
+                                          subject: payload.subject ?? "",
+                                          account: GmailSession.shared.account(for: payload.messageID), analyze: true)
+                        PanelStore.shared.open(.mail(ref))
                     }
                 }
                 return true

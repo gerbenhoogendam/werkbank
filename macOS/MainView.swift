@@ -95,6 +95,13 @@ struct MainView: View {
             DragOverlay()
             ToastOverlay(message: appState.toast)
 
+            // ⇧⌘A: open gesprek of geselecteerde mail archiveren.
+            Button("") { MailCommands.archiveFocused(appState: appState) }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+
             // Esc: annuleert een lopend concept op de agenda.
             Button("") { drag.draft = nil }
                 .keyboardShortcut(.cancelAction)

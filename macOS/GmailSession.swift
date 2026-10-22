@@ -513,6 +513,25 @@ final class GmailSession {
         _ = try await api("messages/send", method: "POST", body: body, account: account)
     }
 
+    /// De mails van een gesprek (oudste eerst, zonder concepten): id, ontvangstmoment en labels.
+    func threadMessages(threadID: String, account: String?) async throws -> [(id: String, date: Date, labels: [String])] {
+        note(account: account, forMessageID: threadID)
+        let data = try await api("threads/\(threadID)", query: [URLQueryItem(name: "format", value: "minimal")],
+                                 account: account ?? messageAccount[threadID])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let list = json["messages"] as? [[String: Any]] else { throw GmailError.invalidResponse }
+        var result: [(id: String, date: Date, labels: [String])] = []
+        for item in list {
+            guard let id = item["id"] as? String else { continue }
+            let labels = item["labelIds"] as? [String] ?? []
+            if labels.contains("DRAFT") { continue }
+            let millis = Double(item["internalDate"] as? String ?? "") ?? 0
+            note(account: account ?? messageAccount[threadID], forMessageID: id)
+            result.append((id, Date(timeIntervalSince1970: millis / 1000), labels))
+        }
+        return result.sorted { $0.date < $1.date }
+    }
+
     /// De ruwe mail (RFC 822), bijvoorbeeld voor de analyse met Claude.
     func rawMessageData(id: String) async throws -> Data { try await rawMessage(id: id) }
 
