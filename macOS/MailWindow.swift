@@ -97,7 +97,7 @@ struct MailWindowView: View {
         taskTitle = ref.subject
         wasInList = gmail.messages.contains { $0.threadID == ref.threadID }
         await model.load()
-        if replyRef == nil, let newest = model.mails.last { replyRef = composeRef(.replyAll, for: newest) }
+        // Geen antwoordblok vooraf: dat komt pas bij ⌘R, Beantwoorden, Allen of Doorsturen.
         if ref.analyze, ClaudeKeychain.read() != nil {
             model.analyze(messageID: model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID))
         }
