@@ -144,6 +144,11 @@ final class ThreadAnalysisBlock: Identifiable {
         StoredAnalysis(id: id, anchorMessageID: anchorMessageID, createdAt: createdAt, model: modelName, turns: turns, usage: usage)
     }
 
+    /// Eén of twee regels: de samenvatting uit de analyse zelf.
+    var summary: String? {
+        turns.first.flatMap { ClaudeSummary.extract(from: $0.answer) }
+    }
+
     /// Het nieuwste conceptantwoord uit de antwoorden.
     var draft: String? {
         for turn in turns.reversed() {

@@ -513,7 +513,17 @@ private struct ThreadAnalysisView: View {
     let onRemove: () -> Void
 
     @State private var question = ""
-    @State private var isExpanded = true
+    @State private var isExpanded: Bool
+
+    init(block: ThreadAnalysisBlock, onAsk: @escaping (String) -> Void, onInsert: @escaping (String) -> Void,
+         onRemove: @escaping () -> Void) {
+        self.block = block
+        self.onAsk = onAsk
+        self.onInsert = onInsert
+        self.onRemove = onRemove
+        // Een nieuwe analyse staat open; een eerdere (bewaarde) staat dicht met alleen de samenvatting.
+        _isExpanded = State(initialValue: block.turns.isEmpty || block.phase.isBusy)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -543,6 +553,16 @@ private struct ThreadAnalysisView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() } }
+
+            if !isExpanded, let summary = block.summary {
+                Text(summary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .lineLimit(2)
+                    .padding(.leading, 26)
             }
 
             if isExpanded {

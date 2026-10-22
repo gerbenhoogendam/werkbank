@@ -89,6 +89,36 @@ public enum QuoteSplitter {
     }
 }
 
+/// Korte samenvatting uit een analyse van Claude: de tekst onder "## Samenvatting", zonder Markdown.
+public enum ClaudeSummary {
+    public static func extract(from answer: String) -> String? {
+        let lines = answer.components(separatedBy: "\n")
+        let start = lines.firstIndex {
+            let t = $0.trimmingCharacters(in: .whitespaces).lowercased()
+            return t.hasPrefix("#") && t.contains("samenvatting")
+        }
+        var body: [String] = []
+        if let start {
+            for line in lines[(start + 1)...] {
+                let t = line.trimmingCharacters(in: .whitespaces)
+                if t.hasPrefix("#") { break }
+                if !t.isEmpty { body.append(t) }
+            }
+        } else if let first = lines.first(where: {
+            let t = $0.trimmingCharacters(in: .whitespaces)
+            return !t.isEmpty && !t.hasPrefix("#")
+        }) {
+            body = [first.trimmingCharacters(in: .whitespaces)]
+        }
+        let text = body.joined(separator: " ")
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "__", with: "")
+            .replacingOccurrences(of: "`", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-*• ").union(.whitespaces))
+        return text.isEmpty ? nil : text
+    }
+}
+
 /// Haalt het conceptantwoord uit een analyse van Claude (het kopje "## Conceptantwoord").
 public enum ClaudeDraft {
     public static func extract(from answer: String) -> String? {

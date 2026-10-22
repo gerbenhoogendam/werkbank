@@ -38,6 +38,12 @@ final class MailThreadingTests: XCTestCase {
         XCTAssertNotNil(QuoteSplitter.split(html: reply, subject: "Re: Surface").history)
     }
 
+    func testSummaryExtraction() {
+        let answer = "## Samenvatting\nKlant vraagt om een **offerte** voor\nnieuwe switches.\n\n## Wat zie ik\nIets"
+        XCTAssertEqual(ClaudeSummary.extract(from: answer), "Klant vraagt om een offerte voor nieuwe switches.")
+        XCTAssertEqual(ClaudeSummary.extract(from: "Gewoon een antwoord.\nMeer."), "Gewoon een antwoord.")
+    }
+
     func testDraftExtraction() {
         let answer = "## Samenvatting\nIets\n\n## Conceptantwoord\nBeste Jan,\n\nDank je.\n\n## Extra\nniet"
         XCTAssertEqual(ClaudeDraft.extract(from: answer), "Beste Jan,\n\nDank je.")
