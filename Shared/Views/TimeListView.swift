@@ -1,5 +1,10 @@
 import SwiftData
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 import UniformTypeIdentifiers
 import WerkbankCore
 
@@ -271,6 +276,8 @@ struct TimeEntryRow: View {
     let entry: TimeEntry
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
+    /// Opengeklapt: klant, case en uitgevoerd, elk met een kopieerknop (voor het boekhoudpakket).
+    @State private var expanded = false
 
     private var writtenBinding: Binding<TodoStatus> {
         Binding(
@@ -280,6 +287,18 @@ struct TimeEntryRow: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            summaryRow
+            if expanded, entry.status == .finished {
+                BookingDetails(entry: entry)
+                    .padding(.leading, 30)
+                    .padding(.bottom, 10)
+            }
+        }
+        .opacity(entry.isWritten && !expanded ? 0.55 : 1)
+    }
+
+    private var summaryRow: some View {
         HStack(spacing: 8) {
             TodoCheckbox(status: writtenBinding, title: entry.title)
                 .disabled(entry.status != .finished)
@@ -296,7 +315,27 @@ struct TimeEntryRow: View {
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(1)
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard entry.status == .finished else { return }
+                withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+            }
             Spacer(minLength: 4)
+
+            if entry.status == .finished {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .foregroundStyle(ThingsColor.textTertiary)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(expanded ? "Inklappen" : "Klant, case en uitgevoerd tonen om te kopiëren")
+            }
 
             Text(trailingTime)
                 .thingsFont(.todoTitle)
@@ -306,7 +345,6 @@ struct TimeEntryRow: View {
             controls
         }
         .frame(minHeight: 44)
-        .opacity(entry.isWritten ? 0.55 : 1)
         .help(entry.status == .finished
               ? entry.workDescription + (entry.correctionSeconds > 0
                   ? "\nGemeten \(Billing.formatHM(entry.accumulated)) u, correctie −\(Int((entry.correctionSeconds / 60).rounded())) min"
@@ -319,8 +357,7 @@ struct TimeEntryRow: View {
                 }
             }
             Button("Verwijderen", role: .destructive) {
-                context.delete(entry)
-                TimerService.save(context)
+                TimerService.discard(entry, in: context)   // via discard: ⌘Z zet hem terug
             }
         }
     }
@@ -356,5 +393,85 @@ struct TimeEntryRow: View {
         case .running, .finished:
             EmptyView()
         }
+    }
+}
+
+// MARK: - Voor het boekhoudpakket
+
+/// Klant, case en uitgevoerd van een afgeronde regel: aan te passen en per veld te kopiëren.
+private struct BookingDetails: View {
+    @Bindable var entry: TimeEntry
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            field("Klant", copy: entry.client == TimerService.noClient ? "" : entry.client) {
+                TextField("Klantnaam", text: Binding(
+                    get: { entry.client == TimerService.noClient ? "" : entry.client },
+                    set: { entry.client = TimerService.normalized($0); TimerService.save(context) }))
+            }
+            field("Case", copy: entry.title) {
+                TextField("Zeer korte omschrijving", text: Binding(
+                    get: { entry.title },
+                    set: { entry.title = $0; TimerService.save(context) }))
+            }
+            field("Uitgevoerd", copy: entry.workDescription) {
+                TextField("Wat er is gedaan", text: Binding(
+                    get: { entry.workDescription },
+                    set: { entry.workDescription = $0; TimerService.save(context) }), axis: .vertical)
+                    .lineLimit(1...8)
+            }
+            field("Uren", copy: Billing.formatHours(TimerService.billedHours(entry))) {
+                Text(Billing.formatHours(TimerService.billedHours(entry)))
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+        }
+        .thingsFont(.notes)
+    }
+
+    private func field<Content: View>(_ label: String, copy text: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label)
+                .thingsFont(.metadata)
+                .foregroundStyle(ThingsColor.textTertiary)
+                .frame(width: 70, alignment: .leading)
+            content()
+                .textFieldStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            CopyButton(text: text)
+        }
+    }
+}
+
+/// Kopieert tekst naar het klembord; het icoon wordt even een vinkje.
+struct CopyButton: View {
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            #if os(macOS)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            #else
+            UIPasteboard.general.string = text
+            #endif
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.2))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(copied ? Color.green : ThingsColor.textSecondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(text.isEmpty)
+        .help("Kopiëren")
+        .accessibilityLabel("Kopieer")
     }
 }

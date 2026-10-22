@@ -15,6 +15,8 @@ struct StopSheet: View {
     @State private var correctionText = ""
     @State private var confirmDelete = false
     @State private var workDescription = ""
+    @State private var caseTitle = ""
+    @State private var clientName = ""
     @State private var descriptionError = false
     @State private var shakes: CGFloat = 0
     @FocusState private var descriptionFocused: Bool
@@ -71,11 +73,9 @@ struct StopSheet: View {
                 Text("Werkzaamheden omschrijven")
                     .thingsFont(.listTitle)
                     .foregroundStyle(ThingsColor.textPrimary)
-                Text("\(entry.title) · \(entry.client)")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .lineLimit(1)
             }
+
+            bookingFields
 
             endTimeSection
             correctionSection
@@ -105,6 +105,8 @@ struct StopSheet: View {
         .onAppear {
             startText = DutchDate.time(firstStart)
             endText = DutchDate.time(defaultEnd)
+            caseTitle = entry.title
+            clientName = entry.client == TimerService.noClient ? "" : entry.client
             descriptionFocused = true
         }
         .confirmationDialog("Tijdregel verwijderen?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -258,11 +260,36 @@ struct StopSheet: View {
         return "Eerste start \(first) · laatst gestart \(last) · daarna \(Billing.formatHM(evaluation.continuousSeconds)) onafgebroken"
     }
 
+    // MARK: Klant en case
+
+    /// Zoals de regel in het boekhoudpakket komt: klant, case (zeer kort) en wat er is uitgevoerd.
+    private var bookingFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            bookingRow("Klant") {
+                TextField("Klantnaam", text: $clientName)
+            }
+            bookingRow("Case") {
+                TextField("Zeer korte omschrijving", text: $caseTitle)
+            }
+        }
+    }
+
+    private func bookingRow<Field: View>(_ label: String, @ViewBuilder field: () -> Field) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .thingsFont(.heading)
+                .foregroundStyle(ThingsColor.accent)
+                .frame(width: 84, alignment: .leading)
+            field()
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
     // MARK: Omschrijving
 
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Omschrijving")
+            Text("Uitgevoerd")
                 .thingsFont(.heading)
                 .foregroundStyle(ThingsColor.accent)
 
@@ -282,7 +309,7 @@ struct StopSheet: View {
                 }
 
             if descriptionError {
-                Text("Vul een omschrijving in (minimaal 3 tekens).")
+                Text("Vul in wat er is uitgevoerd (minimaal 3 tekens).")
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.error)
             }
@@ -311,7 +338,7 @@ struct StopSheet: View {
                             subtracted: result.subtractedSeconds,
                             startAdjust: start.adjustmentSeconds,
                             newFirstStart: start.adjustmentSeconds != 0 ? start.start : nil,
-                            correction: correction, in: context)
+                            correction: correction, caseTitle: caseTitle, client: clientName, in: context)
         appState.stopContext = nil
         appState.showToast("Tijd vastgelegd, klaar om te factureren")
     }

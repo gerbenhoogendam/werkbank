@@ -78,7 +78,13 @@ enum TimerService {
     ///   - correction: aftrek op de te factureren tijd; de gemeten tijd blijft staan.
     static func finish(_ entry: TimeEntry, description: String, end: Date, subtracted: TimeInterval,
                        startAdjust: TimeInterval = 0, newFirstStart: Date? = nil, correction: TimeInterval = 0,
+                       caseTitle: String? = nil, client: String? = nil,
                        in context: ModelContext) {
+        // Case (korte omschrijving) en klant zoals ze in het boekhoudpakket komen.
+        if let caseTitle, !caseTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            entry.title = caseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let client { entry.client = normalized(client) }
         entry.accumulated = max(0, entry.accumulated - subtracted + startAdjust)
         if let newFirstStart { entry.firstStart = newFirstStart }
         entry.correctionSeconds = max(0, correction)
