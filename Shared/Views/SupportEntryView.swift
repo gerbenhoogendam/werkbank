@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// Snelle support-invoer: klant, omschrijving, duur. Wordt gebruikt in de menubalk (macOS),
+/// Snelle support-invoer: klant, case, uitgevoerd en duur (zoals de regel in het boekhoudpakket komt). Wordt gebruikt in de menubalk (macOS),
 /// het "+"-popover van Tijd schrijven en het invoerblad op iOS.
 struct SupportEntryView: View {
     var onFinished: () -> Void = {}
@@ -11,10 +11,12 @@ struct SupportEntryView: View {
     @Query(sort: \TimeEntry.createdAt, order: .reverse) private var entries: [TimeEntry]
 
     @State private var client = ""
-    @State private var workDescription = ""
+    @State private var caseTitle = ""
+    @State private var performed = ""
     @State private var customMinutes = ""
     @State private var quickMinutes = 15
-    @State private var showError = false
+    @State private var caseError = false
+    @State private var performedError = false
     @FocusState private var clientFocused: Bool
     @FocusState private var minutesFocused: Bool
 
@@ -54,14 +56,29 @@ struct SupportEntryView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                label("Omschrijving")
-                TextField("Wat doe je?", text: $workDescription)
+                label("Case")
+                TextField("Zeer korte omschrijving", text: $caseTitle)
                     .textFieldStyle(.roundedBorder)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6).strokeBorder(showError ? ThingsColor.error : .clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 6).strokeBorder(caseError ? ThingsColor.error : .clear, lineWidth: 1.5)
                     )
-                if showError {
-                    Text("Vul een omschrijving in.")
+                if caseError {
+                    Text("Vul een case in.")
+                        .thingsFont(.metadata)
+                        .foregroundStyle(ThingsColor.error)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                label("Uitgevoerd")
+                TextField("Wat heb je gedaan? (mag later, bij het stoppen)", text: $performed, axis: .vertical)
+                    .lineLimit(2...6)
+                    .textFieldStyle(.roundedBorder)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6).strokeBorder(performedError ? ThingsColor.error : .clear, lineWidth: 1.5)
+                    )
+                if performedError {
+                    Text("Vul in wat er is uitgevoerd (minimaal 3 tekens).")
                         .thingsFont(.metadata)
                         .foregroundStyle(ThingsColor.error)
                 }
@@ -95,8 +112,11 @@ struct SupportEntryView: View {
             let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
             if digits != new { customMinutes = digits }
         }
-        .onChange(of: workDescription) { _, _ in
-            if showError && TimerService.validDescription(workDescription) { showError = false }
+        .onChange(of: caseTitle) { _, new in
+            if caseError && !new.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { caseError = false }
+        }
+        .onChange(of: performed) { _, new in
+            if performedError && TimerService.validDescription(new) { performedError = false }
         }
     }
 
@@ -151,24 +171,27 @@ struct SupportEntryView: View {
             )
     }
 
+    /// Case is altijd nodig. Uitgevoerd alleen bij direct loggen; bij een timer vul je het bij het stoppen aan.
     private func submit(startTimer: Bool) {
-        guard TimerService.validDescription(workDescription) else {
-            showError = true
-            return
-        }
-        let text = workDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = caseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let done = performed.trimmingCharacters(in: .whitespacesAndNewlines)
+        caseError = title.isEmpty
+        performedError = !startTimer && !TimerService.validDescription(done)
+        guard !caseError, !performedError else { return }
         if startTimer {
-            TimerService.startSupport(client: client, description: text, in: context)
-            appState.showToast("Timer gestart: \(text)")
+            TimerService.startSupport(client: client, caseTitle: title, performed: done, in: context)
+            appState.showToast("Timer gestart: \(title)")
         } else {
-            TimerService.logSupport(client: client, description: text, minutes: minutes, in: context)
+            TimerService.logSupport(client: client, caseTitle: title, performed: done, minutes: minutes, in: context)
             appState.showToast("\(minutes) min support gelogd")
         }
         client = ""
-        workDescription = ""
+        caseTitle = ""
+        performed = ""
         customMinutes = ""
         quickMinutes = 15
-        showError = false
+        caseError = false
+        performedError = false
         onFinished()
     }
 }

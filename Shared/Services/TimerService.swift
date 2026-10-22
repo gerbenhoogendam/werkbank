@@ -112,8 +112,9 @@ enum TimerService {
     }
 
     @discardableResult
-    static func startSupport(client: String, description: String, in context: ModelContext) -> TimeEntry {
-        let entry = TimeEntry(title: description, client: normalized(client), source: .support)
+    static func startSupport(client: String, caseTitle: String, performed: String = "", in context: ModelContext) -> TimeEntry {
+        let entry = TimeEntry(title: caseTitle, client: normalized(client), source: .support)
+        entry.workDescription = performed
         context.insert(entry)
         start(entry, in: context)
         return entry
@@ -121,15 +122,15 @@ enum TimerService {
 
     /// Direct een afgeronde supportregel met vaste duur.
     @discardableResult
-    static func logSupport(client: String, description: String, minutes: Int,
+    static func logSupport(client: String, caseTitle: String, performed: String, minutes: Int,
                            in context: ModelContext, now: Date = .now) -> TimeEntry {
-        let entry = TimeEntry(title: description, client: normalized(client), source: .support)
+        let entry = TimeEntry(title: caseTitle, client: normalized(client), source: .support)
         let start = now.addingTimeInterval(-Double(minutes) * 60)
         entry.accumulated = Double(minutes) * 60
         entry.firstStart = start
         entry.lastStart = start
         entry.finishedAt = now
-        entry.workDescription = description
+        entry.workDescription = performed
         entry.status = .finished
         context.insert(entry)
         save(context)

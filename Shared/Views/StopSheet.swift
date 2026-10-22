@@ -106,6 +106,8 @@ struct StopSheet: View {
             startText = DutchDate.time(firstStart)
             endText = DutchDate.time(defaultEnd)
             caseTitle = entry.title
+            // Al ingevuld bij het starten (snelle invoer): meenemen.
+            if workDescription.isEmpty { workDescription = entry.workDescription }
             clientName = entry.client == TimerService.noClient ? "" : entry.client
             descriptionFocused = true
         }
