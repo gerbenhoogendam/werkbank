@@ -85,6 +85,10 @@ struct MailWindowView: View {
         }
         .background(ThingsColor.backgroundContent)
         .task(id: ref.messageID) { await start() }
+        // Begonnen aan een antwoord, analyse of taak: niet meer sluiten bij een klik ernaast.
+        .onChange(of: replyRef) { _, new in if new != nil { markEngaged() } }
+        .onChange(of: model.analyses.count) { _, _ in markEngaged() }
+        .onChange(of: showTaskRow) { _, shown in if shown { markEngaged() } }
         // Is het gesprek gearchiveerd (of via slepen een kaart geworden en gearchiveerd), dan is dit paneel klaar.
         .onChange(of: gmail.messages) { _, new in
             if wasInList, !new.contains(where: { $0.threadID == ref.threadID }) { dismiss() }
@@ -92,6 +96,8 @@ struct MailWindowView: View {
     }
 
     private func dismiss() { PanelStore.shared.closeMail(messageID: ref.messageID) }
+
+    private func markEngaged() { PanelStore.shared.markEngaged(PanelKind.mail(ref).id) }
 
     private func start() async {
         taskTitle = ref.subject
@@ -285,7 +291,10 @@ struct MailWindowView: View {
                                 .id(entry.id)
                         case .analysis(let block):
                             ThreadAnalysisView(block: block,
-                                               onAsk: { model.ask($0, in: block) },
+                                               onAsk: { question in
+                                                   markEngaged()
+                                                   model.ask(question, in: block)
+                                               },
                                                onInsert: insertIntoReply,
                                                onRemove: { model.remove(block) })
                                 .id(entry.id)

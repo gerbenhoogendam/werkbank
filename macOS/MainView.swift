@@ -85,11 +85,24 @@ struct MainView: View {
                                 .transition(.identity)
                         }
                     }
-                    .overlay {
-                        PanelOverlay()
-                    }
                 }
             }
+            // Mail en Claude in beeld: de rest van de app vervaagt, zodat je je op de inhoud richt. Een klik in het
+            // vervaagde deel sluit wat je alleen las (niet waar je een antwoord, analyse of invoer in bent begonnen).
+            .blur(radius: focusMode ? 7 : 0)
+            .overlay {
+                if focusMode {
+                    Color.black.opacity(0.06)
+                        .contentShape(Rectangle())
+                        .onTapGesture { PanelStore.shared.closeUnengaged() }
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: focusMode)
+
+            // Boven het board en de agenda (rechts van het Gmail-paneel), niet in de blur.
+            PanelOverlay()
+                .padding(.leading, gmailVisible ? clamp(gmailWidth, Self.gmailRange) + 7 : 0)
 
             if appState.isDropTargeted { dropOverlay }
 
@@ -176,6 +189,9 @@ struct MainView: View {
             }
         }
     }
+
+    /// Blur en "klik ernaast om te sluiten" zolang er een mail- of Claude-paneel open is (niet tijdens slepen).
+    private var focusMode: Bool { PanelStore.shared.hasFocusPanels && !MailDragState.shared.isDragging }
 
     private func toggleMonthAgenda() {
         if monthShown && monthOpen {

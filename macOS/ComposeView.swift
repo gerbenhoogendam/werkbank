@@ -95,6 +95,10 @@ struct ComposeView: View {
         .background(ThingsColor.backgroundContent)
         .task { await prepare() }
         .onChange(of: suggestion) { _, _ in suggestionDismissed = false }
+        .onChange(of: bodyText) { _, _ in markEngaged() }
+        .onChange(of: toText) { _, _ in markEngaged() }
+        .onChange(of: subject) { _, _ in markEngaged() }
+        .onChange(of: attachments.count) { _, _ in markEngaged() }
         .onChange(of: fromAccount, initial: true) { _, account in signaturePreview = MailSignatures.preview(for: account) }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for provider in providers {
@@ -267,6 +271,12 @@ struct ComposeView: View {
             .frame(maxHeight: 130)
             .background(ThingsColor.backgroundSidebar)
         }
+    }
+
+    /// Een los opstelpaneel waarin je iets hebt ingevuld, sluit niet meer bij een klik ernaast.
+    private func markEngaged() {
+        guard !embedded, !isLoading else { return }
+        PanelStore.shared.markEngaged(PanelKind.compose(ref).id)
     }
 
     private func acceptSuggestion() -> Bool {

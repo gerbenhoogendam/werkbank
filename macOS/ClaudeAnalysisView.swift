@@ -245,6 +245,7 @@ struct ClaudeAnalysisView: View {
         guard !analyzer.isBusy, !analyzer.turns.isEmpty else { return }
         let text = question
         question = ""
+        PanelStore.shared.markEngaged(PanelKind.claude.id)
         analyzer.ask(text)
     }
 }

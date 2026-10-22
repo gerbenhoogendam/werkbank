@@ -8,6 +8,11 @@ enum PanelKind: Hashable, Identifiable {
     case event(AgendaEvent)
     case compose(ComposeRef)
 
+    var isEvent: Bool {
+        if case .event = self { return true }
+        return false
+    }
+
     var id: String {
         switch self {
         case .compose(let ref): "compose-\(ref.id)"
@@ -27,6 +32,21 @@ final class PanelStore {
     private(set) var panels: [PanelKind] = []
     /// Panelen die nu wegklappen (na het versturen van een mail).
     private(set) var foldingIDs: Set<String> = []
+    /// Panelen waarin je iets doet (antwoord, analyse, invoer). Die sluiten niet bij een klik ernaast.
+    @ObservationIgnored private var engagedIDs: Set<String> = []
+
+    /// Mail- en Claude-panelen: daarvoor gaat de rest van de app in de blur.
+    var hasFocusPanels: Bool { panels.contains { !$0.isEvent } }
+
+    func markEngaged(_ id: String) { engagedIDs.insert(id) }
+
+    /// Klik naast de panelen: sluit wat alleen gelezen werd. Afspraken regelen dat zelf (wijzigingen gaan voor).
+    func closeUnengaged() {
+        withAnimation(.easeOut(duration: 0.18)) {
+            panels.removeAll { !$0.isEvent && !engagedIDs.contains($0.id) }
+        }
+        engagedIDs.formIntersection(Set(panels.map(\.id)))
+    }
 
     static let foldDuration = 0.30
 
@@ -36,14 +56,17 @@ final class PanelStore {
             panels.append(panel)
             if panels.count > 2 { panels.removeFirst(panels.count - 2) }
         }
+        engagedIDs.formIntersection(Set(panels.map(\.id)))
     }
 
     func close(_ panel: PanelKind) {
         withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { $0.id == panel.id } }
+        engagedIDs.remove(panel.id)
     }
 
     func closeMail(messageID: String) {
         withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { $0.id == "mail-\(messageID)" } }
+        engagedIDs.remove("mail-\(messageID)")
     }
 
     /// Klapt een paneel van boven naar achteren weg (zoals een blad dat omvalt) en haalt het daarna weg.
@@ -54,6 +77,7 @@ final class PanelStore {
             try? await Task.sleep(for: .seconds(Self.foldDuration + 0.05))
             panels.removeAll { $0.id == id }
             foldingIDs.remove(id)
+            engagedIDs.remove(id)
         }
     }
 
