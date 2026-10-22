@@ -10,6 +10,8 @@ struct GmailPanel: View {
     @Environment(\.modelContext) private var context
     /// De mail die is aangeklikt (alleen markering; lezen doe je met dubbelklikken).
     private let selection = MailSelection.shared
+    /// Tab waar nu een mail boven gehouden wordt (om hem daarheen te verplaatsen).
+    @State private var dropTargetTab: String?
     /// Mailbox waarvan de tabnaam wordt gewijzigd.
     @State private var renaming: String?
     @State private var renameText = ""
@@ -128,10 +130,15 @@ struct GmailPanel: View {
             if hasPartialCombination { combinedPill }
             ForEach(gmail.accounts.filter { !hasPartialCombination || !gmail.combinedAccounts.contains($0) }, id: \.self) { email in
                 tab(title: gmail.displayName(email),
-                    isOn: !gmail.isCombined && gmail.activeAccount == email) {
+                    isOn: !gmail.isCombined && gmail.activeAccount == email || dropTargetTab == email) {
                     select(email)
                 }
                 .help("\(email) · ⌘-klik om te combineren")
+                .onDrop(of: [.gmailMessage], isTargeted: Binding(
+                    get: { dropTargetTab == email },
+                    set: { dropTargetTab = $0 ? email : (dropTargetTab == email ? nil : dropTargetTab) })) { providers in
+                    moveDrop(to: email, providers: providers)
+                }
             }
             tab(title: "Alles", isOn: gmail.isAllCombined) {
                 selection.selectedID = nil
@@ -168,6 +175,7 @@ struct GmailPanel: View {
                 }
                 .buttonStyle(.plain)
                 .help("\(email) · ⌘-klik om uit de combinatie te halen")
+                .onDrop(of: [.gmailMessage], isTargeted: nil) { providers in moveDrop(to: email, providers: providers) }
             }
         }
         .font(.system(size: 11.5, weight: .semibold))
@@ -189,6 +197,24 @@ struct GmailPanel: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Een mail op een tab laten vallen: het gesprek verhuist naar die mailbox.
+    private func moveDrop(to email: String, providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }) else {
+            return false
+        }
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
+            guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
+            Task { @MainActor in
+                let source = gmail.account(for: payload.messageID)
+                guard source != email else { return }
+                PanelStore.shared.closeMail(messageID: payload.messageID)
+                await gmail.moveThread(threadID: payload.threadID, messageID: payload.messageID, from: source, to: email,
+                                       appState: appState)
+            }
+        }
+        return true
     }
 
     /// ⌘1…⌘9 schakelt tussen de mailboxen, ⌘0 toont ze samen (alleen als het Gmail-paneel open staat).
@@ -441,6 +467,20 @@ private struct GmailRow: View {
                 Button("Losse analyse (eigen venster)") {
                     ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
                     PanelStore.shared.open(.claude)
+                }
+                let source = GmailSession.shared.account(for: message.id)
+                let targets = GmailSession.shared.accounts.filter { $0 != source }
+                if !targets.isEmpty {
+                    Menu("Verplaats naar") {
+                        ForEach(targets, id: \.self) { email in
+                            Button(GmailSession.shared.displayName(email)) {
+                                Task {
+                                    await GmailSession.shared.moveThread(threadID: message.threadID, messageID: message.id,
+                                                                         from: source, to: email, appState: AppState.shared)
+                                }
+                            }
+                        }
+                    }
                 }
                 Divider()
                 Button("Archiveren", action: onArchive)

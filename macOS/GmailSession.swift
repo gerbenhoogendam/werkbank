@@ -539,6 +539,103 @@ final class GmailSession {
         return GmailAPI.summary(fromMessageJSON: data)
     }
 
+    // MARK: Verplaatsen naar een andere mailbox
+
+    /// Verplaatst een heel gesprek naar een andere gekoppelde mailbox: elke mail wordt daar ingevoegd alsof hij daar
+    /// binnenkwam (geen doorsturen, er gaat niets de deur uit), daarna gaat het gesprek in de oude mailbox naar de
+    /// prullenbak. Met ⌘Z terug.
+    func moveThread(threadID: String, messageID: String? = nil, from source: String?, to target: String,
+                    appState: AppState) async {
+        let source = source ?? messageAccount[threadID] ?? activeAccount
+        guard accounts.contains(target), source != target else { return }
+        let busyKey = messageID ?? threadID
+        guard !busyMessageIDs.contains(busyKey) else { return }
+        busyMessageIDs.insert(busyKey)
+        defer { busyMessageIDs.remove(busyKey) }
+
+        do {
+            let items = try await threadMessages(threadID: threadID, account: source)
+            guard !items.isEmpty else { return }
+            var inserted: [String] = []
+            var targetThread: String?
+            for item in items {
+                let raw = try await rawMessage(id: item.id)
+                let labels = ["INBOX"] + (item.isUnread ? ["UNREAD"] : [])
+                let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
+                inserted.append(result.id)
+                targetThread = targetThread ?? result.threadID
+            }
+            try await trash(threadID: threadID, account: source)
+            removeThreadFromLists(threadID)
+            for id in inserted { note(account: target, forMessageID: id) }
+            if let targetThread { note(account: target, forMessageID: targetThread) }
+            if isCombined || activeAccount == target { await reload() }
+            appState.announce("Verplaatst naar \(displayName(target))")
+
+            UndoCenter.shared.record("Mail verplaatsen", undo: { [weak self] in
+                Task { await self?.undoMove(threadID: threadID, source: source, inserted: inserted, target: target) }
+            })
+        } catch {
+            appState.showToast("Verplaatsen mislukt: \(error.localizedDescription)", seconds: 5)
+        }
+    }
+
+    private func undoMove(threadID: String, source: String?, inserted: [String], target: String) async {
+        do {
+            _ = try await api("threads/\(threadID)/untrash", method: "POST", account: source)
+            for id in inserted {
+                _ = try? await api("messages/\(id)/trash", method: "POST", account: target)
+            }
+            await reload()
+        } catch {
+            AppState.shared.announce("Terugzetten mislukt")
+        }
+    }
+
+    private func trash(threadID: String, account: String?) async throws {
+        _ = try await api("threads/\(threadID)/trash", method: "POST", account: account)
+    }
+
+    /// `messages.insert` via de upload-route (multipart: labels en gesprek als JSON, de mail als message/rfc822),
+    /// zodat ook grote mails met bijlagen passen. De datum komt uit de mail zelf.
+    private func insert(raw: Data, labels: [String], threadID: String?, account: String,
+                        isRetry: Bool = false) async throws -> (id: String, threadID: String) {
+        var metadata: [String: Any] = ["labelIds": labels]
+        if let threadID { metadata["threadId"] = threadID }
+        let boundary = "werkbank-\(UUID().uuidString)"
+        var body = Data()
+        body.append(Data("--\(boundary)\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".utf8))
+        body.append(try JSONSerialization.data(withJSONObject: metadata))
+        body.append(Data("\r\n--\(boundary)\r\nContent-Type: message/rfc822\r\n\r\n".utf8))
+        body.append(raw)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+
+        let token = try await validAccessToken(account: account)
+        var request = URLRequest(url: URL(string: "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages?uploadType=multipart&internalDateSource=dateHeader")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw GmailError.invalidResponse }
+        if http.statusCode == 401, !isRetry {
+            tokenCache[account] = nil
+            return try await insert(raw: raw, labels: labels, threadID: threadID, account: account, isRetry: true)
+        }
+        // Wil Gmail hem niet bij het gesprek zetten, dan gewoon los.
+        if http.statusCode == 400, threadID != nil {
+            return try await insert(raw: raw, labels: labels, threadID: nil, account: account, isRetry: isRetry)
+        }
+        guard (200..<300).contains(http.statusCode),
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = json["id"] as? String else {
+            let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                .flatMap { ($0["error"] as? [String: Any])?["message"] as? String }
+            throw GmailError.http(http.statusCode, message)
+        }
+        return (id, json["threadId"] as? String ?? id)
+    }
+
     /// Verstuurt een kant-en-klare mail (RFC 822) vanuit `account`; `threadID` houdt een antwoord in hetzelfde gesprek.
     func send(raw: Data, threadID: String?, account: String) async throws {
         var json: [String: Any] = ["raw": Base64URL.encode(raw)]

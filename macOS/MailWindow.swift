@@ -196,6 +196,25 @@ struct MailWindowView: View {
                 } label: {
                     Label("Taak maken", systemImage: "checkmark.circle")
                 }
+
+                let source = ref.account ?? gmail.account(for: ref.messageID)
+                let targets = gmail.accounts.filter { $0 != source }
+                if !targets.isEmpty {
+                    Menu {
+                        ForEach(targets, id: \.self) { email in
+                            Button(gmail.displayName(email)) {
+                                Task {
+                                    dismiss()
+                                    await gmail.moveThread(threadID: ref.threadID, messageID: ref.messageID, from: source,
+                                                           to: email, appState: appState)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Verplaats naar", systemImage: "tray.and.arrow.up")
+                    }
+                    .fixedSize()
+                }
                 Spacer()
                 if model.isLoading { ProgressView().controlSize(.small) }
             }
