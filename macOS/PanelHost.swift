@@ -28,7 +28,7 @@ final class PanelStore {
     /// Panelen die nu wegklappen (na het versturen van een mail).
     private(set) var foldingIDs: Set<String> = []
 
-    static let foldDuration = 0.45
+    static let foldDuration = 0.30
 
     func open(_ panel: PanelKind) {
         withAnimation(.easeOut(duration: 0.18)) {
