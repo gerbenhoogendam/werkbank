@@ -132,7 +132,7 @@ struct MailWindowView: View {
             .padding(.top, 8)
             .padding(.bottom, 6)
             .onDrag({
-                MailDragState.shared.begin()
+                MailDragState.shared.begin(account: ref.account ?? gmail.account(for: ref.messageID))
                 return gmail.dragProvider(for: ref.summary)
             }, preview: { dragChip })
             .onHover { inside in

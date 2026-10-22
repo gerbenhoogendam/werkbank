@@ -9,14 +9,18 @@ final class MailDragState {
     static let shared = MailDragState()
 
     private(set) var isDragging = false
+    /// Mailbox van de mail die gesleept wordt (die staat niet tussen de mailboxen om naartoe te verplaatsen).
+    private(set) var sourceAccount: String?
 
-    func begin() {
+    func begin(account: String? = nil) {
         guard !isDragging else { return }
         isDragging = true
+        sourceAccount = account
         Task { @MainActor in
             while NSEvent.pressedMouseButtons & 1 != 0 { try? await Task.sleep(for: .milliseconds(100)) }
             try? await Task.sleep(for: .milliseconds(450))   // de afhandeling van de drop gaat voor
             isDragging = false
+            sourceAccount = nil
         }
     }
 }

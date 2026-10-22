@@ -11,8 +11,10 @@ struct GmailPanel: View {
     @Environment(\.modelContext) private var context
     /// De mail die is aangeklikt (alleen markering; lezen doe je met dubbelklikken).
     private let selection = MailSelection.shared
-    /// Tab waar nu een mail boven gehouden wordt (om hem daarheen te verplaatsen).
-    @State private var dropTargetTab: String?
+    /// "Verplaatsen naar" bovenin staat open (tijdens het slepen van een mail).
+    @State private var moveZoneOpen = false
+    /// Hoogte van kop en tabs: daar klapt "Verplaatsen naar" open.
+    @State private var topBarHeight: CGFloat = 74
     /// Mailbox waarvan de tabnaam wordt gewijzigd.
     @State private var renaming: String?
     @State private var renameText = ""
@@ -20,10 +22,19 @@ struct GmailPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
-            if gmail.accounts.count > 1 { tabs }
+            VStack(spacing: 0) {
+                header
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                if gmail.accounts.count > 1 { tabs }
+            }
+            .background(GeometryReader { proxy in
+                Color.clear
+                    .onAppear { topBarHeight = proxy.size.height }
+                    .onChange(of: proxy.size.height) { _, height in topBarHeight = height }
+            })
             content
+                .blur(radius: moveZoneOpen ? 4 : 0)
+                .animation(.easeOut(duration: 0.18), value: moveZoneOpen)
         }
         .frame(maxHeight: .infinity)
         .background(ThingsColor.backgroundSidebar)
@@ -37,6 +48,14 @@ struct GmailPanel: View {
         }
         // Een Gmail-mail loslaten op het paneel zelf doet niets (zo kun je een sleepactie afbreken).
         .onDrop(of: [.gmailMessage], isTargeted: nil) { _ in true }
+        .overlay(alignment: .top) {
+            if dragState.isDragging, gmail.accounts.count > 1 {
+                MailMoveZone(triggerHeight: topBarHeight, isOpen: $moveZoneOpen) { email, providers in
+                    moveDrop(to: email, providers: providers)
+                }
+            }
+        }
+        .onChange(of: dragState.isDragging) { _, dragging in if !dragging { moveZoneOpen = false } }
         .overlay(alignment: .bottom) {
             if dragState.isDragging {
                 ClaudeDropTarget()
@@ -131,15 +150,10 @@ struct GmailPanel: View {
             if hasPartialCombination { combinedPill }
             ForEach(gmail.accounts.filter { !hasPartialCombination || !gmail.combinedAccounts.contains($0) }, id: \.self) { email in
                 tab(title: gmail.displayName(email),
-                    isOn: !gmail.isCombined && gmail.activeAccount == email || dropTargetTab == email) {
+                    isOn: !gmail.isCombined && gmail.activeAccount == email) {
                     select(email)
                 }
                 .help("\(email) · ⌘-klik om te combineren")
-                .onDrop(of: [.gmailMessage], isTargeted: Binding(
-                    get: { dropTargetTab == email },
-                    set: { dropTargetTab = $0 ? email : (dropTargetTab == email ? nil : dropTargetTab) })) { providers in
-                    moveDrop(to: email, providers: providers)
-                }
             }
             tab(title: "Alles", isOn: gmail.isAllCombined) {
                 selection.selectedID = nil
@@ -176,7 +190,6 @@ struct GmailPanel: View {
                 }
                 .buttonStyle(.plain)
                 .help("\(email) · ⌘-klik om uit de combinatie te halen")
-                .onDrop(of: [.gmailMessage], isTargeted: nil) { providers in moveDrop(to: email, providers: providers) }
             }
         }
         .font(.system(size: 11.5, weight: .semibold))
@@ -200,7 +213,7 @@ struct GmailPanel: View {
         .buttonStyle(.plain)
     }
 
-    /// Een mail op een tab laten vallen: het gesprek verhuist naar die mailbox.
+    /// Een mail op een mailbox in "Verplaatsen naar" laten vallen: het gesprek verhuist naar die mailbox.
     private func moveDrop(to email: String, providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }) else {
             return false
@@ -371,7 +384,7 @@ struct GmailPanel: View {
                                      accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(gmail.displayName) : nil,
                                      onSelect: { selection.selectedID = message.id },
                                      onArchive: { archive(message) },
-                                     onDragStarted: { dragState.begin() })
+                                     onDragStarted: { dragState.begin(account: gmail.account(for: message.id)) })
                                 .trackpadSwipe(
                                     leading: SwipeAction(systemImage: "checkmark.circle", title: "Taak maken",
                                                          color: ThingsColor.accent) { quickTask(message) },
