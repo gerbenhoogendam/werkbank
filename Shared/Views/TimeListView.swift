@@ -406,17 +406,17 @@ private struct BookingDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             field("Klant", copy: entry.client == TimerService.noClient ? "" : entry.client) {
-                TextField("Klantnaam", text: Binding(
+                TextField("", text: Binding(
                     get: { entry.client == TimerService.noClient ? "" : entry.client },
                     set: { entry.client = TimerService.normalized($0); TimerService.save(context) }))
             }
             field("Case", copy: entry.title) {
-                TextField("Zeer korte omschrijving", text: Binding(
+                TextField("", text: Binding(
                     get: { entry.title },
                     set: { entry.title = $0; TimerService.save(context) }))
             }
             field("Uitgevoerd", copy: entry.workDescription) {
-                TextField("Wat er is gedaan", text: Binding(
+                TextField("", text: Binding(
                     get: { entry.workDescription },
                     set: { entry.workDescription = $0; TimerService.save(context) }), axis: .vertical)
                     .lineLimit(1...8)
@@ -433,8 +433,8 @@ private struct BookingDetails: View {
     private func field<Content: View>(_ label: String, copy text: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .thingsFont(.metadata)
-                .foregroundStyle(ThingsColor.textTertiary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.fieldLabel)
                 .frame(width: 70, alignment: .leading)
             content()
                 .textFieldStyle(.plain)

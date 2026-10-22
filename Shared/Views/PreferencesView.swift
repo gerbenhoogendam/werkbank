@@ -76,8 +76,6 @@ private struct CalendarsPreferences: View {
                     }
                 } header: {
                     Text("Zichtbare agenda's")
-                } footer: {
-                    Text("Uitgevinkte agenda's zijn nergens zichtbaar. De aangevinkte agenda's kun je boven de agenda tijdelijk aan/uit zetten. De kleur geldt alleen in Werkbank; de agenda's zelf en de Agenda-app blijven ongemoeid. Een kleur per afspraak bestaat niet in macOS-agenda's.")
                 }
 
                 Section("Standaard agenda") {
@@ -99,8 +97,6 @@ private struct CalendarsPreferences: View {
                     }
                 } header: {
                     Text("Kleur van afspraken")
-                } footer: {
-                    Text("Bij een donkere kleur wordt de tekst vanzelf wit.")
                 }
 
                 Section("Reistijd per auto") {
@@ -162,8 +158,6 @@ private struct DisplayPreferences: View {
                 .pickerStyle(.segmented)
             } header: {
                 Text("Minitimer")
-            } footer: {
-                Text("Zwevend venster bovenin het scherm met de lopende tijd, pauze en stop. Sleep het naar een andere plek.")
             }
             #endif
 
@@ -245,8 +239,6 @@ private struct ColumnsPreferences: View {
                 }
             } header: {
                 Text("Kolommen van het board")
-            } footer: {
-                Text("Een kolom verplaats je op het board door aan de kop te slepen. Bij verwijderen gaan de kaarten naar de eerste andere kolom.")
             }
 
             Section {
@@ -327,8 +319,6 @@ private struct OtherPreferences: View {
                 }
             } header: {
                 Text("Koppeltabel domein → klant")
-            } footer: {
-                Text("Wordt ook automatisch aangevuld als je het label van een mailkaart wijzigt.")
             }
 
             Section {
@@ -336,8 +326,6 @@ private struct OtherPreferences: View {
                 TextField("Search Engine ID (cx)", text: $searchEngineID)
             } header: {
                 Text("Logo's zoeken (Google Afbeeldingen)")
-            } footer: {
-                Text("Zonder sleutel gebruikt Werkbank het favicon van het domein.")
             }
         }
         .formStyle(.grouped)

@@ -226,7 +226,7 @@ struct ClaudeAnalysisView: View {
                     .foregroundStyle(ThingsColor.textTertiary)
             }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Vervolgvraag of extra context (bijvoorbeeld wat je al hebt geprobeerd)…", text: $question, axis: .vertical)
+                TextField("Vervolgvraag…", text: $question, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...4)
                     .focused($questionFocused)

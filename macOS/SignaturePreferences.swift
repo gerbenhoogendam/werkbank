@@ -38,8 +38,6 @@ struct SignaturePreferences: View {
                 }
             } header: {
                 Text("Mailboxen")
-            } footer: {
-                Text("De naam op de tab wijzig je via het persoonsicoon in de Mail-balk.")
             }
 
             Section("Gesprekken") {
@@ -55,8 +53,6 @@ struct SignaturePreferences: View {
                     ForEach(gmail.accounts, id: \.self) { Text($0).tag($0) }
                 }
                 TextField("Naam afzender", text: $senderName, prompt: Text("Gerben Hoogendam"))
-            } footer: {
-                Text("Een mailbox zonder eigen handtekening gebruikt de standaard.")
             }
 
             Section("HTML van de handtekening") {
@@ -84,8 +80,6 @@ struct SignaturePreferences: View {
                 if let importError { Text(importError).foregroundStyle(.red) }
             } header: {
                 Text("Logo")
-            } footer: {
-                Text("Verwijst de HTML naar een ingesloten afbeelding (src=\"cid:…\", zoals Apple Mail die maakt), dan wordt dit bestand daarvoor ingesloten.")
             }
 
             Section("Voorbeeld") {

@@ -33,8 +33,6 @@ struct ClaudePreferences: View {
                 }
             } header: {
                 Text("Toegang")
-            } footer: {
-                Text("Maak een sleutel op platform.claude.com (Settings › API keys) en zet er tegoed bij. Betaald wordt per analyse; onder het antwoord staat een schatting.")
             }
 
             Section {
@@ -43,8 +41,6 @@ struct ClaudePreferences: View {
                 }
             } header: {
                 Text("Model")
-            } footer: {
-                Text("Alleen mails die je zelf naar Claude stuurt (slepen op het Claude-icoon of via de knop in de mail) worden verstuurd, met hun bijlagen.")
             }
 
             Section {
@@ -55,8 +51,6 @@ struct ClaudePreferences: View {
                     .disabled(context == ClaudeSettings.defaultContext)
             } header: {
                 Text("Over jullie werk")
-            } footer: {
-                Text("Gaat bij elke analyse mee. Hoe meer Claude weet over jullie omgevingen, hoe bruikbaarder de suggesties.")
             }
         }
         .formStyle(.grouped)

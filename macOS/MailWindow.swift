@@ -547,7 +547,7 @@ private struct ThreadAnalysisView: View {
                     Text(usage).thingsFont(.metadata).foregroundStyle(ThingsColor.textTertiary)
                 }
                 HStack(alignment: .bottom, spacing: 8) {
-                    TextField("Vervolgvraag of extra context…", text: $question, axis: .vertical)
+                    TextField("Vervolgvraag…", text: $question, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                         .onSubmit(send)

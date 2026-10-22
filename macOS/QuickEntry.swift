@@ -115,9 +115,6 @@ struct QuickEntryView: View {
                 .labelsHidden()
                 .fixedSize()
                 Spacer()
-                Text("Esc sluit")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textTertiary)
             }
             .padding(.horizontal, 18)
             .padding(.top, 14)
@@ -163,7 +160,7 @@ struct QuickEntryView: View {
             Image(systemName: BoardColumn.inbox.symbol)
                 .font(.system(size: 20))
                 .foregroundStyle(BoardColumn.inbox.color)
-            TextField("Nieuwe kaart in Inbox — #klant voor een label", text: $text)
+            TextField("", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 20))
                 .foregroundStyle(ThingsColor.textPrimary)

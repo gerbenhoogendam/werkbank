@@ -243,10 +243,6 @@ struct StopSheet: View {
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.textSecondary)
             }
-
-            Text("De gewerkte tijd blijft in de regel staan; alleen de te factureren tijd wordt lager.")
-                .thingsFont(.metadata)
-                .foregroundStyle(ThingsColor.textSecondary)
         }
     }
 
@@ -268,10 +264,10 @@ struct StopSheet: View {
     private var bookingFields: some View {
         VStack(alignment: .leading, spacing: 8) {
             bookingRow("Klant") {
-                TextField("Klantnaam", text: $clientName)
+                TextField("", text: $clientName)
             }
             bookingRow("Case") {
-                TextField("Zeer korte omschrijving", text: $caseTitle)
+                TextField("", text: $caseTitle)
             }
         }
     }
@@ -279,8 +275,8 @@ struct StopSheet: View {
     private func bookingRow<Field: View>(_ label: String, @ViewBuilder field: () -> Field) -> some View {
         HStack(spacing: 8) {
             Text(label)
-                .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.accent)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.fieldLabel)
                 .frame(width: 84, alignment: .leading)
             field()
                 .textFieldStyle(.roundedBorder)
@@ -292,8 +288,8 @@ struct StopSheet: View {
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Uitgevoerd")
-                .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.accent)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.fieldLabel)
 
             TextEditor(text: $workDescription)
                 .thingsFont(.notes)

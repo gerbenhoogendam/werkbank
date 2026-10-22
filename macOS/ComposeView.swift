@@ -232,9 +232,6 @@ struct ComposeView: View {
             if !bodyText.isEmpty, let activeSuggestion {
                 // Er staat al tekst: de suggestie eronder, Tab voegt hem toe.
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Suggestie van Claude · Tab voegt toe")
-                        .thingsFont(.metadata)
-                        .foregroundStyle(ThingsColor.textTertiary)
                     Text(activeSuggestion)
                         .font(.system(size: 13))
                         .foregroundStyle(ThingsColor.textTertiary)

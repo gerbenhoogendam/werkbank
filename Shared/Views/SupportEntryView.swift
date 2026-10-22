@@ -43,8 +43,8 @@ struct SupportEntryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                label("Klant (optioneel)")
-                TextField("Geen klant", text: $client)
+                label("Klant")
+                TextField("", text: $client)
                     .textFieldStyle(.roundedBorder)
                     .focused($clientFocused)
                 if !suggestions.isEmpty && (clientFocused || !client.isEmpty) {
@@ -59,7 +59,7 @@ struct SupportEntryView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 label("Case")
-                TextField("Zeer korte omschrijving", text: $caseTitle)
+                TextField("", text: $caseTitle)
                     .textFieldStyle(.roundedBorder)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6).strokeBorder(caseError ? ThingsColor.error : .clear, lineWidth: 1.5)
@@ -73,7 +73,7 @@ struct SupportEntryView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 label("Uitgevoerd")
-                TextField("Wat heb je gedaan? (mag later, bij het stoppen)", text: $performed, axis: .vertical)
+                TextField("", text: $performed, axis: .vertical)
                     .lineLimit(2...6)
                     .textFieldStyle(.roundedBorder)
                     .overlay(
@@ -132,7 +132,7 @@ struct SupportEntryView: View {
     /// Eigen aantal minuten: alleen cijfers, max. 3. Krijgt een eigen focusmarkering in plaats van de systeemring.
     private var customMinutesField: some View {
         HStack(spacing: 4) {
-            TextField("", text: $customMinutes, prompt: Text("eigen"))
+            TextField("", text: $customMinutes)
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 38)
@@ -168,7 +168,9 @@ struct SupportEntryView: View {
     }
 
     private func label(_ text: String) -> some View {
-        Text(text).thingsFont(.metadata).foregroundStyle(ThingsColor.textSecondary)
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.fieldLabel)
     }
 
     private func chipBackground(selected: Bool, filled: Bool = false) -> some View {
@@ -203,4 +205,9 @@ struct SupportEntryView: View {
         performedError = false
         onFinished()
     }
+}
+
+extension Color {
+    /// Labels van invoervelden (Klant, Case, Uitgevoerd, …): helder blauw, goed leesbaar in licht en donker.
+    static let fieldLabel = Color(red: 0x1A / 255, green: 0x8C / 255, blue: 0xFF / 255)
 }
