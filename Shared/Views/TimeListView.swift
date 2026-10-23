@@ -299,6 +299,8 @@ struct TimeEntryRow: View {
     @Environment(AppState.self) private var appState
     /// Opengeklapt: klant, case en uitgevoerd, elk met een kopieerknop (voor het boekhoudpakket).
     @State private var expanded = false
+    /// Veld dat bewerkt wordt (dubbelklik).
+    @State private var editingField: BookingField?
 
     private var writtenBinding: Binding<TodoStatus> {
         Binding(
@@ -311,7 +313,7 @@ struct TimeEntryRow: View {
         VStack(alignment: .leading, spacing: 0) {
             summaryRow
             if expanded, entry.status == .finished {
-                BookingDetails(entry: entry)
+                BookingDetails(entry: entry, editing: $editingField)
                     .padding(.leading, 30)
                     .padding(.bottom, 10)
             }
@@ -338,6 +340,12 @@ struct TimeEntryRow: View {
                     .lineLimit(1)
             }
             .contentShape(Rectangle())
+            // Dubbelklik: openklappen en meteen de case aanpassen.
+            .onTapGesture(count: 2) {
+                guard entry.status == .finished else { return }
+                withAnimation(.easeOut(duration: 0.15)) { expanded = true }
+                editingField = .caseTitle
+            }
             .onTapGesture {
                 guard entry.status == .finished else { return }
                 withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
@@ -363,6 +371,12 @@ struct TimeEntryRow: View {
                 .thingsFont(.todoTitle)
                 .monospacedDigit()
                 .foregroundStyle(ThingsColor.textSecondary)
+
+            if entry.status == .finished {
+                // Case en uitgevoerd in één keer, voor het documentatiepakket.
+                CopyButton(text: BookingDetails.documentationText(entry), symbol: "doc.on.clipboard",
+                           help: "Case en uitgevoerd kopiëren")
+            }
 
             controls
         }
@@ -421,47 +435,171 @@ struct TimeEntryRow: View {
 // MARK: - Voor het boekhoudpakket
 
 /// Klant, case en uitgevoerd van een afgeronde regel: aan te passen en per veld te kopiëren.
+/// Velden van een afgeronde regel die je met een dubbelklik aanpast.
+enum BookingField: Hashable {
+    case client, caseTitle, performed, hours
+
+    var label: String {
+        switch self {
+        case .client: "Klant"
+        case .caseTitle: "Case"
+        case .performed: "Uitgevoerd"
+        case .hours: "Uren"
+        }
+    }
+}
+
+/// Klant, case, uitgevoerd en uren: dubbelklik om aan te passen (Return bewaart, Esc annuleert, ⌘Z draait terug),
+/// per regel kopiëren.
 private struct BookingDetails: View {
     @Bindable var entry: TimeEntry
+    @Binding var editing: BookingField?
     @Environment(\.modelContext) private var context
+    @State private var draft = ""
+    @State private var cancelled = false
+    @FocusState private var focused: Bool
+
+    /// Zoals het in het documentatiepakket komt.
+    static func documentationText(_ entry: TimeEntry) -> String {
+        "Case: \(entry.title)\nUitgevoerd: \(entry.workDescription)"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            field("Klant", copy: entry.client == TimerService.noClient ? "" : entry.client) {
-                TextField("", text: Binding(
-                    get: { entry.client == TimerService.noClient ? "" : entry.client },
-                    set: { entry.client = TimerService.normalized($0); TimerService.save(context) }))
-            }
-            field("Case", copy: entry.title) {
-                TextField("", text: Binding(
-                    get: { entry.title },
-                    set: { entry.title = $0; TimerService.save(context) }))
-            }
-            field("Uitgevoerd", copy: entry.workDescription) {
-                TextField("", text: Binding(
-                    get: { entry.workDescription },
-                    set: { entry.workDescription = $0; TimerService.save(context) }), axis: .vertical)
-                    .lineLimit(1...8)
-            }
-            field("Uren", copy: Billing.formatHours(TimerService.billedHours(entry))) {
-                Text(Billing.formatHours(TimerService.billedHours(entry)))
-                    .monospacedDigit()
-                    .foregroundStyle(ThingsColor.textSecondary)
-            }
+            row(.client, copy: value(.client))
+            row(.caseTitle, copy: entry.title.isEmpty ? "" : "Case: \(entry.title)")
+            row(.performed, copy: entry.workDescription.isEmpty ? "" : "Uitgevoerd: \(entry.workDescription)")
+            row(.hours, copy: value(.hours))
         }
         .thingsFont(.notes)
+        .onChange(of: editing, initial: true) { old, new in
+            if let old, old != new, !cancelled { save(old, draft) }
+            cancelled = false
+            draft = new.map(value) ?? ""
+            if new != nil, new != .client { Task { @MainActor in focused = true } }
+        }
+        .onChange(of: focused) { _, isFocused in
+            // Ernaast klikken bewaart (het klantveld bewaart met Return).
+            if !isFocused, let field = editing, field != .client { editing = nil }
+        }
     }
 
-    private func field<Content: View>(_ label: String, copy text: String, @ViewBuilder content: () -> Content) -> some View {
+    private func value(_ field: BookingField) -> String {
+        switch field {
+        case .client: entry.client == TimerService.noClient ? "" : entry.client
+        case .caseTitle: entry.title
+        case .performed: entry.workDescription
+        case .hours: Billing.formatHours(TimerService.billedHours(entry))
+        }
+    }
+
+    private func row(_ field: BookingField, copy: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label)
+            Text(field.label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)
                 .frame(width: 70, alignment: .leading)
-            content()
-                .textFieldStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            CopyButton(text: text)
+            Group {
+                if editing == field {
+                    editor(field)
+                        .onKeyPress(.escape) {
+                            cancelled = true
+                            editing = nil
+                            return .handled
+                        }
+                } else {
+                    let text = value(field)
+                    Text(text.isEmpty ? "—" : text)
+                        .foregroundStyle(text.isEmpty || field == .hours ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+                        .monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) { editing = field }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            CopyButton(text: copy)
+        }
+    }
+
+    @ViewBuilder private func editor(_ field: BookingField) -> some View {
+        switch field {
+        case .client:
+            ClientField(text: $draft, autofocus: true, onCommit: { editing = nil })
+        case .performed:
+            TextField("", text: $draft, axis: .vertical)
+                .lineLimit(1...8)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit { editing = nil }
+        case .caseTitle, .hours:
+            TextField("", text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit { editing = nil }
+        }
+    }
+
+    /// Bewaart één veld; ⌘Z zet de vorige waarden terug.
+    private func save(_ field: BookingField, _ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let before = Values(entry)
+        switch field {
+        case .client:
+            entry.client = TimerService.normalized(trimmed)
+        case .caseTitle:
+            guard !trimmed.isEmpty else { return }
+            entry.title = trimmed
+        case .performed:
+            entry.workDescription = trimmed
+        case .hours:
+            guard let hours = Self.parseHours(trimmed) else { return }
+            entry.accumulated = hours * 3600 + entry.correctionSeconds
+        }
+        let after = Values(entry)
+        guard after != before else { return }
+        TimerService.save(context)
+        let id = entry.id
+        let context = context
+        UndoCenter.shared.record("Tijdregel aanpassen", undo: {
+            if let entry = TimerService.entry(withID: id, in: context) { before.apply(to: entry); TimerService.save(context) }
+        }, redo: {
+            if let entry = TimerService.entry(withID: id, in: context) { after.apply(to: entry); TimerService.save(context) }
+        })
+    }
+
+    /// "0,25", "0.5", "1", "1:30" → uren.
+    static func parseHours(_ text: String) -> Double? {
+        let parts = text.split(separator: ":")
+        let hours: Double?
+        if parts.count == 2, let h = Double(parts[0]), let m = Double(parts[1]) {
+            hours = h + m / 60
+        } else {
+            hours = Double(text.replacingOccurrences(of: ",", with: "."))
+        }
+        guard let hours, hours > 0, hours < 24 else { return nil }
+        return hours
+    }
+
+    private struct Values: Equatable {
+        var client: String
+        var title: String
+        var performed: String
+        var accumulated: TimeInterval
+
+        init(_ entry: TimeEntry) {
+            client = entry.client
+            title = entry.title
+            performed = entry.workDescription
+            accumulated = entry.accumulated
+        }
+
+        func apply(to entry: TimeEntry) {
+            entry.client = client
+            entry.title = title
+            entry.workDescription = performed
+            entry.accumulated = accumulated
         }
     }
 }
@@ -469,6 +607,8 @@ private struct BookingDetails: View {
 /// Kopieert tekst naar het klembord; het icoon wordt even een vinkje.
 struct CopyButton: View {
     let text: String
+    var symbol = "doc.on.doc"
+    var help = "Kopiëren"
     @State private var copied = false
 
     var body: some View {
@@ -485,7 +625,7 @@ struct CopyButton: View {
                 copied = false
             }
         } label: {
-            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+            Image(systemName: copied ? "checkmark" : symbol)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(copied ? Color.green : ThingsColor.textSecondary)
                 .frame(width: 22, height: 22)
@@ -493,7 +633,7 @@ struct CopyButton: View {
         }
         .buttonStyle(.plain)
         .disabled(text.isEmpty)
-        .help("Kopiëren")
+        .help(help)
         .accessibilityLabel("Kopieer")
     }
 }

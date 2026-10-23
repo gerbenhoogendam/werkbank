@@ -7,6 +7,8 @@ import WerkbankCore
 struct ClientField: View {
     @Binding var text: String
     var autofocus = false
+    /// Return zonder suggesties in beeld (bijv. bewaren bij aanpassen in Tijd schrijven).
+    var onCommit: (() -> Void)?
 
     @Query(sort: \TimeEntry.createdAt, order: .reverse) private var entries: [TimeEntry]
     @FocusState private var focused: Bool
@@ -88,7 +90,7 @@ struct ClientField: View {
                 return .handled
             }
             .onSubmit {
-                guard !matches.isEmpty else { return }
+                guard !matches.isEmpty else { onCommit?(); return }
                 pick(matches[min(highlighted, matches.count - 1)])
             }
     }
