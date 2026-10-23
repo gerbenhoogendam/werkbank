@@ -48,6 +48,17 @@ struct WerkbankApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        // Losgehaalde opstelvensters (bijvoorbeeld op een ander scherm).
+        WindowGroup("Mail", id: "compose", for: DetachedCompose.self) { $value in
+            if let value {
+                DetachedComposeWindow(value: value)
+                    .environment(appState)
+                    .modelContainer(Persistence.container)
+            }
+        }
+        .defaultSize(width: 760, height: 680)
+        .commands { CommandGroup(replacing: .newItem) {} }
+
         Settings {
             PreferencesView()
                 .scrollIndicators(.never)

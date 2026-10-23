@@ -197,6 +197,10 @@ struct MailWindowView: View {
                     Label("Taak maken", systemImage: "checkmark.circle")
                 }
 
+                MailTimerButton(threadID: ref.threadID, subject: ref.subject,
+                                senders: model.mails.filter { !$0.isSent }.map(\.from)
+                                    + [ref.fromAddress.map { MailAddress(name: ref.fromName, address: $0).displayString } ?? ""])
+
                 let source = ref.account ?? gmail.account(for: ref.messageID)
                 let targets = gmail.accounts.filter { $0 != source }
                 if !targets.isEmpty {

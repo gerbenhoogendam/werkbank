@@ -136,13 +136,14 @@ final class Subtask {
 // MARK: - Tijd schrijven
 
 enum TimeSource: String {
-    case todo, support, calendar
+    case todo, support, calendar, mail
 
     var title: String {
         switch self {
         case .todo:     return "To-do"
         case .support:  return "Support"
         case .calendar: return "Agenda"
+        case .mail:     return "Mail"
         }
     }
 }
@@ -180,6 +181,8 @@ final class TimeEntry {
     var todoID: UUID?
     /// Voorkomt dat dezelfde agenda-afspraak dubbel wordt toegevoegd.
     var externalID: String?
+    /// Het Gmail-gesprek van een mailtimer: één regel per gesprek, opnieuw starten telt erbij op tot hij geschreven is.
+    var mailThreadID: String?
     var createdAt: Date = Date()
 
     init(title: String, client: String, source: TimeSource, todoID: UUID? = nil) {

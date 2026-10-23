@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 import WerkbankCore
 
 /// Waar een opstelvenster mee begint: een nieuwe mail, of een antwoord op / doorsturen van een bestaande.
-struct ComposeRef: Hashable {
-    enum Mode: String, Hashable { case new, reply, replyAll, forward }
+struct ComposeRef: Codable, Hashable {
+    enum Mode: String, Codable, Hashable { case new, reply, replyAll, forward }
 
     var id = UUID()
     var mode: Mode
@@ -27,12 +27,17 @@ struct ComposeView: View {
     var onSent: (() -> Void)?
     /// In een gesprek: het concept weggooien (prullenbak onderaan).
     var onDiscard: (() -> Void)?
+    /// In een eigen venster (losgehaald): `restored` is wat er al ingevuld was.
+    var detached = false
+    var restored: ComposeDraft?
 
     init(ref: ComposeRef, embedded: Bool = false, preloaded: MailContent? = nil, externalBody: Binding<String>? = nil,
          suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil,
-         onDiscard: (() -> Void)? = nil) {
+         onDiscard: (() -> Void)? = nil, detached: Bool = false, restored: ComposeDraft? = nil) {
         self.ref = ref
         self.embedded = embedded
+        self.detached = detached
+        self.restored = restored
         self.preloaded = preloaded
         self.externalBody = externalBody
         self.suggestion = suggestion
@@ -42,6 +47,7 @@ struct ComposeView: View {
     }
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     private let gmail = GmailSession.shared
 
     private enum Field { case to, body }
@@ -58,7 +64,6 @@ struct ComposeView: View {
     @State private var original: MailContent?
     @State private var isLoading = false
     @State private var isSending = false
-    @State private var confirmSend = false
     @State private var importing = false
     @State private var errorText: String?
     @State private var suggestionDismissed = false
@@ -113,12 +118,6 @@ struct ComposeView: View {
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { urls.forEach { addFile($0, scoped: true) } }
-        }
-        .confirmationDialog("Mail versturen?", isPresented: $confirmSend, titleVisibility: .visible) {
-            Button("Verstuur") { Task { await send() } }
-            Button("Annuleer", role: .cancel) {}
-        } message: {
-            Text("Aan: \(toText.isEmpty ? "—" : toText)")
         }
     }
 
@@ -277,7 +276,7 @@ struct ComposeView: View {
 
     /// Een los opstelpaneel waarin je iets hebt ingevuld, sluit niet meer bij een klik ernaast.
     private func markEngaged() {
-        guard !embedded, !isLoading else { return }
+        guard !embedded, !detached, !isLoading else { return }
         PanelStore.shared.markEngaged(PanelKind.compose(ref).id)
     }
 
@@ -436,6 +435,13 @@ struct ComposeView: View {
                 .disabled(bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || reviewer.phase == .running)
                 .keyboardShortcut("k", modifiers: [.command, .shift])
                 .help("Taal en inhoud laten controleren (⇧⌘K)")
+                if let source = ref.source, ref.mode != .forward {
+                    MailTimerButton(threadID: source.threadID, subject: source.subject, senders: senders(of: source))
+                }
+                if !detached {
+                    Button { detach() } label: { Image(systemName: "macwindow.badge.plus") }
+                        .help("Loshalen in een eigen venster")
+                }
                 if let onDiscard {
                     Button {
                         bodyBinding.wrappedValue = ""
@@ -448,12 +454,12 @@ struct ComposeView: View {
                 }
                 Spacer()
                 if isSending { ProgressView().controlSize(.small) }
-                Button("Verstuur") { validateThenConfirm() }
+                Button("Verstuur") { sendDirectly() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(isSending || isLoading)
                     .help("Versturen (⌘↩ of ⇧⌘D)")
-                // ⇧⌘D: direct versturen, net als in Mail.
+                // ⇧⌘D: hetzelfde, zoals in Mail.
                 Button("") { sendDirectly() }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
                     .disabled(isSending || isLoading)
@@ -470,6 +476,10 @@ struct ComposeView: View {
     // MARK: Voorbereiden
 
     private func prepare() async {
+        if let restored {
+            restore(restored)
+            return
+        }
         fromAccount = ref.source?.account ?? gmail.activeAccount ?? gmail.accounts.first ?? ""
         guard let source = ref.source else {
             focus = .to
@@ -531,13 +541,50 @@ struct ComposeView: View {
         errorText = nil
     }
 
-    // MARK: Versturen
+    // MARK: Loshalen
 
-    private func validateThenConfirm() {
-        if validate() { confirmSend = true }
+    /// Zet wat er staat over naar een eigen venster (bijvoorbeeld op een ander scherm) en sluit dit opstelblok.
+    private func detach() {
+        let draft = ComposeDraft(fromAccount: fromAccount, to: toText, cc: ccText, bcc: bccText, subject: subject,
+                                 body: bodyText, attachments: attachments, useSignature: useSignature,
+                                 showCc: showCc, showBcc: showBcc, original: original)
+        openWindow(value: DetachedCompose(ref: ref, draftID: ComposeDrafts.store(draft)))
+        if embedded {
+            bodyBinding.wrappedValue = ""
+            attachments = []
+            onDiscard?()
+        } else {
+            PanelStore.shared.close(.compose(ref))
+        }
     }
 
-    /// ⇧⌘D: meteen versturen, zonder bevestiging.
+    private func restore(_ draft: ComposeDraft) {
+        fromAccount = draft.fromAccount
+        toText = draft.to
+        ccText = draft.cc
+        bccText = draft.bcc
+        subject = draft.subject
+        bodyBinding.wrappedValue = draft.body
+        attachments = draft.attachments
+        useSignature = draft.useSignature
+        showCc = draft.showCc
+        showBcc = draft.showBcc
+        original = draft.original
+        focus = draft.to.isEmpty ? .to : .body
+    }
+
+    /// Afzenders van het gesprek, om bij de timer de klant te bepalen.
+    private func senders(of source: MailRef) -> [String] {
+        var list: [String] = []
+        if let original { list.append(original.from) }
+        if let address = source.fromAddress {
+            list.append(MailAddress(name: source.fromName, address: address).displayString)
+        }
+        return list
+    }
+
+    // MARK: Versturen
+
     private func sendDirectly() {
         guard !isSending, !isLoading, validate() else { return }
         Task { await send() }
@@ -595,6 +642,8 @@ struct ComposeView: View {
                 bodyBinding.wrappedValue = ""
                 attachments = []
                 onSent?()
+            } else if detached {
+                onSent?()
             } else {
                 PanelStore.shared.foldAway(id: PanelKind.compose(ref).id)
             }
@@ -620,5 +669,55 @@ enum SendSound {
         }
         current = NSSound(named: "Pop")
         current?.play()
+    }
+}
+
+// MARK: - Los venster
+
+/// Wat er in een opstelblok stond op het moment van loshalen.
+struct ComposeDraft {
+    var fromAccount: String
+    var to: String
+    var cc: String
+    var bcc: String
+    var subject: String
+    var body: String
+    var attachments: [MailAttachment]
+    var useSignature: Bool
+    var showCc: Bool
+    var showBcc: Bool
+    var original: MailContent?
+}
+
+/// Concepten die naar een eigen venster gaan (een venster krijgt alleen een id mee).
+@MainActor
+enum ComposeDrafts {
+    private static var drafts: [UUID: ComposeDraft] = [:]
+
+    static func store(_ draft: ComposeDraft) -> UUID {
+        let id = UUID()
+        drafts[id] = draft
+        return id
+    }
+
+    static func draft(_ id: UUID) -> ComposeDraft? { drafts[id] }
+    static func remove(_ id: UUID) { drafts[id] = nil }
+}
+
+struct DetachedCompose: Codable, Hashable {
+    var ref: ComposeRef
+    var draftID: UUID
+}
+
+/// Een losgehaald opstelvenster; sluit na versturen of weggooien.
+struct DetachedComposeWindow: View {
+    let value: DetachedCompose
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ComposeView(ref: value.ref, onSent: { dismiss() }, onDiscard: { dismiss() },
+                    detached: true, restored: ComposeDrafts.draft(value.draftID))
+            .frame(minWidth: 520, minHeight: 420)
+            .onDisappear { ComposeDrafts.remove(value.draftID) }
     }
 }
