@@ -1,6 +1,6 @@
 # Overdracht
 
-Stand van 23 oktober 2026, commit `fa64b39`. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
+Stand van 23 oktober 2026, commit `29ea3e1`. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
 zelf kan bouwen, starten en bedienen. Tot nu toe is alles gebouwd vanuit een Linux-container zonder Xcode: alleen CI
 controleerde of het compileerde, en de eigenaar testte het gedrag.
 
@@ -74,6 +74,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 10. **F16 en klanten uit CSV**: tweede sneltoets (Voorkeuren › Overig), klantveld (`Shared/Views/ClientField.swift`)
     zoekt in alle .csv in de map. Na te gaan: werken pijltjes en Tab in het veld (`onKeyPress` op een TextField),
     lezen de CSV's van Excel goed in (UTF-8 of Windows-codering).
+11. **Drie timers tegelijk** (`TimerService.maxRunning`): een vierde pauzeert de langst niet herstarte. Na te gaan:
+    stapelt de zwevende pil netjes (paneel groeit naar beneden), tonen Tijd schrijven en de menubalk alle lopende.
+12. **Logo's per klant** (`ClientDirectory.logoDomains`, `ClientLogo`): naast het klantveld, in de suggesties en in
+    Tijd schrijven; bron is de klantenlijst (kolom Domeinnaam), dan de koppeltabel, dan kaarten.
+13. **Klantenlijst**: klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN worden overal weggelaten.
 
 ## Open punten
 
