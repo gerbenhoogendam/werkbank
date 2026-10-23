@@ -74,10 +74,15 @@ struct ClientField: View {
             highlighted = 0
         }
         .task {
+            // Eerst de cursor erin (het paneel wordt net key, vandaar een paar pogingen), dan de lijst bijwerken.
+            if autofocus {
+                focused = true
+                for delay in [40, 120, 300] {
+                    try? await Task.sleep(for: .milliseconds(delay))
+                    if !focused { focused = true }
+                }
+            }
             await directory.refresh()
-            guard autofocus else { return }
-            try? await Task.sleep(for: .milliseconds(80))   // het paneel wordt net key
-            focused = true
         }
     }
 
@@ -86,6 +91,14 @@ struct ClientField: View {
             HStack(spacing: 8) {
                 Text(record.name)
                     .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
+                if let status = record.status {
+                    Text(status)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(isOn ? Color.white.opacity(0.2) : ThingsColor.tagBackground))
+                }
                 if !record.details.isEmpty {
                     Text(record.details.joined(separator: " · "))
                         .foregroundStyle(isOn ? Color.white.opacity(0.75) : ThingsColor.textSecondary)

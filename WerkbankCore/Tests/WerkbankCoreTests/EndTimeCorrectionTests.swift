@@ -27,11 +27,23 @@ final class EndTimeCorrectionTests: XCTestCase {
         XCTAssertEqual(r.subtractedSeconds, 0)
     }
 
+    func testLaterEndAddsTime() {
+        // Timer liep 11:09–11:25; eindtijd 11:28 telt 3 minuten erbij.
+        let r = EndTimeCorrection.evaluate(lastStart: t(11, 9), defaultEnd: t(11, 25), requestedEnd: t(11, 28))
+        XCTAssertFalse(r.isOutOfRange)
+        XCTAssertEqual(r.end, t(11, 28))
+        XCTAssertEqual(r.subtractedSeconds, -3 * 60)
+        // Samen met een begintijd van 11:00: 16 gemeten + 3 + 9 = 28 minuten.
+        let start = StartTimeCorrection.evaluate(firstStart: t(11, 9), requestedStart: t(11, 0), end: r.end,
+                                                 measuredSeconds: 16 * 60 - r.subtractedSeconds)
+        XCTAssertEqual(16 * 60 - r.subtractedSeconds + start.adjustmentSeconds, 28 * 60)
+    }
+
     func testOutOfRangeIsClamped() {
-        let late = EndTimeCorrection.evaluate(lastStart: t(9, 0), defaultEnd: t(10, 0), requestedEnd: t(11, 0))
+        let late = EndTimeCorrection.evaluate(lastStart: t(9, 0), defaultEnd: t(10, 0), requestedEnd: t(23, 0))
         XCTAssertTrue(late.isOutOfRange)
-        XCTAssertEqual(late.end, t(10, 0))
-        XCTAssertEqual(late.subtractedSeconds, 0)
+        XCTAssertEqual(late.end, t(22, 0))
+        XCTAssertEqual(late.subtractedSeconds, -12 * 3600)
 
         let early = EndTimeCorrection.evaluate(lastStart: t(9, 0), defaultEnd: t(10, 0), requestedEnd: t(8, 0))
         XCTAssertTrue(early.isOutOfRange)

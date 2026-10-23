@@ -1,11 +1,12 @@
 import Foundation
 
 public struct EndTimeEvaluation: Equatable {
-    /// Eindtijd, begrensd tot [laatste start, standaard-eindtijd].
+    /// Eindtijd: niet vóór de laatste start, hooguit `EndTimeCorrection.maxExtension` na de standaard-eindtijd.
     public var end: Date
     /// De ingevoerde tijd lag buiten het toegestane bereik (veld rood).
     public var isOutOfRange: Bool
-    /// Af te trekken van de gemeten tijd. Verschillen onder 1 minuut tellen niet.
+    /// Af te trekken van de gemeten tijd; negatief bij een latere eindtijd dan de timer liep (tijd erbij).
+    /// Verschillen onder 1 minuut tellen niet.
     public var subtractedSeconds: TimeInterval
     /// Tijd tussen laatste start en standaard-eindtijd ("daarna 1:07 onafgebroken").
     public var continuousSeconds: TimeInterval
@@ -14,6 +15,9 @@ public struct EndTimeEvaluation: Equatable {
 }
 
 public enum EndTimeCorrection {
+    /// Zoveel later dan de timer liep mag de eindtijd hooguit zijn (bijv. 11:25 gestopt, 11:28 opgeven).
+    public static let maxExtension: TimeInterval = 12 * 3600
+
     /// - Parameters:
     ///   - lastStart: laatste (her)start van de timer.
     ///   - defaultEnd: "nu", of het pauzemoment als de timer al gepauzeerd was.
@@ -24,14 +28,15 @@ public enum EndTimeCorrection {
                                 requestedEnd: Date,
                                 warningThresholdMinutes: Int = 60) -> EndTimeEvaluation {
         let upper = max(defaultEnd, lastStart)
+        let latest = upper.addingTimeInterval(maxExtension)
         // Het invoerveld heeft minuutprecisie; de laatste start telt vanaf het begin van die minuut.
         let lowerMinute = floorToMinute(lastStart)
 
-        let isOut = requestedEnd < lowerMinute || requestedEnd > upper
-        let end = min(max(requestedEnd, lastStart), upper)
+        let isOut = requestedEnd < lowerMinute || requestedEnd > latest
+        let end = min(max(requestedEnd, lastStart), latest)
 
         var subtracted = upper.timeIntervalSince(end)
-        if subtracted < 60 { subtracted = 0 }
+        if abs(subtracted) < 60 { subtracted = 0 }
 
         let continuous = max(0, upper.timeIntervalSince(lastStart))
         let warning = continuous > Double(warningThresholdMinutes) * 60 && subtracted == 0

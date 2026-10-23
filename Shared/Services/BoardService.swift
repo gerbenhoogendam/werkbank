@@ -351,9 +351,12 @@ enum BoardService {
 
     // MARK: Klant en logo
 
+    /// Domein → klant: eerst de klantenlijst (kolom Domeinnaam), een eigen koppeling gaat daar voor.
     static func mappingTable(in context: ModelContext) -> [String: String] {
         let mappings = (try? context.fetch(FetchDescriptor<ClientMapping>())) ?? []
-        return Dictionary(mappings.map { ($0.domain.lowercased(), $0.client) }, uniquingKeysWith: { _, last in last })
+        var table = ClientDirectory.shared.domainMap
+        for mapping in mappings { table[mapping.domain.lowercased()] = mapping.client }
+        return table
     }
 
     /// Past label/logo van een kaart aan. Wijzigt de gebruiker het label van een kaart met logodomein,

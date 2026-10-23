@@ -45,4 +45,54 @@ final class ClientListTests: XCTestCase {
         XCTAssertTrue(ClientList.search("utrecht", in: records).isEmpty)
         XCTAssertTrue(ClientList.search("  ", in: records).isEmpty)
     }
+
+    func testTypoFindsClient() {
+        let records = [
+            ClientRecord(name: "Interface Communicatie"),
+            ClientRecord(name: "Schildersbedrijf Willegom"),
+            ClientRecord(name: "Combo Design"),
+            ClientRecord(name: "Bakkerij West"),
+            ClientRecord(name: "Aiva Corporate", details: ["aivacorporate.com"]),
+        ]
+        // "ecom": één verkeerde letter in "egom" gaat vóór een ontbrekende letter ("com"); een domein op ".com"
+        // telt niet als "ecom".
+        let names = ClientList.search("ecom", in: records).map(\.name)
+        XCTAssertEqual(names.first, "Schildersbedrijf Willegom")
+        XCTAssertFalse(names.contains("Bakkerij West"))
+        // Korte zoektermen: geen tikfouten.
+        XCTAssertTrue(ClientList.search("wst", in: records).isEmpty)
+    }
+
+    func testPunctuationIgnored() {
+        let records = [ClientRecord(name: "Paula’s Choice Europe B.V."), ClientRecord(name: "J.V.I. Holding B.V.")]
+        XCTAssertEqual(ClientList.search("paulas", in: records).map(\.name), ["Paula’s Choice Europe B.V."])
+        XCTAssertEqual(ClientList.search("jvi", in: records).map(\.name), ["J.V.I. Holding B.V."])
+    }
+
+    func testStatusMarkersAndDomains() {
+        let csv = "Klantnaam,Domeinnaam\r\nFAILLIET Romex Benelux,romexbenelux.nl\r\nRomex Nieuw,www.romex.nl\r\n"
+            + "Voorbeeld NIET GEBRUIKEN,voorbeeld.nl\r\n\"Brink, Coaching & Advies\",brink.nl\r\nZonder Domein,\r\n"
+        let records = ClientList.parseCSV(csv)
+        XCTAssertEqual(records.map(\.name), ["Romex Benelux", "Romex Nieuw", "Voorbeeld", "Brink, Coaching & Advies",
+                                             "Zonder Domein"])
+        XCTAssertEqual(records[0].status, "failliet")
+        XCTAssertEqual(records[2].status, "niet gebruiken")
+        XCTAssertNil(records[1].status)
+        XCTAssertEqual(records[1].domains, ["romex.nl"])
+        XCTAssertEqual(records[4].domains, [])
+        // Niet meer actief: achteraan.
+        XCTAssertEqual(ClientList.search("romex", in: records).map(\.name), ["Romex Nieuw", "Romex Benelux"])
+    }
+
+    func testDomainMapSkipsFreemailAndShared() {
+        let records = [
+            ClientRecord(name: "Alpha", domains: ["alpha.nl"]),
+            ClientRecord(name: "Beta", domains: ["gmail.com"]),
+            ClientRecord(name: "Gamma", domains: ["gedeeld.nl"]),
+            ClientRecord(name: "Delta", domains: ["gedeeld.nl"]),
+            ClientRecord(name: "Oud", domains: ["over.nl"], status: "failliet"),
+            ClientRecord(name: "Nieuw", domains: ["over.nl"]),
+        ]
+        XCTAssertEqual(ClientList.domainMap(records), ["alpha.nl": "Alpha", "over.nl": "Nieuw"])
+    }
 }

@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
 import KeyboardShortcuts
@@ -268,6 +269,7 @@ private struct OtherPreferences: View {
     @Query private var allEntries: [TimeEntry]
     @State private var newDomain = ""
     @State private var newClient = ""
+    @State private var choosingClientFile = false
 
     var body: some View {
         Form {
@@ -290,6 +292,26 @@ private struct OtherPreferences: View {
             if Persistence.isCloudBuild { Section("Synchronisatie-details") { syncDetails } }
 
             #if os(macOS)
+            Section("Klantenlijst") {
+                let directory = ClientDirectory.shared
+                LabeledContent("Bestand") {
+                    HStack {
+                        Text(directory.chosenFileName ?? "—").foregroundStyle(.secondary)
+                        Button("Kies…") { choosingClientFile = true }
+                        if directory.chosenFileName != nil {
+                            Button("Loskoppelen") { Task { await directory.forgetChosenFile() } }
+                        }
+                    }
+                }
+                LabeledContent("Klanten") {
+                    Text("\(directory.records.count)").monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
+            .fileImporter(isPresented: $choosingClientFile, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
+                if case .success(let url) = result { Task { await ClientDirectory.shared.choose(url) } }
+            }
+            .task { await ClientDirectory.shared.refresh() }
+
             Section("iCloud Drive") {
                 let sync = PreferencesSync.shared
                 LabeledContent("Map Werkbank") {

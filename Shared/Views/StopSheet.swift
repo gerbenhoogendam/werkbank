@@ -154,7 +154,7 @@ struct StopSheet: View {
             }
 
             if showsRange {
-                Text("De eindtijd moet tussen \(DutchDate.time(lastStart)) en \(DutchDate.time(defaultEnd)) liggen.")
+                Text("De eindtijd moet na \(DutchDate.time(lastStart)) liggen.")
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.error)
             }
@@ -170,6 +170,10 @@ struct StopSheet: View {
 
             if evaluation.subtractedSeconds > 0 {
                 Text("\(Int((evaluation.subtractedSeconds / 60).rounded())) min afgetrokken van de gemeten tijd")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textPrimary)
+            } else if evaluation.subtractedSeconds < 0 {
+                Text("\(Int((-evaluation.subtractedSeconds / 60).rounded())) min erbij door de latere eindtijd")
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.textPrimary)
             }
