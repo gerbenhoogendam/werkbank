@@ -149,7 +149,8 @@ extension ClaudeRequest {
         of productnamen, beloftes of tijdsinschattingen die niet waar te maken zijn, risico's die de klant moet weten \
         maar die ontbreken (dataverlies, beveiliging, downtime, kosten), en tegenstrijdigheden met de mail van de klant. \
         Alleen als je er zeker van bent; geen algemene tips, geen "je zou ook nog kunnen". Weet je iets niet zeker, \
-        laat het weg.
+        laat het weg. Een route of product uit onze vaste werkwijze (hierboven) is geen fout; stel daar geen \
+        alternatief voor.
 
         Per opmerking:
         - quote: het stuk uit het concept waar het om gaat, letterlijk en exact zoals het er staat (zodat het te vervangen is), \

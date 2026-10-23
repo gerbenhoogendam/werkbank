@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 #if os(macOS)
+import AppKit
 import KeyboardShortcuts
 #endif
 
@@ -273,6 +274,7 @@ private struct OtherPreferences: View {
             #if os(macOS)
             Section("Snelle invoer") {
                 KeyboardShortcuts.Recorder("Sneltoets", name: .quickEntry)
+                KeyboardShortcuts.Recorder("Tweede sneltoets", name: .quickEntryAlt)
             }
             #endif
 
@@ -286,6 +288,25 @@ private struct OtherPreferences: View {
             }
 
             if Persistence.isCloudBuild { Section("Synchronisatie-details") { syncDetails } }
+
+            #if os(macOS)
+            Section("iCloud Drive") {
+                let sync = PreferencesSync.shared
+                LabeledContent("Map Werkbank") {
+                    if sync.isAvailable {
+                        Button("Openen") { NSWorkspace.shared.open(WerkbankFolder.url) }
+                    } else {
+                        Text("Niet beschikbaar").foregroundStyle(.secondary)
+                    }
+                }
+                if let date = sync.lastSync {
+                    LabeledContent("Voorkeuren") {
+                        Text("\(date.formatted(date: .abbreviated, time: .shortened)) · \(sync.lastSource ?? "")")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            #endif
 
             Section("Facturatie") {
                 Picker("Afronden op", selection: $rounding) {

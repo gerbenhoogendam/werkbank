@@ -264,7 +264,7 @@ struct StopSheet: View {
     private var bookingFields: some View {
         VStack(alignment: .leading, spacing: 8) {
             bookingRow("Klant") {
-                TextField("", text: $clientName)
+                ClientField(text: $clientName)
             }
             bookingRow("Case") {
                 TextField("", text: $caseTitle)
@@ -273,7 +273,7 @@ struct StopSheet: View {
     }
 
     private func bookingRow<Field: View>(_ label: String, @ViewBuilder field: () -> Field) -> some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)

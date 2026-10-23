@@ -101,6 +101,23 @@ final class CalendarService {
         }
     }
 
+    /// Per agenda een naam die op elke Mac gelijk is ("account|agenda"); de id's verschillen per Mac.
+    func calendarKeys() -> [String: String] {
+        guard hasAccess else { return [:] }
+        var keys: [String: String] = [:]
+        for calendar in store.calendars(for: .event) {
+            keys[calendar.calendarIdentifier] = "\(calendar.source?.title ?? "")|\(calendar.title)"
+        }
+        return keys
+    }
+
+    /// Na het overnemen van voorkeuren van een andere Mac (kleuren, verborgen agenda's).
+    func settingsChanged() {
+        CalendarColors.reload()
+        reloadCalendars()
+        revision += 1
+    }
+
     private func reloadCalendars() {
         guard hasAccess else { calendars = []; return }
         calendars = store.calendars(for: .event)
@@ -544,6 +561,9 @@ enum CalendarColors {
     }
 
     static var hasAny: Bool { !stored.isEmpty }
+
+    /// Opnieuw uit UserDefaults lezen (na het overnemen van voorkeuren van een andere Mac).
+    static func reload() { cache = nil }
 
     static func color(for id: String) -> Color? {
         guard let c = stored[id], c.count == 3 else { return nil }

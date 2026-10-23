@@ -426,7 +426,7 @@ struct DayCloseView: View {
                 .toggleStyle(.checkbox)
                 .labelsHidden()
                 .frame(width: Width.check)
-            TextField("", text: proposal.client)
+            ClientField(text: proposal.client)
                 .frame(width: Width.client)
             TextField("", text: proposal.caseTitle)
                 .frame(width: Width.caseTitle)
@@ -472,7 +472,7 @@ struct DayCloseView: View {
                 if count > 0 { appState.announce(count == 1 ? "1 tijdregel toegevoegd" : "\(count) tijdregels toegevoegd") }
                 dismiss()
             }
-            .keyboardShortcut(.defaultAction)
+            .keyboardShortcut(.return, modifiers: .command)
             .disabled(model.phase != .ready || chosen.isEmpty)
         }
         .padding(.horizontal, 16)

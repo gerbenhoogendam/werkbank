@@ -173,6 +173,11 @@ final class GmailSession {
     private(set) var displayNames: [String: String] =
         UserDefaults.standard.dictionary(forKey: "gmail.displayNames") as? [String: String] ?? [:]
 
+    /// Na het overnemen van voorkeuren van een andere Mac.
+    func reloadDisplayNames() {
+        displayNames = UserDefaults.standard.dictionary(forKey: "gmail.displayNames") as? [String: String] ?? [:]
+    }
+
     func displayName(_ email: String) -> String {
         let name = displayNames[email]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return name.isEmpty ? Self.shortName(email) : name

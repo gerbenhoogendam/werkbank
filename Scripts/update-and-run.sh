@@ -25,8 +25,9 @@ if pgrep -x Werkbank >/dev/null; then
 fi
 
 echo "› Bouwen (dat duurt even)…"
+# -allowProvisioningUpdates: Xcode werkt het ondertekeningsprofiel bij als de app nieuwe rechten krijgt (bijv. iCloud Drive).
 xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug \
-    -derivedDataPath DerivedData -quiet build
+    -derivedDataPath DerivedData -allowProvisioningUpdates -quiet build
 
 echo "› Starten…"
 open DerivedData/Build/Products/Debug/Werkbank.app

@@ -6,6 +6,8 @@ import SwiftUI
 extension KeyboardShortcuts.Name {
     /// Globale sneltoets voor snelle invoer (standaard ⌥⌘T, aanpasbaar in Instellingen).
     static let quickEntry = Self("quickEntry", default: .init(.t, modifiers: [.option, .command]))
+    /// Tweede sneltoets voor hetzelfde paneel (standaard F16, bijvoorbeeld op een extra toets of Stream Deck).
+    static let quickEntryAlt = Self("quickEntryAlt", default: .init(.f16))
 }
 
 /// Zwevend invoerpaneel in Spotlight-stijl, boven alle apps.

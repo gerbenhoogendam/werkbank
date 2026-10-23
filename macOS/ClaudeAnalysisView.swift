@@ -237,6 +237,7 @@ struct ClaudeAnalysisView: View {
                     .disabled(analyzer.isBusy || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                               || analyzer.turns.isEmpty)
             }
+            MemoryInputRow()
         }
         .padding(12)
     }

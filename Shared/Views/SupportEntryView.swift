@@ -10,7 +10,6 @@ struct SupportEntryView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
-    @Query(sort: \TimeEntry.createdAt, order: .reverse) private var entries: [TimeEntry]
 
     @State private var client = ""
     @State private var caseTitle = ""
@@ -19,7 +18,6 @@ struct SupportEntryView: View {
     @State private var quickMinutes = 15
     @State private var caseError = false
     @State private var performedError = false
-    @FocusState private var clientFocused: Bool
     @FocusState private var minutesFocused: Bool
 
     private static let quickChoices = [10, 15, 30, 60]
@@ -31,30 +29,11 @@ struct SupportEntryView: View {
     }
     private var usesCustom: Bool { (Int(customMinutes) ?? 0) > 0 }
 
-    private var suggestions: [String] {
-        var seen = Set<String>()
-        let typed = client.trimmingCharacters(in: .whitespaces).lowercased()
-        return entries.map(\.client)
-            .filter { $0 != TimerService.noClient && seen.insert($0).inserted }
-            .filter { typed.isEmpty || ($0.lowercased().contains(typed) && $0.lowercased() != typed) }
-            .prefix(5).map { $0 }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 label("Klant")
-                TextField("", text: $client)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($clientFocused)
-                if !suggestions.isEmpty && (clientFocused || !client.isEmpty) {
-                    HStack(spacing: 4) {
-                        ForEach(suggestions, id: \.self) { name in
-                            Button { client = name } label: { TagPill(name: name) }
-                                .buttonStyle(.plain)
-                        }
-                    }
-                }
+                ClientField(text: $client, autofocus: autofocusClient)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -112,11 +91,6 @@ struct SupportEntryView: View {
             }
         }
         .padding(2)
-        .task {
-            guard autofocusClient else { return }
-            try? await Task.sleep(for: .milliseconds(80))   // het paneel wordt net key
-            clientFocused = true
-        }
         .onChange(of: customMinutes) { _, new in
             let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
             if digits != new { customMinutes = digits }

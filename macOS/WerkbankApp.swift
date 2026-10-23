@@ -10,9 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MiniTimerController.shared.start()
         WaitingWatcher.shared.start()
         IdleWatcher.shared.start()
+        WerkbankSync.start()
 
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
         KeyboardShortcuts.onKeyUp(for: .quickEntry) {
+            Task { @MainActor in QuickEntryController.shared.toggle() }
+        }
+        KeyboardShortcuts.onKeyUp(for: .quickEntryAlt) {
             Task { @MainActor in QuickEntryController.shared.toggle() }
         }
     }

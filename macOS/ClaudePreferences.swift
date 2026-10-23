@@ -6,6 +6,8 @@ struct ClaudePreferences: View {
     @AppStorage(ClaudeSettings.contextKey) private var context = ClaudeSettings.defaultContext
     @State private var keyText = ""
     @State private var hasKey = ClaudeKeychain.read() != nil
+    @State private var newMemory = ""
+    private let memory = ClaudeMemory.shared
 
     var body: some View {
         Form {
@@ -52,7 +54,32 @@ struct ClaudePreferences: View {
             } header: {
                 Text("Over jullie werk")
             }
+
+            Section {
+                ForEach(memory.items, id: \.self) { item in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(item)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                        Button { memory.remove(item) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                    }
+                }
+                HStack(alignment: .firstTextBaseline) {
+                    TextField("", text: $newMemory, axis: .vertical)
+                        .lineLimit(1...3)
+                        .labelsHidden()
+                    Button("Toevoegen") {
+                        memory.add(newMemory)
+                        newMemory = ""
+                    }
+                    .disabled(newMemory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } header: {
+                Text("Geheugen")
+            }
         }
         .formStyle(.grouped)
+        .task { await memory.reload() }
     }
 }

@@ -632,6 +632,7 @@ private struct ThreadAnalysisView: View {
                         .help("Voegt het conceptantwoord toe aan je antwoord onderaan")
                     }
                 }
+                MemoryInputRow()
             }
         }
         .padding(14)
