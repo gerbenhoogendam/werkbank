@@ -55,6 +55,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 3. **Inactiviteit** (`macOS/IdleWatcher.swift`). Timer loopt, 10 minuten of langer geen invoer, of slaapstand: bij
    terugkomst toont de pil "x min weg" met Eraf en Laten. Om te testen kun je `IdleWatcher.threshold` tijdelijk
    verlagen (niet committen).
+4. **Verplaatskaart** bij het slepen van een mail naar de tabs (`macOS/MailMoveZone.swift`): oplichten werkt volgens
+   de eigenaar. Nog na te gaan: knippert de kaart bij de overgang van de tabs naar een vlak, en werkt hij ook bij
+   slepen vanaf de greep van een geopend gesprek.
 5. **Versturen** gaat direct (Verstuur, ⌘↩, ⇧⌘D), zonder vraag.
 6. **Mailtimer** (`macOS/MailTimer.swift`): knop in de kop van een gesprek en onder een antwoord. Eén regel per
    gesprek (`TimeEntry.mailThreadID`); opnieuw starten telt op, ook na stoppen, tot de regel als geschreven is
@@ -71,9 +74,6 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 10. **F16 en klanten uit CSV**: tweede sneltoets (Voorkeuren › Overig), klantveld (`Shared/Views/ClientField.swift`)
     zoekt in alle .csv in de map. Na te gaan: werken pijltjes en Tab in het veld (`onKeyPress` op een TextField),
     lezen de CSV's van Excel goed in (UTF-8 of Windows-codering).
-4. **Verplaatskaart** bij het slepen van een mail naar de tabs (`macOS/MailMoveZone.swift`): oplichten werkt volgens
-   de eigenaar. Nog na te gaan: knippert de kaart bij de overgang van de tabs naar een vlak, en werkt hij ook bij
-   slepen vanaf de greep van een geopend gesprek.
 
 ## Open punten
 
