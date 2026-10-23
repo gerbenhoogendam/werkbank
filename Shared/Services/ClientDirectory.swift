@@ -16,6 +16,8 @@ final class ClientDirectory {
     private(set) var domainMap: [String: String] = [:]
     /// Naam van het aangewezen bestand, voor Voorkeuren.
     private(set) var chosenFileName: String?
+    /// Failliete klanten: komen nergens meer voor, ook niet als ze nog in oude tijdregels staan.
+    @ObservationIgnored private var removedNames: Set<String> = []
     @ObservationIgnored private var stamps: [String: Date] = [:]
     @ObservationIgnored private var isRefreshing = false
 
@@ -71,8 +73,9 @@ final class ClientDirectory {
             return (records, stamps)
         }.value
         guard let result else { return }
-        records = result.records
-        domainMap = ClientList.domainMap(result.records)
+        records = result.records.filter { $0.status != "failliet" }
+        removedNames = Set(result.records.filter { $0.status == "failliet" }.map { $0.name.lowercased() })
+        domainMap = ClientList.domainMap(records)
         stamps = result.stamps
     }
 
@@ -80,7 +83,7 @@ final class ClientDirectory {
     func suggestions(for query: String, known: [String], limit: Int = 6) -> [ClientRecord] {
         var all = records
         let listed = Set(records.map { $0.name.lowercased() })
-        for name in known where !listed.contains(name.lowercased()) {
+        for name in known where !listed.contains(name.lowercased()) && !removedNames.contains(name.lowercased()) {
             all.append(ClientRecord(name: name))
         }
         return ClientList.search(query, in: all, limit: limit)
