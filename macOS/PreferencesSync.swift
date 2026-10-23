@@ -197,7 +197,7 @@ enum WerkbankSync {
         PreferencesSync.shared.start()
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil,
                                                queue: .main) { _ in
-            MainActor.assumeIsolated { Task { await WerkbankSync.refresh() } }
+            Task { @MainActor in await WerkbankSync.refresh() }
         }
         task = Task {
             while !Task.isCancelled {
