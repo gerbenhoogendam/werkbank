@@ -1,6 +1,6 @@
 # Overdracht
 
-Stand van 22 oktober 2026, commit `dd37b1d`. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
+Stand van 23 oktober 2026, commit `fa64b39`. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
 zelf kan bouwen, starten en bedienen. Tot nu toe is alles gebouwd vanuit een Linux-container zonder Xcode: alleen CI
 controleerde of het compileerde, en de eigenaar testte het gedrag.
 
@@ -55,6 +55,22 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 3. **Inactiviteit** (`macOS/IdleWatcher.swift`). Timer loopt, 10 minuten of langer geen invoer, of slaapstand: bij
    terugkomst toont de pil "x min weg" met Eraf en Laten. Om te testen kun je `IdleWatcher.threshold` tijdelijk
    verlagen (niet committen).
+5. **Versturen** gaat direct (Verstuur, ⌘↩, ⇧⌘D), zonder vraag.
+6. **Mailtimer** (`macOS/MailTimer.swift`): knop in de kop van een gesprek en onder een antwoord. Eén regel per
+   gesprek (`TimeEntry.mailThreadID`); opnieuw starten telt op, ook na stoppen, tot de regel als geschreven is
+   afgevinkt. Klant uit de afzender of van de gekoppelde kaart.
+7. **Opstelvenster loshalen** (knop met venstericoon onder het opstelblok): eigen venster met velden, tekst en
+   bijlagen; sluit na versturen.
+8. **iCloud Drive-map Werkbank** (`Shared/Services/WerkbankFolder.swift`, `macOS/PreferencesSync.swift`). Nieuw
+   iCloud Documents-recht: de eerste build moet het profiel bijwerken (`-allowProvisioningUpdates` in het script).
+   Controleer: verschijnt iCloud Drive/Werkbank in Finder, komt `Voorkeuren.plist` erin, neemt een tweede Mac de
+   voorkeuren over (melding in de pil), kloppen agendakleuren en verborgen agenda's daar (vertaald via
+   "account|agenda"). Voorkeuren › Overig › iCloud Drive toont de map en de laatste synchronisatie.
+9. **Claude-geheugen** (`macOS/ClaudeMemory.swift`): `Claude-geheugen.md` in de map, veld Geheugen onder elke
+   analyse, lijst in Voorkeuren › Claude. Gaat via `ClaudeSettings.context` mee in elke vraag aan Claude.
+10. **F16 en klanten uit CSV**: tweede sneltoets (Voorkeuren › Overig), klantveld (`Shared/Views/ClientField.swift`)
+    zoekt in alle .csv in de map. Na te gaan: werken pijltjes en Tab in het veld (`onKeyPress` op een TextField),
+    lezen de CSV's van Excel goed in (UTF-8 of Windows-codering).
 4. **Verplaatskaart** bij het slepen van een mail naar de tabs (`macOS/MailMoveZone.swift`): oplichten werkt volgens
    de eigenaar. Nog na te gaan: knippert de kaart bij de overgang van de tabs naar een vlak, en werkt hij ook bij
    slepen vanaf de greep van een geopend gesprek.
@@ -69,6 +85,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 - Wacht op klant werkt alleen voor kaarten die sinds `dd37b1d` uit Gmail zijn gemaakt.
 - De drempel voor inactiviteit staat vast op 10 minuten; eventueel instelbaar maken in Voorkeuren.
 - TestFlight: na de nieuwe velden op `TodoCard` moet het CloudKit-schema opnieuw naar Production.
+- Instellingen die per Mac blijven: mailboxen (inloggen), Claude-sleutel (sleutelhanger), sneltoetsen, vensters.
 - `DropInfo.location` gaf in `MailMoveZone` geen bruikbare posities; vandaar per vlak een eigen `onDrop`.
 
 ## Ideeën die nog openstaan
