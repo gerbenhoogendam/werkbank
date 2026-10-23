@@ -9,9 +9,9 @@ final class IdleWatcher {
     static let shared = IdleWatcher()
     static let threshold: TimeInterval = 600
 
-    /// Begin van de inactiviteit en de timer die toen liep.
+    /// Begin van de inactiviteit en de timers die toen liepen.
     private var idleStart: Date?
-    private var entryID: UUID?
+    private var entryIDs: [UUID] = []
     private var task: Task<Void, Never>?
     private var context: ModelContext { Persistence.container.mainContext }
 
@@ -45,32 +45,36 @@ final class IdleWatcher {
     }
 
     private func markAway(since start: Date) {
-        guard idleStart == nil, let running = TimerService.runningEntry(in: context) else { return }
+        let running = TimerService.runningEntries(in: context)
+        guard idleStart == nil, !running.isEmpty else { return }
         idleStart = start
-        entryID = running.id
+        entryIDs = running.map(\.id)
     }
 
     private func returned(at end: Date) {
-        guard let start = idleStart, let id = entryID else { return }
+        guard let start = idleStart else { return }
+        let ids = entryIDs.filter { TimerService.entry(withID: $0, in: context)?.status == .running }
         idleStart = nil
-        entryID = nil
-        guard end.timeIntervalSince(start) >= Self.threshold,
-              let entry = TimerService.entry(withID: id, in: context), entry.status == .running else { return }
-        AppState.shared.idlePrompt = IdlePrompt(entryID: id, start: start, end: end)
+        entryIDs = []
+        guard end.timeIntervalSince(start) >= Self.threshold, !ids.isEmpty else { return }
+        AppState.shared.idlePrompt = IdlePrompt(entryIDs: ids, start: start, end: end)
     }
 
-    /// "Eraf": de tijd telt niet mee, alsof de timer al die tijd op pauze stond. ⌘Z zet hem terug.
+    /// "Eraf": de tijd telt niet mee, alsof de timers al die tijd op pauze stonden. ⌘Z zet het terug.
     func subtract(_ prompt: IdlePrompt) {
         AppState.shared.idlePrompt = nil
-        guard let entry = TimerService.entry(withID: prompt.entryID, in: context) else { return }
-        let seconds = min(prompt.duration, max(0, entry.elapsed()))
-        guard seconds > 0 else { return }
-        let id = prompt.entryID
-        apply(-seconds, to: id)
+        var amounts: [(id: UUID, seconds: TimeInterval)] = []
+        for id in prompt.entryIDs {
+            guard let entry = TimerService.entry(withID: id, in: context) else { continue }
+            let seconds = min(prompt.duration, max(0, entry.elapsed()))
+            if seconds > 0 { amounts.append((id, seconds)) }
+        }
+        guard let longest = amounts.map(\.seconds).max() else { return }
+        for item in amounts { apply(-item.seconds, to: item.id) }
         UndoCenter.shared.record("Inactieve tijd aftrekken",
-                                 undo: { IdleWatcher.shared.apply(seconds, to: id) },
-                                 redo: { IdleWatcher.shared.apply(-seconds, to: id) })
-        AppState.shared.announce("\(Int((seconds / 60).rounded())) min afgetrokken")
+                                 undo: { for item in amounts { IdleWatcher.shared.apply(item.seconds, to: item.id) } },
+                                 redo: { for item in amounts { IdleWatcher.shared.apply(-item.seconds, to: item.id) } })
+        AppState.shared.announce("\(Int((longest / 60).rounded())) min afgetrokken")
     }
 
     func keep() {

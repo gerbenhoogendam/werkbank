@@ -54,7 +54,7 @@ struct BoardListView: View {
     @State private var columnDropTarget: String?
 
     private var columns: [BoardColumn] { columnRecords.map(\.column) }
-    private var runningTodoID: UUID? { running.first?.todoID }
+    private var runningTodoIDs: Set<UUID> { Set(running.compactMap(\.todoID)) }
 
     var body: some View {
         boardContent.providingSubtasks()
@@ -121,7 +121,7 @@ struct BoardListView: View {
 
             List {
                 ForEach(columnCards) { card in
-                    CardView(card: card, isTimerRunning: runningTodoID == card.id,
+                    CardView(card: card, isTimerRunning: runningTodoIDs.contains(card.id),
                              onStartTimer: {
                                  TimerService.startTimer(for: card, in: context)
                                  appState.showToast("Timer gestart: \(card.title)")

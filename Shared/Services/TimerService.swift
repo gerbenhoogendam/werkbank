@@ -2,10 +2,12 @@ import Foundation
 import SwiftData
 import WerkbankCore
 
-/// Alle timerlogica. Er loopt maximaal één timer tegelijk; alles rekent met tijdstempels.
+/// Alle timerlogica. Er kunnen tot drie timers tegelijk lopen (zaken lopen soms door elkaar); alles rekent met
+/// tijdstempels.
 @MainActor
 enum TimerService {
     static let noClient = "Geen klant"
+    static let maxRunning = 3
 
     // MARK: Opvragen
 
@@ -13,17 +15,20 @@ enum TimerService {
         (try? context.fetch(FetchDescriptor<TimeEntry>())) ?? []
     }
 
-    static func runningEntry(in context: ModelContext) -> TimeEntry? {
-        allEntries(in: context).first { $0.status == .running }
+    static func runningEntries(in context: ModelContext) -> [TimeEntry] {
+        allEntries(in: context).filter { $0.status == .running }
     }
 
     // MARK: Start / pauze / hervat
 
-    /// Start een timer, of hervat hem. Een eventueel lopende andere timer gaat op pauze.
+    /// Start een timer, of hervat hem. Lopen er al drie, dan gaat de langst niet herstarte op pauze.
     static func start(_ entry: TimeEntry, in context: ModelContext, now: Date = .now) {
         guard entry.status != .finished, entry.status != .running else { return }
 
-        for other in allEntries(in: context) where other.status == .running && other.id != entry.id {
+        let others = runningEntries(in: context)
+            .filter { $0.id != entry.id }
+            .sorted { ($0.lastStart ?? .distantPast) < ($1.lastStart ?? .distantPast) }
+        for other in others.prefix(max(0, others.count - maxRunning + 1)) {
             pause(other, in: context, now: now)
         }
 

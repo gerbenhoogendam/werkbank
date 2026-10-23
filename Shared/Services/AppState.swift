@@ -11,7 +11,8 @@ struct StopContext: Identifiable, Equatable {
 
 /// Was de Mac een tijd niet in gebruik terwijl de timer liep: die tijd aftrekken of laten staan.
 struct IdlePrompt: Equatable {
-    let entryID: UUID
+    /// De timers die liepen toen de Mac niet gebruikt werd.
+    let entryIDs: [UUID]
     let start: Date
     let end: Date
 

@@ -69,7 +69,7 @@ struct BoardView: View {
     @State private var dropTargetColumn: BoardColumn?
     @GestureState private var gestureActive = false
 
-    private var runningTodoID: UUID? { running.first?.todoID }
+    private var runningTodoIDs: Set<UUID> { Set(running.compactMap(\.todoID)) }
     private var columns: [BoardColumn] { columnRecords.map(\.column) }
 
     var body: some View {
@@ -381,7 +381,7 @@ struct BoardView: View {
     private func cell(_ card: TodoCard, in column: BoardColumn) -> some View {
         BoardCardCell(
             card: card,
-            isTimerRunning: runningTodoID == card.id,
+            isTimerRunning: runningTodoIDs.contains(card.id),
             onStartTimer: { TimerService.startTimer(for: card, in: context) },
             onEdit: { editing = card },
             onDelete: { BoardService.delete(card, in: context) }

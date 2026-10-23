@@ -34,7 +34,7 @@ struct RootView: View {
                 NavigationStack {
                     BoardListView(columnID: $columnID)
                         .toolbar { boardToolbar }
-                        .tabChrome(running: running.first, plus: { showQuickAdd = true })
+                        .tabChrome(running: running, plus: { showQuickAdd = true })
                 }
                 .tabItem { Label("Board", systemImage: "square.grid.2x2") }
                 .tag(Tab.board)
@@ -42,7 +42,7 @@ struct RootView: View {
                 NavigationStack {
                     DayAgendaView()
                         .toolbar { settingsToolbar }
-                        .tabChrome(running: running.first, plus: nil)
+                        .tabChrome(running: running, plus: nil)
                 }
                 .tabItem { Label("Agenda", systemImage: "calendar") }
                 .tag(Tab.agenda)
@@ -50,7 +50,7 @@ struct RootView: View {
                 NavigationStack {
                     TimeListView()
                         .toolbar { settingsToolbar }
-                        .tabChrome(running: nil, plus: { showSupport = true })
+                        .tabChrome(running: [], plus: { showSupport = true })
                 }
                 .tabItem { Label("Tijd", systemImage: "clock") }
                 .tag(Tab.time)
@@ -187,14 +187,16 @@ struct QuickAddSheet: View {
 
 private extension View {
     /// Lopende-timerbalk en Magic Plus binnen een tab, zodat ze boven de tabbalk staan.
-    func tabChrome(running: TimeEntry?, plus: (() -> Void)?) -> some View {
+    func tabChrome(running: [TimeEntry], plus: (() -> Void)?) -> some View {
         self
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let running {
-                    RunningTimerRow(entry: running)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.bar)
+                if !running.isEmpty {
+                    VStack(spacing: 6) {
+                        ForEach(running) { entry in RunningTimerRow(entry: entry) }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.bar)
                 }
             }
             .overlay(alignment: .bottomTrailing) {

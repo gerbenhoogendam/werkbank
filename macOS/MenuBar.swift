@@ -37,8 +37,8 @@ struct MenuBarPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let entry = running.first {
-                runningSection(entry)
+            if !running.isEmpty {
+                ForEach(running) { entry in runningSection(entry) }
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
             }
 

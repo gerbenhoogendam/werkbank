@@ -31,33 +31,10 @@ struct ClientField: View {
     var body: some View {
         let matches = self.matches
         VStack(alignment: .leading, spacing: 4) {
-            TextField("", text: $text)
-                .textFieldStyle(.roundedBorder)
-                .focused($focused)
-                .onKeyPress(.downArrow) {
-                    guard !matches.isEmpty else { return .ignored }
-                    highlighted = min(highlighted + 1, matches.count - 1)
-                    return .handled
-                }
-                .onKeyPress(.upArrow) {
-                    guard !matches.isEmpty else { return .ignored }
-                    highlighted = max(highlighted - 1, 0)
-                    return .handled
-                }
-                .onKeyPress(.tab) {
-                    guard !matches.isEmpty else { return .ignored }
-                    pick(matches[min(highlighted, matches.count - 1)])
-                    return .handled
-                }
-                .onKeyPress(.escape) {
-                    guard !matches.isEmpty else { return .ignored }
-                    settled = text.trimmingCharacters(in: .whitespaces)
-                    return .handled
-                }
-                .onSubmit {
-                    guard !matches.isEmpty else { return }
-                    pick(matches[min(highlighted, matches.count - 1)])
-                }
+            HStack(spacing: 6) {
+                ClientLogo(name: text, size: 18)
+                textField(matches)
+            }
             if !matches.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(Array(matches.enumerated()), id: \.element) { index, record in
@@ -86,9 +63,40 @@ struct ClientField: View {
         }
     }
 
+    private func textField(_ matches: [ClientRecord]) -> some View {
+        TextField("", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .focused($focused)
+            .onKeyPress(.downArrow) {
+                guard !matches.isEmpty else { return .ignored }
+                highlighted = min(highlighted + 1, matches.count - 1)
+                return .handled
+            }
+            .onKeyPress(.upArrow) {
+                guard !matches.isEmpty else { return .ignored }
+                highlighted = max(highlighted - 1, 0)
+                return .handled
+            }
+            .onKeyPress(.tab) {
+                guard !matches.isEmpty else { return .ignored }
+                pick(matches[min(highlighted, matches.count - 1)])
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                guard !matches.isEmpty else { return .ignored }
+                settled = text.trimmingCharacters(in: .whitespaces)
+                return .handled
+            }
+            .onSubmit {
+                guard !matches.isEmpty else { return }
+                pick(matches[min(highlighted, matches.count - 1)])
+            }
+    }
+
     private func row(_ record: ClientRecord, isOn: Bool) -> some View {
         Button { pick(record) } label: {
             HStack(spacing: 8) {
+                ClientLogo(name: record.name, size: 14)
                 Text(record.name)
                     .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
                 if let status = record.status {
@@ -119,5 +127,18 @@ struct ClientField: View {
         text = record.name
         settled = record.name
         highlighted = 0
+    }
+}
+
+/// Logo van een klant als het domein bekend is (klantenlijst, koppeltabel of kaart); anders niets.
+struct ClientLogo: View {
+    let name: String
+    var size: CGFloat = 16
+    private let directory = ClientDirectory.shared
+
+    var body: some View {
+        if let domain = directory.logoDomain(for: name) {
+            LogoView(domain: domain, fallbackName: name, size: size)
+        }
     }
 }

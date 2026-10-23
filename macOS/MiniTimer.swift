@@ -32,8 +32,11 @@ final class MiniTimerController {
     static let shared = MiniTimerController()
 
     private var panel: MiniTimerPanel?
+    /// Aantal pillen onder elkaar (één per lopende timer).
+    private var rows = 1
     private static let positionKey = "miniTimerPosition"   // "midX,maxY"
     private static let margin: CGFloat = 12               // ruimte voor de schaduw
+    static let rowSpacing: CGFloat = 6
 
     func start() {
         guard panel == nil else { return }
@@ -52,7 +55,10 @@ final class MiniTimerController {
 
         let view = MiniTimerView(
             onVisibilityChange: { [weak self] visible in self?.setVisible(visible) },
-            onResize: { [weak self] in self?.resize() }
+            onResize: { [weak self] rows in
+                self?.rows = max(1, rows)
+                self?.resize()
+            }
         )
         .environment(AppState.shared)
         .modelContainer(Persistence.container)
@@ -67,7 +73,8 @@ final class MiniTimerController {
 
     private var contentSize: NSSize {
         let size = MiniTimerSize(stored: UserDefaults.standard.string(forKey: SettingsKey.miniTimerSize))
-        return NSSize(width: size.width + Self.margin * 2, height: size.height + Self.margin * 2)
+        let height = size.height * CGFloat(rows) + Self.rowSpacing * CGFloat(rows - 1)
+        return NSSize(width: size.width + Self.margin * 2, height: height + Self.margin * 2)
     }
 
     private func setVisible(_ visible: Bool) {
@@ -122,7 +129,8 @@ final class MiniTimerController {
 
 struct MiniTimerView: View {
     var onVisibilityChange: (Bool) -> Void
-    var onResize: () -> Void
+    /// Aantal pillen onder elkaar, zodat het paneel mee groeit.
+    var onResize: (Int) -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
@@ -132,16 +140,26 @@ struct MiniTimerView: View {
 
     private var size: MiniTimerSize { MiniTimerSize(stored: sizeRaw) }
 
-    /// De lopende timer; anders de laatst gepauzeerde van de afgelopen twee uur, zodat je hem kunt hervatten.
-    private var current: TimeEntry? {
-        if let running = active.first(where: { $0.status == .running }) { return running }
+    /// De lopende timers (tot drie, oudste boven); loopt er geen, dan de laatst gepauzeerde van de afgelopen twee uur,
+    /// zodat je hem kunt hervatten.
+    private var shown: [TimeEntry] {
+        let running = active
+            .filter { $0.status == .running }
+            .sorted { ($0.firstStart ?? $0.createdAt) < ($1.firstStart ?? $1.createdAt) }
+        if !running.isEmpty { return Array(running.prefix(TimerService.maxRunning)) }
         let cutoff = Date().addingTimeInterval(-7200)
         return active
             .filter { $0.status == .paused && ($0.pausedAt ?? .distantPast) > cutoff }
             .max { ($0.pausedAt ?? .distantPast) < ($1.pausedAt ?? .distantPast) }
+            .map { [$0] } ?? []
     }
 
-    private var isShown: Bool { current != nil || appState.hudMessage != nil || appState.idlePrompt != nil }
+    private var isShown: Bool { !shown.isEmpty || appState.hudMessage != nil || appState.idlePrompt != nil }
+
+    /// Een melding of vraag staat als één pil; anders één pil per timer.
+    private var rows: Int {
+        appState.idlePrompt != nil || appState.hudMessage != nil ? 1 : max(1, shown.count)
+    }
 
     var body: some View {
         Group {
@@ -155,9 +173,11 @@ struct MiniTimerView: View {
                 messageContent(message)
                     .padding(12)
                     .transition(.opacity)
-            } else if let entry = current {
-                content(entry)
-                    .padding(12)   // ruimte voor de schaduw; moet gelijk zijn aan MiniTimerController.margin
+            } else if !shown.isEmpty {
+                VStack(spacing: MiniTimerController.rowSpacing) {
+                    ForEach(shown) { entry in content(entry) }
+                }
+                .padding(12)   // ruimte voor de schaduw; moet gelijk zijn aan MiniTimerController.margin
             } else {
                 Color.clear.frame(width: 1, height: 1)
             }
@@ -165,7 +185,8 @@ struct MiniTimerView: View {
         .animation(.easeOut(duration: 0.2), value: appState.hudMessage)
         .animation(.easeOut(duration: 0.2), value: appState.idlePrompt)
         .onChange(of: isShown, initial: true) { _, shown in onVisibilityChange(shown) }
-        .onChange(of: sizeRaw) { _, _ in onResize() }
+        .onChange(of: sizeRaw) { _, _ in onResize(rows) }
+        .onChange(of: rows, initial: true) { _, count in onResize(count) }
     }
 
     private func content(_ entry: TimeEntry) -> some View {

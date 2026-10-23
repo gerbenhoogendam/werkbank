@@ -37,7 +37,7 @@ struct TimeListView: View {
     /// De regels in één keer verdeeld (niet per onderdeel van de weergave opnieuw filteren en sorteren).
     @MainActor
     private struct Parts {
-        var running: TimeEntry?
+        var running: [TimeEntry] = []
         /// Nog te schrijven: bovenaan. Afgevinkte regels gaan naar "Al geschreven" onderaan.
         var toWrite: [TimeEntry] = []
         var written: [TimeEntry] = []
@@ -46,7 +46,7 @@ struct TimeListView: View {
         init(_ entries: [TimeEntry], sortWritten: Bool) {
             for entry in entries {
                 switch (entry.status, entry.isWritten) {
-                case (.running, _): if running == nil { running = entry }
+                case (.running, _): running.append(entry)
                 case (_, true): written.append(entry)
                 default: toWrite.append(entry)
                 }
@@ -61,7 +61,7 @@ struct TimeListView: View {
 
     var body: some View {
         let parts = Parts(entries, sortWritten: showWritten)
-        let running = parts.running
+        let running = parts.running.sorted { ($0.firstStart ?? $0.createdAt) < ($1.firstStart ?? $1.createdAt) }
         let toWrite = parts.toWrite
         let written = parts.written
         return VStack(spacing: 0) {
@@ -73,8 +73,8 @@ struct TimeListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        if let running {
-                            RunningTimerRow(entry: running)
+                        ForEach(running) { entry in
+                            RunningTimerRow(entry: entry)
                                 .padding(.bottom, 6)
                         }
                         ForEach(toWrite) { entry in
@@ -97,6 +97,7 @@ struct TimeListView: View {
             }
         }
         .background(ThingsColor.backgroundContent)
+        .task { await ClientDirectory.shared.refresh() }   // logo's per klant
         .fileExporter(isPresented: $isExporting, document: exportDocument,
                       contentType: .commaSeparatedText, defaultFilename: "Werkbank-tijd") { result in
             if case .success = result { appState.showToast("Export bewaard") }
@@ -231,6 +232,7 @@ struct RunningTimerRow: View {
                 .fill(ThingsColor.running)
                 .frame(width: 9, height: 9)
                 .accessibilityHidden(true)
+            ClientLogo(name: entry.client, size: 18)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.title)
@@ -322,6 +324,7 @@ struct TimeEntryRow: View {
             TodoCheckbox(status: writtenBinding, title: entry.title)
                 .disabled(entry.status != .finished)
                 .help(entry.status == .finished ? "Geschreven in het facturatiesysteem" : "Stop eerst de timer")
+            ClientLogo(name: entry.client, size: 16)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.title)

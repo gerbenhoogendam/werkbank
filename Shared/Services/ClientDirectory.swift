@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 import WerkbankCore
 
 /// De klantenlijst: het bestand dat in Voorkeuren is aangewezen, plus alle .csv-bestanden in iCloud Drive/Werkbank.
@@ -16,7 +17,10 @@ final class ClientDirectory {
     private(set) var domainMap: [String: String] = [:]
     /// Naam van het aangewezen bestand, voor Voorkeuren.
     private(set) var chosenFileName: String?
-    /// Failliete klanten: komen nergens meer voor, ook niet als ze nog in oude tijdregels staan.
+    /// Klantnaam (kleine letters) → domein voor het logo: klantenlijst, dan koppeltabel, dan kaarten.
+    private(set) var logoDomains: [String: String] = [:]
+    /// Klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN: komen nergens meer voor, ook niet als ze nog in oude
+    /// tijdregels staan.
     @ObservationIgnored private var removedNames: Set<String> = []
     @ObservationIgnored private var stamps: [String: Date] = [:]
     @ObservationIgnored private var isRefreshing = false
@@ -33,6 +37,7 @@ final class ClientDirectory {
         let folder = WerkbankFolder.url
         let chosen = Self.resolveChosenFile()
         chosenFileName = chosen?.lastPathComponent
+        defer { rebuildLogoDomains() }   // ook als de lijst niet veranderde: koppeltabel en kaarten wel
         let known = force ? [:] : stamps
         let result = await Task.detached(priority: .utility) { () -> (records: [ClientRecord], stamps: [String: Date])? in
             let fm = FileManager.default
@@ -73,10 +78,34 @@ final class ClientDirectory {
             return (records, stamps)
         }.value
         guard let result else { return }
-        records = result.records.filter { $0.status != "failliet" }
-        removedNames = Set(result.records.filter { $0.status == "failliet" }.map { $0.name.lowercased() })
+        records = result.records.filter { !$0.isInactive }
+        removedNames = Set(result.records.filter(\.isInactive).map { $0.name.lowercased() })
         domainMap = ClientList.domainMap(records)
         stamps = result.stamps
+    }
+
+    /// Domein voor het logo van een klant, als dat bekend is.
+    func logoDomain(for name: String) -> String? {
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return key.isEmpty ? nil : logoDomains[key]
+    }
+
+    private func rebuildLogoDomains() {
+        let context = Persistence.container.mainContext
+        var map: [String: String] = [:]
+        for card in BoardService.allCards(in: context) {
+            if let label = card.clientLabel, let domain = card.logoDomain { map[label.lowercased()] = domain }
+        }
+        for mapping in (try? context.fetch(FetchDescriptor<ClientMapping>())) ?? []
+        where !ClientNaming.freemailDomains.contains(mapping.domain.lowercased()) {
+            map[mapping.client.lowercased()] = mapping.domain.lowercased()
+        }
+        for record in records {
+            if let domain = record.domains.first(where: { !ClientNaming.freemailDomains.contains($0) }) {
+                map[record.name.lowercased()] = domain
+            }
+        }
+        if map != logoDomains { logoDomains = map }
     }
 
     /// Treffers uit de lijst, aangevuld met klantnamen die al in Werkbank voorkomen.
