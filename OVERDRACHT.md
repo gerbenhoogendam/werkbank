@@ -24,7 +24,8 @@ controleerde of het compileerde, en de eigenaar testte het gedrag.
 - Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
 - `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.
 - CI (GitHub Actions, `.github/workflows/werkbank.yml`) bouwt macOS en iOS en draait de tests bij elke push naar
-  `main`. Na een push moet die groen zijn.
+  `main`. Na een push moet die groen zijn. CI gebruikt dezelfde Xcode als de Mac (`XCODE_VERSION` in de workflow,
+  runner `xcode-27`); werk die bij als Xcode op de Mac wordt bijgewerkt.
 - Er werkt soms ook een cloudsessie aan dezelfde repo. Commit en push je eigen werk voordat je stopt, en begin met
   `git pull`. Anders faalt het `--ff-only` in het script.
 

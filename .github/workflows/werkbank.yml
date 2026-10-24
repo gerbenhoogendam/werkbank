@@ -6,19 +6,26 @@ on:
   push:
     branches: [main, "claude/**"]
 
+# Zelfde Xcode als op de Mac van de eigenaar (`xcodebuild -version`), zodat CI dezelfde compilerfouten ziet.
+# De runner `xcode-27` heeft /Applications/Xcode_<versie>.app voor 27.0, 27.1 en 27.2.
+env:
+  XCODE_VERSION: "27.0"
+
 jobs:
   core-tests:
     name: WerkbankCore tests
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
+      - name: Xcode kiezen
+        run: sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app" && xcodebuild -version
       - name: swift test
         working-directory: WerkbankCore
         run: swift test
 
   build:
     name: Build ${{ matrix.scheme }}
-    runs-on: macos-15
+    runs-on: xcode-27
     strategy:
       fail-fast: false
       matrix:
@@ -29,8 +36,11 @@ jobs:
             destination: "generic/platform=iOS Simulator"
     steps:
       - uses: actions/checkout@v4
-      - name: Xcode-versie
-        run: xcodebuild -version
+      - name: Xcode kiezen
+        run: sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app" && xcodebuild -version
+      - name: Metal-toolchain
+        if: matrix.scheme == 'Werkbank-macOS'
+        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
       - name: XcodeGen installeren
         run: brew install xcodegen
       - name: Project genereren
