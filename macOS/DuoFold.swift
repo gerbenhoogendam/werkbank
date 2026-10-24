@@ -87,7 +87,7 @@ struct DuoFoldEffect: ViewModifier, Animatable {
         Group {
             if usesShader {
                 content
-                    .overlay(Color.black.opacity(dim).blendMode(.sourceAtop))
+                    .overlay(Rectangle().foregroundStyle(Color.black.opacity(dim)).blendMode(.sourceAtop))
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .compositingGroup()
                     .layerEffect(ShaderLibrary.frostTilt(.boundingRect, .float(tilt), .float(DuoFold.frostSpread),
