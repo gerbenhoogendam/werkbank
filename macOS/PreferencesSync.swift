@@ -19,6 +19,8 @@ final class PreferencesSync {
         SettingsKey.miniTimerSize, SettingsKey.officeAddress, SettingsKey.homeAddress, SettingsKey.eventOpacity,
         calendarColorsKey, "mail.signatureHTML", "mail.signatureLogo", "mail.senderName", MailSettings.newestAtBottomKey,
         "gmail.displayNames", ClaudeSettings.modelKey, ClaudeSettings.contextKey,
+        FoldSpeed.windowOpen.key, FoldSpeed.windowClose.key, FoldSpeed.mailOpen.key, FoldSpeed.mailClose.key,
+        FoldSpeed.send.key,
     ]
     private static let calendarColorsKey = "calendar.colors"
     /// Alleen op deze Mac.

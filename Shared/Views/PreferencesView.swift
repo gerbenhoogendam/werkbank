@@ -161,6 +161,12 @@ private struct DisplayPreferences: View {
             } header: {
                 Text("Minitimer")
             }
+
+            Section("Animaties") {
+                ForEach(FoldSpeed.allCases) { part in
+                    FoldSpeedRow(part: part)
+                }
+            }
             #endif
 
             Section("Agenda") {
@@ -201,6 +207,31 @@ private struct DisplayPreferences: View {
         )
     }
 }
+
+#if os(macOS)
+/// Duur van één vouwanimatie (`DuoFold`), in seconden.
+private struct FoldSpeedRow: View {
+    let part: FoldSpeed
+    @AppStorage private var duration: Double
+
+    init(part: FoldSpeed) {
+        self.part = part
+        _duration = AppStorage(wrappedValue: part.defaultDuration, part.key)
+    }
+
+    var body: some View {
+        LabeledContent(part.title) {
+            HStack(spacing: 10) {
+                Slider(value: $duration, in: FoldSpeed.range, step: 0.05)
+                    .frame(width: 180)
+                Text("\(duration.formatted(.number.precision(.fractionLength(2)))) s")
+                    .monospacedDigit()
+                    .frame(width: 48, alignment: .trailing)
+            }
+        }
+    }
+}
+#endif
 
 // MARK: - Kolommen
 

@@ -374,8 +374,8 @@ struct MailWindowView: View {
                         suggestion: draft.flatMap { $0.id == usedDraftID ? nil : $0.text },
                         onSuggestionDone: { usedDraftID = model.latestDraft?.id },
                         onSent: {
-                            // Verstuurd: het gesprek vouwt dicht.
-                            PanelStore.shared.close(id: PanelKind.mail(ref).id)
+                            // Verstuurd: het gesprek vouwt weg.
+                            PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
                         },
                         onDiscard: {
                             usedDraftID = model.latestDraft?.id

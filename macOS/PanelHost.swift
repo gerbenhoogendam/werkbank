@@ -38,6 +38,8 @@ final class PanelStore {
     static let shared = PanelStore()
 
     private(set) var panels: [PanelKind] = []
+    /// Panelen waarvan nu een afbeelding boven het venster wegvouwt (`DuoWindowFold`); het paneel zelf verdwijnt meteen.
+    private(set) var ghostedIDs: Set<String> = []
     /// Panelen waarin je iets doet (antwoord, analyse, invoer). Die sluiten niet bij een klik ernaast.
     @ObservationIgnored private var engagedIDs: Set<String> = []
 
@@ -48,20 +50,12 @@ final class PanelStore {
 
     /// Klik naast de panelen: sluit wat alleen gelezen werd. Afspraken regelen dat zelf (wijzigingen gaan voor).
     func closeUnengaged() {
-        let closing = panels.filter { !$0.isEvent && !engagedIDs.contains($0.id) }
-        withAnimation(Self.animation(for: closing, opening: false)) {
-            panels.removeAll { !$0.isEvent && !engagedIDs.contains($0.id) }
-        }
-        engagedIDs.formIntersection(Set(panels.map(\.id)))
-    }
-
-    private static func animation(for panels: [PanelKind], opening: Bool) -> Animation {
-        guard panels.contains(where: \.foldsLikeDuo) else { return .easeOut(duration: 0.18) }
-        return opening ? DuoFold.opening : DuoFold.closing
+        remove(panels.filter { !$0.isEvent && !engagedIDs.contains($0.id) }, part: .mailClose)
     }
 
     func open(_ panel: PanelKind) {
-        withAnimation(Self.animation(for: [panel], opening: true)) {
+        ghostedIDs.remove(panel.id)
+        withAnimation(panel.foldsLikeDuo ? DuoFold.opening(.mailOpen) : .easeOut(duration: 0.18)) {
             panels.removeAll { $0.id == panel.id }
             panels.append(panel)
             if panels.count > 2 { panels.removeFirst(panels.count - 2) }
@@ -70,18 +64,45 @@ final class PanelStore {
     }
 
     func close(_ panel: PanelKind) {
-        withAnimation(Self.animation(for: [panel], opening: false)) { panels.removeAll { $0.id == panel.id } }
-        engagedIDs.remove(panel.id)
+        remove([panel], part: .mailClose)
     }
 
-    func closeMail(messageID: String) {
-        close(id: "mail-\(messageID)")
+    /// `snapshot: false` als het paneel net niet in beeld was (slepen naar een andere mailbox): dan geen afbeelding.
+    func closeMail(messageID: String, snapshot: Bool = true) {
+        guard let panel = panels.first(where: { $0.id == "mail-\(messageID)" }) else { return }
+        remove([panel], part: .mailClose, snapshot: snapshot)
     }
 
-    /// Sluit een paneel op id (na versturen: het gesprek of opstelblok vouwt dicht).
-    func close(id: String) {
+    /// Na versturen: het gesprek of opstelblok vouwt weg.
+    func closeAfterSending(id: String) {
         guard let panel = panels.first(where: { $0.id == id }) else { return }
-        close(panel)
+        remove([panel], part: .send)
+    }
+
+    /// Mail en opstellen: eerst een afbeelding laten wegvouwen (echt matglas), anders de benaderde vouw van het paneel.
+    private func remove(_ closing: [PanelKind], part: FoldSpeed, snapshot: Bool = true) {
+        guard !closing.isEmpty else { return }
+        engagedIDs.subtract(closing.map(\.id))
+        var ghosted: Set<String> = []
+        for panel in closing where snapshot && panel.foldsLikeDuo {
+            if DuoWindowFold.shared.foldAway(panelID: panel.id, part: part) { ghosted.insert(panel.id) }
+        }
+        let live = closing.filter { !ghosted.contains($0.id) }
+        if !live.isEmpty {
+            let liveIDs = Set(live.map(\.id))
+            withAnimation(live.contains(where: \.foldsLikeDuo) ? DuoFold.closing(part) : .easeOut(duration: 0.18)) {
+                panels.removeAll { liveIDs.contains($0.id) }
+            }
+        }
+        guard !ghosted.isEmpty else { return }
+        ghostedIDs.formUnion(ghosted)
+        Task { @MainActor in
+            // Eerst de overgang zonder vouw laten gelden, dan weghalen; de rest schuift gewoon op.
+            try? await Task.sleep(for: .milliseconds(20))
+            withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { ghosted.contains($0.id) } }
+            try? await Task.sleep(for: .milliseconds(400))
+            ghostedIDs.subtract(ghosted)
+        }
     }
 }
 
@@ -94,12 +115,13 @@ struct PanelOverlay: View {
     var body: some View {
         GeometryReader { geo in
             let single = store.panels.count < 2
-            let width = single ? geo.size.width * 0.6 : (geo.size.width - 36) / 2
+            let height = max(geo.size.height - 40, 1)
             HStack(spacing: 12) {
                 ForEach(store.panels) { panel in
                     PanelChrome(panel: panel)
                         .transition(panel.foldsLikeDuo
-                                    ? AnyTransition.duoFold(width: width, shadow: ThingsColor.cardShadow)
+                                    ? AnyTransition.duoFold(height: height, shadow: ThingsColor.cardShadow,
+                                                            hidesInstantly: store.ghostedIDs.contains(panel.id))
                                     : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -153,6 +175,7 @@ private struct PanelChrome: View {
                 EventDetailView(target: .existing(event)) { PanelStore.shared.close(panel) }
             }
         }
+        .background(PanelProbe(panelID: panel.id))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(ThingsColor.separator))
         // Binnen de Duo-vouw valt deze schaduw weg (afgesneden door de vouwvorm); het effect tekent er dan zelf een.

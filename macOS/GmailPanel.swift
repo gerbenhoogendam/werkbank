@@ -223,7 +223,7 @@ struct GmailPanel: View {
             Task { @MainActor in
                 let source = gmail.account(for: payload.messageID)
                 guard source != email else { return }
-                PanelStore.shared.closeMail(messageID: payload.messageID)
+                PanelStore.shared.closeMail(messageID: payload.messageID, snapshot: false)
                 await gmail.moveThread(threadID: payload.threadID, messageID: payload.messageID, from: source, to: email,
                                        appState: appState)
             }

@@ -79,12 +79,16 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 12. **Logo's per klant** (`ClientDirectory.logoDomains`, `ClientLogo`): naast het klantveld, in de suggesties en in
     Tijd schrijven; bron is de klantenlijst (kolom Domeinnaam), dan de koppeltabel, dan kaarten.
 13. **Klantenlijst**: klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN worden overal weggelaten.
-14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`). Mail- en opstelpanelen openen en sluiten met
-    de vouw (ook na versturen), andere panelen vervagen zoals eerst. Het hoofdvenster en losse opstelvensters vouwen
-    open bij openen en dicht bij ⌘W, de sluitknop en ⌘Q. Na te gaan: werken waas en verkleining ook over de mailtekst
-    (WKWebView) en tekstvelden; verschijnt het hoofdvenster na het openen altijd (het staat ±0,3 s achter de
-    bureaubladachtergrond); geen flits van het venster bij openen; geen gat tussen venster en vouw bij sluiten.
-    Lukt de afbeelding van het venster niet (`CGWindowListCreateImage`), dan opent of sluit het zonder vouw.
+14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`, `macOS/Shaders/FrostTilt.metal`). Eén vlak
+    kantelt om de onderrand naar achteren weg, achter matglas: hoe verder naar achteren, hoe waziger en donkerder.
+    Openen gaat van plat naar rechtop. Geldt voor het hoofdvenster en losse opstelvensters (openen, ⌘W, sluitknop,
+    ⌘Q), mail- en opstelpanelen (openen, sluiten, versturen). Sluiten en versturen vouwen een afbeelding van het
+    paneel weg met de shader; openen van een paneel is benaderd (één waas en een verloop), omdat er dan nog niets is om
+    vast te leggen en de shader de mailtekst niet kan lezen. Duur per onderdeel in Voorkeuren › Weergave › Animaties.
+    Na te gaan: verschijnt het hoofdvenster na het openen altijd (het staat ±0,3 s achter de bureaubladachtergrond);
+    geen flits bij openen; geen gat of sprong tussen paneel of venster en de afbeelding bij sluiten; klopt de plek van
+    de afbeelding van een paneel (ook met het Gmail-paneel open en met twee panelen). Lukt de afbeelding
+    (`CGWindowListCreateImage`) niet, dan sluit een paneel met de benaderde vouw en een venster zonder vouw.
 
 ## Open punten
 
@@ -111,7 +115,7 @@ onbekend); plan mijn dag.
 | Onderdeel | Bestanden |
 |---|---|
 | Hoofdvenster, panelen, blur | `macOS/MainView.swift`, `macOS/PanelHost.swift` |
-| Duo-vouw (openen en sluiten) | `macOS/DuoFold.swift` (effect, overgang), `macOS/DuoWindowFold.swift` (vensters) |
+| Duo-vouw (openen en sluiten) | `macOS/DuoFold.swift` (effect, duur), `macOS/DuoWindowFold.swift` (afbeeldingen), `macOS/Shaders/FrostTilt.metal` |
 | Board en slepen | `macOS/BoardView.swift`, `macOS/DragCoordinator.swift`, `Shared/Services/BoardService.swift`, `Shared/Views/CardView.swift` |
 | Agenda | `macOS/AgendaView.swift`, `macOS/EventDetailView.swift`, `Shared/Services/CalendarService.swift` |
 | Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift` |
@@ -127,7 +131,7 @@ onbekend); plan mijn dag.
 - Een `DropDelegate` kan tijdens één sleepactie verouderde waarden vasthouden. Gebruik `onDrop(isTargeted:)` per
   vlak of een referentiemodel. Geneste dropzones: de binnenste wint.
 - Een `layerEffect` of Metal-shader kan geen AppKit-inhoud lezen (WKWebView, `ScrollView`, tekstvelden): die worden
-  niet of als vervangend plaatje getekend. Daarom is de Duo-vouw nagebootst met `scaleEffect`, `blur`, een verloop
-  en een vorm. Een `.metal`-bestand vraagt in Xcode 26 bovendien de losse Metal-toolchain.
+  niet of als vervangend plaatje getekend. Daarom draait de matglas-shader alleen op afbeeldingen van vensters en
+  panelen. Voor `.metal`-bestanden is in Xcode 26 de losse Metal-toolchain nodig (het script controleert dat).
 - Kolommen hebben vaste sleutels (`inbox`, `todo`, `doing`, `waiting`); de namen zijn aanpasbaar.
 - `GmailSession.api(_:query:method:body:account:)` regelt het token per mailbox en één nieuwe poging bij 401.

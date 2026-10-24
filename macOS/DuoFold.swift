@@ -1,72 +1,78 @@
 import SwiftUI
 
-/// De vouw van de iPhone Duo: het glas kantelt om een scharnier in het midden, de inhoud blijft liggen. Door het glas
-/// gezien rekt het deel bij het scharnier uit over de breedte, worden de randen korter (perspectief) en nemen waas en
-/// donkerte toe met de afstand tot het scharnier; vlak voor dicht is het een donkere strook.
+/// De Duo-vouw: een vlak kantelt om zijn onderrand naar achteren weg, achter het beeldscherm alsof dat matglas is. Hoe
+/// verder een deel achter het glas ligt, hoe waziger en donkerder; de onderrand blijft het scherpst. Bij openen komt het
+/// vlak van plat naar voren tot het rechtop staat, en wordt het weer scherp.
 ///
-/// Model en waarden komen uit DuoLikeAnimation van Elijah Semyonov (MIT). Dat rekent het per pixel uit in een
-/// Metal-shader; hier is het nagebootst met gewone SwiftUI-effecten, omdat een shader geen AppKit-inhoud kan lezen
-/// (mailtekst in een WKWebView, tekstvelden) en er zo geen Metal-toolchain nodig is om te bouwen.
+/// Het matglas per pixel is een Metal-shader (`Shaders/FrostTilt.metal`) en werkt alleen op een afbeelding: vensters, en
+/// panelen die dichtgaan (daarvan maakt `DuoWindowFold` eerst een afbeelding). Een paneel dat opengaat is er nog niet als
+/// afbeelding, en een shader kan de AppKit-inhoud (mailtekst, tekstvelden) niet lezen; daar is het matglas benaderd met
+/// één waas en een verloop van donker naar licht.
 enum DuoFold {
-    /// Kanteling bij dicht: net geen 90°, zodat het eerst donker wordt en dan pas verdwijnt.
-    static let maxAngle = 88.0 * Double.pi / 180
-    /// Afstand van het oog tot het scherm: 320 mm bij 6 punten per mm.
-    static let eyeDistance = 1920.0
-    /// Straal van de waas per punt afstand tussen glas en inhoud.
-    static let blurSpread = 0.12
-    /// Licht dat per punt waas verloren gaat.
-    static let darkening = 0.015
+    /// Waasstraal per punt diepte achter het glas, en de grootste straal.
+    static let frostSpread = 0.06
+    static let maxFrost = 64.0
+    /// Licht dat per punt waasstraal verloren gaat.
+    static let darkening = 0.01
+    static let perspective = 0.35
 
-    static let opening = Animation.timingCurve(0.2, 0.75, 0.25, 1, duration: 0.5)
-    static let closing = Animation.timingCurve(0.45, 0, 0.75, 0.55, duration: 0.42)
-    static let windowOpening = Animation.timingCurve(0.2, 0.75, 0.25, 1, duration: 0.55)
-    static let windowClosing = Animation.timingCurve(0.45, 0, 0.75, 0.55, duration: 0.45)
-}
-
-/// Stand van de vouw voor een vlak van `width` punten breed: hoe breder, hoe sterker het perspectief, zoals bij echt glas.
-struct DuoFoldPose {
-    let progress: Double
-    let width: Double
-
-    private var angle: Double { min(max(progress, 0), 1) * DuoFold.maxAngle }
-
-    /// Hoeveel verder het oog door de buitenrand kijkt dan door het scharnier (1 als het plat ligt).
-    var edgeStretch: Double { DuoFold.eyeDistance / max(DuoFold.eyeDistance - width / 2 * sin(angle), 1) }
-
-    /// Horizontale vergroting: het deel bij het scharnier vult het vlak.
-    var zoom: Double { min(1 / max(cos(angle) * (1 + edgeStretch) / 2, 0.0001), 4.5) }
-
-    /// Waas over het vlak; vooral in de tweede helft van de beweging, zodat het begin scherp blijft.
-    var blur: Double { DuoFold.blurSpread * width / 4 * pow(sin(angle), 3) }
-
-    /// Donkerte op `fraction` van het scharnier (0) naar de rand (1).
-    func darkness(at fraction: Double) -> Double {
-        min(1, DuoFold.darkening * DuoFold.blurSpread * fraction * width / 2 * sin(angle))
+    static func opening(_ part: FoldSpeed) -> Animation {
+        .timingCurve(0.2, 0.75, 0.25, 1, duration: part.duration)
     }
 
-    /// Het donkere moment vlak voor dicht, over het hele vlak.
-    var dim: Double { smoothstep(0.6, 1, progress) * 0.85 }
-
-    var opacity: Double { 1 - smoothstep(0.85, 1, progress) }
-
-    private func smoothstep(_ from: Double, _ to: Double, _ x: Double) -> Double {
-        let t = min(max((x - from) / (to - from), 0), 1)
-        return t * t * (3 - 2 * t)
+    static func closing(_ part: FoldSpeed) -> Animation {
+        .timingCurve(0.45, 0, 0.75, 0.55, duration: part.duration)
     }
 }
 
-/// 0: plat, gewoon in beeld. 1: dichtgevouwen. Als overgang (`.duoFold`) speelt het bij openen en sluiten.
+/// Duur van de vouw per onderdeel, in Voorkeuren › Weergave.
+enum FoldSpeed: String, CaseIterable, Identifiable {
+    case windowOpen, windowClose, mailOpen, mailClose, send
+
+    static let range = 0.15...1.5
+
+    var id: String { rawValue }
+    var key: String { "animation.\(rawValue)" }
+
+    var title: String {
+        switch self {
+        case .windowOpen: "Venster openen"
+        case .windowClose: "Venster sluiten"
+        case .mailOpen: "Mail openen"
+        case .mailClose: "Mail sluiten"
+        case .send: "Versturen"
+        }
+    }
+
+    var defaultDuration: Double {
+        switch self {
+        case .windowOpen: 0.55
+        case .windowClose: 0.45
+        case .mailOpen: 0.5
+        case .mailClose, .send: 0.42
+        }
+    }
+
+    /// In seconden.
+    var duration: Double {
+        let stored = UserDefaults.standard.double(forKey: key)
+        return stored > 0 ? min(max(stored, Self.range.lowerBound), Self.range.upperBound) : defaultDuration
+    }
+}
+
+/// 0: rechtop, gewoon in beeld. 1: plat achterover, weg. Als overgang (`.duoFold`) speelt het bij openen en sluiten.
 struct DuoFoldEffect: ViewModifier, Animatable {
     var progress: Double
-    /// Breedte van het vlak in punten.
-    var width: Double
+    /// Hoogte van het vlak in punten (voor de benaderde waas; de shader meet zelf).
+    var height: Double
     var cornerRadius: CGFloat = 12
-    /// Schaduw rond het vlak; verdwijnt in het begin van de vouw.
+    /// Schaduw rond het vlak; verdwijnt in het begin van de beweging.
     var shadow: Color = .clear
     var shadowRadius: CGFloat = 18
-    /// Inhoud met eigen doorzichtige delen (afbeelding van een venster met ronde hoeken): de donkerte valt alleen op
-    /// de inhoud. Alleen voor afbeeldingen; een compositing group om AppKit-inhoud kan die niet tekenen.
-    var keepsTransparency = false
+    /// Afbeelding: matglas per pixel met de shader. Alleen voor afbeeldingen; AppKit-inhoud tekent een shader niet.
+    var usesShader = false
+    /// Van dit paneel vouwt al een afbeelding weg (`DuoWindowFold`): het paneel zelf verdwijnt meteen.
+    var hidesInstantly = false
 
     var animatableData: Double {
         get { progress }
@@ -74,70 +80,50 @@ struct DuoFoldEffect: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        let pose = DuoFoldPose(progress: progress, width: width)
+        let tilt = min(max(progress, 0), 1) * Double.pi / 2
+        let topFrost = min(DuoFold.frostSpread * height * sin(tilt), DuoFold.maxFrost)
+        // Het laatste stuk, bijna plat: alles wordt donker.
+        let dim = smoothstep(0.55, 1, progress) * 0.7
         Group {
-            if keepsTransparency {
+            if usesShader {
                 content
-                    .scaleEffect(x: pose.zoom, y: 1)
-                    .blur(radius: pose.blur)
-                    .overlay(DuoFoldShade(pose: pose).blendMode(.sourceAtop))
+                    .overlay(Color.black.opacity(dim).blendMode(.sourceAtop))
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .compositingGroup()
+                    .layerEffect(ShaderLibrary.frostTilt(.boundingRect, .float(tilt), .float(DuoFold.frostSpread),
+                                                         .float(DuoFold.maxFrost), .float(DuoFold.darkening)),
+                                 maxSampleOffset: .zero, isEnabled: progress > 0.001)
             } else {
                 content
-                    .scaleEffect(x: pose.zoom, y: 1)
-                    .blur(radius: pose.blur)
-                    .overlay(DuoFoldShade(pose: pose).allowsHitTesting(false))
+                    .blur(radius: topFrost / 3)
+                    .overlay {
+                        ZStack {
+                            LinearGradient(colors: [.black.opacity(min(DuoFold.darkening * topFrost, 1)), .clear],
+                                           startPoint: .top, endPoint: .bottom)
+                            Color.black.opacity(dim)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
         }
-        .clipShape(DuoFoldShape(pose: pose, cornerRadius: cornerRadius))
+        .rotation3DEffect(.radians(tilt), axis: (x: 1, y: 0, z: 0), anchor: .bottom, anchorZ: 0,
+                          perspective: DuoFold.perspective)
         .shadow(color: shadow.opacity(1 - min(progress * 2.5, 1)), radius: shadowRadius, x: 0, y: shadowRadius / 3)
-        .opacity(pose.opacity)
+        .opacity(hidesInstantly && progress > 0 ? 0 : 1 - smoothstep(0.9, 1, progress))
         .allowsHitTesting(progress < 0.001)
+    }
+
+    private func smoothstep(_ from: Double, _ to: Double, _ x: Double) -> Double {
+        let t = min(max((x - from) / (to - from), 0), 1)
+        return t * t * (3 - 2 * t)
     }
 }
 
 extension AnyTransition {
     /// Openen en sluiten met de Duo-vouw.
-    static func duoFold(width: Double, shadow: Color) -> AnyTransition {
-        .modifier(active: DuoFoldEffect(progress: 1, width: width, shadow: shadow),
-                  identity: DuoFoldEffect(progress: 0, width: width, shadow: shadow))
-    }
-}
-
-/// Wat van het vlak zichtbaar is: de randen worden korter naarmate ze verder kantelen, met de vouwlijn in het midden.
-private struct DuoFoldShape: Shape {
-    let pose: DuoFoldPose
-    let cornerRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let rounded = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
-        guard pose.progress > 0.0001 else { return rounded }
-        let inset = rect.height / 2 * (1 - 1 / pose.edgeStretch)
-        var bowtie = Path()
-        bowtie.move(to: CGPoint(x: rect.minX, y: rect.minY + inset))
-        bowtie.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
-        bowtie.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + inset))
-        bowtie.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - inset))
-        bowtie.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        bowtie.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - inset))
-        bowtie.closeSubpath()
-        return rounded.intersection(bowtie)
-    }
-}
-
-/// Donkerte die toeneemt met de afstand tot het scharnier, plus het donkere moment vlak voor dicht.
-private struct DuoFoldShade: View {
-    let pose: DuoFoldPose
-
-    var body: some View {
-        let fractions: [Double] = [1, 0.5, 0, 0.5, 1]
-        let stops = fractions.enumerated().map { index, fraction in
-            Gradient.Stop(color: .black.opacity(pose.darkness(at: fraction)),
-                          location: Double(index) / Double(fractions.count - 1))
-        }
-        ZStack {
-            LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
-            Color.black.opacity(pose.dim)
-        }
+    static func duoFold(height: Double, shadow: Color, hidesInstantly: Bool = false) -> AnyTransition {
+        .modifier(active: DuoFoldEffect(progress: 1, height: height, shadow: shadow, hidesInstantly: hidesInstantly),
+                  identity: DuoFoldEffect(progress: 0, height: height, shadow: shadow, hidesInstantly: hidesInstantly))
     }
 }

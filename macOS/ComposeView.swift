@@ -645,7 +645,7 @@ struct ComposeView: View {
             } else if detached {
                 onSent?()
             } else {
-                PanelStore.shared.close(id: PanelKind.compose(ref).id)
+                PanelStore.shared.closeAfterSending(id: PanelKind.compose(ref).id)
             }
         } catch {
             errorText = "Versturen mislukt: \(error.localizedDescription)"
@@ -715,7 +715,12 @@ struct DetachedComposeWindow: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ComposeView(ref: value.ref, onSent: { dismiss() }, onDiscard: { dismiss() },
+        ComposeView(ref: value.ref,
+                    onSent: {
+                        DuoWindowFold.shared.markSending()
+                        dismiss()
+                    },
+                    onDiscard: { dismiss() },
                     detached: true, restored: ComposeDrafts.draft(value.draftID))
             .frame(minWidth: 520, minHeight: 420)
             .background(DuoWindowHook().frame(width: 0, height: 0))
