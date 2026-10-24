@@ -120,7 +120,7 @@ struct PanelOverlay: View {
                 ForEach(store.panels) { panel in
                     PanelChrome(panel: panel)
                         .transition(panel.foldsLikeDuo
-                                    ? AnyTransition.duoFold(height: height, shadow: ThingsColor.cardShadow,
+                                    ? AnyTransition.duoFold(height: height,
                                                             hidesInstantly: store.ghostedIDs.contains(panel.id))
                                     : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -178,7 +178,6 @@ private struct PanelChrome: View {
         .background(PanelProbe(panelID: panel.id))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(ThingsColor.separator))
-        // Binnen de Duo-vouw valt deze schaduw weg (afgesneden door de vouwvorm); het effect tekent er dan zelf een.
         .shadow(color: ThingsColor.cardShadow, radius: 18, x: 0, y: 6)
     }
 }

@@ -24,11 +24,6 @@ if pgrep -x Werkbank >/dev/null; then
     pkill -x Werkbank 2>/dev/null || true
 fi
 
-# De Duo-vouw heeft een Metal-shader; in Xcode 26 is de Metal-toolchain een losse download.
-if ! xcrun metal --version >/dev/null 2>&1; then
-    echo "Metal-toolchain ontbreekt: xcodebuild -downloadComponent MetalToolchain" >&2; exit 1
-fi
-
 echo "› Bouwen (dat duurt even)…"
 # -allowProvisioningUpdates: Xcode werkt het ondertekeningsprofiel bij als de app nieuwe rechten krijgt (bijv. iCloud Drive).
 xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug \

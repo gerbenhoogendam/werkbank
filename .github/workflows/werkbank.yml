@@ -38,9 +38,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Xcode kiezen
         run: sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app" && xcodebuild -version
-      - name: Metal-toolchain
-        if: matrix.scheme == 'Werkbank-macOS'
-        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
       - name: XcodeGen installeren
         run: brew install xcodegen
       - name: Project genereren

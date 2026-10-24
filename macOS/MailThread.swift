@@ -238,12 +238,14 @@ final class MailThreadModel {
         analyses.forEach { $0.onChange = { [weak self] in self?.persist() } }
     }
 
-    func load() async {
+    /// `notBefore`: het gesprek komt niet eerder in beeld (pas als het paneel is opengevouwen, anders hapert de vouw).
+    func load(notBefore: ContinuousClock.Instant? = nil) async {
         isLoading = true
         gmail.note(account: ref.account, forMessageID: ref.messageID)
         gmail.note(account: ref.account, forMessageID: ref.threadID)
         do {
             let items = try await gmail.threadMessages(threadID: ref.threadID, account: ref.account)
+            if let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
             mails = items.map { item in
                 var mail = ThreadMail(item)
                 if let cached = ParsedMailCache.get(item.id) { Self.fill(&mail, with: cached) }

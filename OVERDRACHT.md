@@ -80,16 +80,17 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 12. **Logo's per klant** (`ClientDirectory.logoDomains`, `ClientLogo`): naast het klantveld, in de suggesties en in
     Tijd schrijven; bron is de klantenlijst (kolom Domeinnaam), dan de koppeltabel, dan kaarten.
 13. **Klantenlijst**: klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN worden overal weggelaten.
-14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`, `macOS/Shaders/FrostTilt.metal`). Eén vlak
-    kantelt om de onderrand naar achteren weg, achter matglas: hoe verder naar achteren, hoe waziger en donkerder.
-    Openen gaat van plat naar rechtop. Geldt voor het hoofdvenster en losse opstelvensters (openen, ⌘W, sluitknop,
-    ⌘Q), mail- en opstelpanelen (openen, sluiten, versturen). Sluiten en versturen vouwen een afbeelding van het
-    paneel weg met de shader; openen van een paneel is benaderd (één waas en een verloop), omdat er dan nog niets is om
-    vast te leggen en de shader de mailtekst niet kan lezen. Duur per onderdeel in Voorkeuren › Weergave › Animaties.
-    Na te gaan: verschijnt het hoofdvenster na het openen altijd (het staat ±0,3 s achter de bureaubladachtergrond);
-    geen flits bij openen; geen gat of sprong tussen paneel of venster en de afbeelding bij sluiten; klopt de plek van
-    de afbeelding van een paneel (ook met het Gmail-paneel open en met twee panelen). Lukt de afbeelding
-    (`CGWindowListCreateImage`) niet, dan sluit een paneel met de benaderde vouw en een venster zonder vouw.
+14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`). Eén vlak kantelt om de onderrand naar
+    achteren weg, achter matglas: hoe verder naar achteren, hoe waziger en donkerder. Openen gaat van plat naar
+    rechtop. Geldt voor het hoofdvenster en losse opstelvensters (openen, ⌘W, sluitknop, ⌘Q), mail- en opstelpanelen
+    (openen, sluiten, versturen). Vensters en sluitende panelen vouwen als afbeelding in Core Animation (loopt door
+    als de app bezig is) met twee vooraf berekende waaslagen; een paneel dat opengaat kantelt zelf, met een matte
+    sluier in plaats van waas. Het gesprek komt pas in beeld als de vouw klaar is. Duur per onderdeel in Voorkeuren ›
+    Weergave › Animaties. Na te gaan: vloeiend (eerst haperde het); verschijnt het hoofdvenster na het openen altijd
+    (het staat ±0,3 s achter de bureaubladachtergrond); geen flits, gat of sprong bij de overgang naar de afbeelding;
+    klopt de plek van de afbeelding van een paneel (ook met het Gmail-paneel open en met twee panelen). Lukt de
+    afbeelding (`CGWindowListCreateImage`) niet, dan sluit een paneel met zijn eigen kanteling en een venster zonder
+    vouw.
 
 ## Open punten
 
@@ -116,7 +117,7 @@ onbekend); plan mijn dag.
 | Onderdeel | Bestanden |
 |---|---|
 | Hoofdvenster, panelen, blur | `macOS/MainView.swift`, `macOS/PanelHost.swift` |
-| Duo-vouw (openen en sluiten) | `macOS/DuoFold.swift` (effect, duur), `macOS/DuoWindowFold.swift` (afbeeldingen), `macOS/Shaders/FrostTilt.metal` |
+| Duo-vouw (openen en sluiten) | `macOS/DuoFold.swift` (model, duur, paneel openen), `macOS/DuoWindowFold.swift` (afbeeldingen) |
 | Board en slepen | `macOS/BoardView.swift`, `macOS/DragCoordinator.swift`, `Shared/Services/BoardService.swift`, `Shared/Views/CardView.swift` |
 | Agenda | `macOS/AgendaView.swift`, `macOS/EventDetailView.swift`, `Shared/Services/CalendarService.swift` |
 | Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift` |
@@ -132,7 +133,8 @@ onbekend); plan mijn dag.
 - Een `DropDelegate` kan tijdens één sleepactie verouderde waarden vasthouden. Gebruik `onDrop(isTargeted:)` per
   vlak of een referentiemodel. Geneste dropzones: de binnenste wint.
 - Een `layerEffect` of Metal-shader kan geen AppKit-inhoud lezen (WKWebView, `ScrollView`, tekstvelden): die worden
-  niet of als vervangend plaatje getekend. Daarom draait de matglas-shader alleen op afbeeldingen van vensters en
-  panelen. Voor `.metal`-bestanden is in Xcode 26 de losse Metal-toolchain nodig (het script controleert dat).
+  niet of als vervangend plaatje getekend. Een shader per pixel op een heel venster was bovendien te zwaar (haperde).
+  Animaties die vloeiend moeten blijven terwijl de app laadt: Core Animation (`CAKeyframeAnimation`), niet SwiftUI.
+- Mail laden tijdens een animatie (WKWebView aanmaken) laat die haperen; zie `MailThreadModel.load(notBefore:)`.
 - Kolommen hebben vaste sleutels (`inbox`, `todo`, `doing`, `waiting`); de namen zijn aanpasbaar.
 - `GmailSession.api(_:query:method:body:account:)` regelt het token per mailbox en één nieuwe poging bij 401.

@@ -1,27 +1,76 @@
+import QuartzCore
 import SwiftUI
 
-/// De Duo-vouw: een vlak kantelt om zijn onderrand naar achteren weg, achter het beeldscherm alsof dat matglas is. Hoe
-/// verder een deel achter het glas ligt, hoe waziger en donkerder; de onderrand blijft het scherpst. Bij openen komt het
-/// vlak van plat naar voren tot het rechtop staat, en wordt het weer scherp.
+/// De Duo-vouw: een vlak kantelt om zijn onderrand naar achteren weg, achter het beeldscherm alsof dat matglas is.
+/// Hoe verder een deel achter het glas ligt, hoe waziger en donkerder; de onderrand blijft het scherpst. Bij openen
+/// komt het vlak van plat naar voren tot het rechtop staat, en wordt het weer scherp. (Idee: DuoLikeAnimation.)
 ///
-/// Het matglas per pixel is een Metal-shader (`Shaders/FrostTilt.metal`) en werkt alleen op een afbeelding: vensters, en
-/// panelen die dichtgaan (daarvan maakt `DuoWindowFold` eerst een afbeelding). Een paneel dat opengaat is er nog niet als
-/// afbeelding, en een shader kan de AppKit-inhoud (mailtekst, tekstvelden) niet lezen; daar is het matglas benaderd met
-/// één waas en een verloop van donker naar licht.
+/// Vensters, en panelen die dichtgaan, vouwen als afbeelding in Core Animation (`DuoWindowFold`): met echte waas en
+/// vloeiend, ook als de app het druk heeft. Een paneel dat opengaat is er nog niet als afbeelding; daar doet
+/// `DuoFoldEffect` het op de levende inhoud, met een matte sluier in plaats van waas (waas op een WKWebView is te
+/// zwaar).
 enum DuoFold {
-    /// Waasstraal per punt diepte achter het glas, en de grootste straal.
+    /// Waasstraal (punten) per punt diepte achter het glas, en de grootste straal.
     static let frostSpread = 0.06
     static let maxFrost = 64.0
+    /// Waaslagen: tot `mediumFrost` mengt de lichte waas in, daarboven tot `heavyFrost` de zware.
+    static let mediumFrost = 12.0
+    static let heavyFrost = 40.0
     /// Licht dat per punt waasstraal verloren gaat.
     static let darkening = 0.01
     static let perspective = 0.35
 
+    static let openingCurve = (0.2, 0.75, 0.25, 1.0)
+    static let closingCurve = (0.45, 0.0, 0.75, 0.55)
+
     static func opening(_ part: FoldSpeed) -> Animation {
-        .timingCurve(0.2, 0.75, 0.25, 1, duration: part.duration)
+        .timingCurve(openingCurve.0, openingCurve.1, openingCurve.2, openingCurve.3, duration: part.duration)
     }
 
     static func closing(_ part: FoldSpeed) -> Animation {
-        .timingCurve(0.45, 0, 0.75, 0.55, duration: part.duration)
+        .timingCurve(closingCurve.0, closingCurve.1, closingCurve.2, closingCurve.3, duration: part.duration)
+    }
+
+    static func timing(opening: Bool) -> CAMediaTimingFunction {
+        let c = opening ? openingCurve : closingCurve
+        return CAMediaTimingFunction(controlPoints: Float(c.0), Float(c.1), Float(c.2), Float(c.3))
+    }
+
+    // MARK: Stand bij `progress` (0 rechtop, 1 plat achterover)
+
+    static func tilt(_ progress: Double) -> Double {
+        min(max(progress, 0), 1) * Double.pi / 2
+    }
+
+    /// Waasstraal op `fraction` van de hoogte (0 onderrand, 1 bovenrand) van een vlak van `height` punten.
+    static func frost(at fraction: Double, height: Double, progress: Double) -> Double {
+        min(frostSpread * fraction * height * sin(tilt(progress)), maxFrost)
+    }
+
+    static func mediumWeight(_ frost: Double) -> Double {
+        min(max(frost / mediumFrost, 0), 1)
+    }
+
+    static func heavyWeight(_ frost: Double) -> Double {
+        min(max((frost - mediumFrost) / (heavyFrost - mediumFrost), 0), 1)
+    }
+
+    /// Donkerte bij een waasstraal, plus het donkere moment vlak voor plat.
+    static func darkness(_ frost: Double, progress: Double) -> Double {
+        1 - (1 - min(darkening * frost, 1)) * (1 - dim(progress))
+    }
+
+    static func dim(_ progress: Double) -> Double {
+        smoothstep(0.55, 1, progress) * 0.7
+    }
+
+    static func opacity(_ progress: Double) -> Double {
+        1 - smoothstep(0.9, 1, progress)
+    }
+
+    private static func smoothstep(_ from: Double, _ to: Double, _ x: Double) -> Double {
+        let t = min(max((x - from) / (to - from), 0), 1)
+        return t * t * (3 - 2 * t)
     }
 }
 
@@ -60,17 +109,14 @@ enum FoldSpeed: String, CaseIterable, Identifiable {
     }
 }
 
-/// 0: rechtop, gewoon in beeld. 1: plat achterover, weg. Als overgang (`.duoFold`) speelt het bij openen en sluiten.
+/// De vouw op levende inhoud (een paneel dat opengaat): kantelen, een matte sluier en donkerte naar de bovenrand.
+/// Geen waas en geen eigen schaduw, zodat het ook met mailtekst vloeiend blijft. Als overgang: `.duoFold`.
 struct DuoFoldEffect: ViewModifier, Animatable {
+    /// 0: rechtop, gewoon in beeld. 1: plat achterover, weg.
     var progress: Double
-    /// Hoogte van het vlak in punten (voor de benaderde waas; de shader meet zelf).
+    /// Hoogte van het vlak in punten.
     var height: Double
     var cornerRadius: CGFloat = 12
-    /// Schaduw rond het vlak; verdwijnt in het begin van de beweging.
-    var shadow: Color = .clear
-    var shadowRadius: CGFloat = 18
-    /// Afbeelding: matglas per pixel met de shader. Alleen voor afbeeldingen; AppKit-inhoud tekent een shader niet.
-    var usesShader = false
     /// Van dit paneel vouwt al een afbeelding weg (`DuoWindowFold`): het paneel zelf verdwijnt meteen.
     var hidesInstantly = false
 
@@ -80,50 +126,44 @@ struct DuoFoldEffect: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        let tilt = min(max(progress, 0), 1) * Double.pi / 2
-        let topFrost = min(DuoFold.frostSpread * height * sin(tilt), DuoFold.maxFrost)
-        // Het laatste stuk, bijna plat: alles wordt donker.
-        let dim = smoothstep(0.55, 1, progress) * 0.7
-        Group {
-            if usesShader {
-                content
-                    .overlay(Rectangle().foregroundStyle(Color.black.opacity(dim)).blendMode(.sourceAtop))
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .compositingGroup()
-                    .layerEffect(ShaderLibrary.frostTilt(.boundingRect, .float(tilt), .float(DuoFold.frostSpread),
-                                                         .float(DuoFold.maxFrost), .float(DuoFold.darkening)),
-                                 maxSampleOffset: .zero, isEnabled: progress > 0.001)
-            } else {
-                content
-                    .blur(radius: topFrost / 3)
-                    .overlay {
-                        ZStack {
-                            LinearGradient(colors: [.black.opacity(min(DuoFold.darkening * topFrost, 1)), .clear],
-                                           startPoint: .top, endPoint: .bottom)
-                            Color.black.opacity(dim)
-                        }
-                        .allowsHitTesting(false)
+        let veilStops = stops { ThingsColor.backgroundContent.opacity(Self.veil($0)) }
+        let shadeStops = stops { Color.black.opacity(DuoFold.darkness($0, progress: progress)) }
+        content
+            .overlay {
+                if progress > 0.001 {
+                    ZStack {
+                        LinearGradient(stops: veilStops, startPoint: .bottom, endPoint: .top)
+                        LinearGradient(stops: shadeStops, startPoint: .bottom, endPoint: .top)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    .allowsHitTesting(false)
+                }
             }
-        }
-        .rotation3DEffect(.radians(tilt), axis: (x: 1, y: 0, z: 0), anchor: .bottom, anchorZ: 0,
-                          perspective: DuoFold.perspective)
-        .shadow(color: shadow.opacity(1 - min(progress * 2.5, 1)), radius: shadowRadius, x: 0, y: shadowRadius / 3)
-        .opacity(hidesInstantly && progress > 0 ? 0 : 1 - smoothstep(0.9, 1, progress))
-        .allowsHitTesting(progress < 0.001)
+            .rotation3DEffect(.radians(DuoFold.tilt(progress)), axis: (x: 1, y: 0, z: 0), anchor: .bottom, anchorZ: 0,
+                              perspective: DuoFold.perspective)
+            .opacity(hidesInstantly && progress > 0 ? 0 : DuoFold.opacity(progress))
+            .allowsHitTesting(progress < 0.001)
     }
 
-    private func smoothstep(_ from: Double, _ to: Double, _ x: Double) -> Double {
-        let t = min(max((x - from) / (to - from), 0), 1)
-        return t * t * (3 - 2 * t)
+    /// Matte sluier in plaats van waas: licht, en dichter waar de zware waas zou zitten.
+    private static func veil(_ frost: Double) -> Double {
+        0.25 * DuoFold.mediumWeight(frost) + 0.5 * DuoFold.heavyWeight(frost)
+    }
+
+    /// Verloop van onder (0) naar boven (1), met de kleur bij de waasstraal op die hoogte.
+    private func stops(_ color: (Double) -> Color) -> [Gradient.Stop] {
+        (0...4).map { index in
+            let fraction = Double(index) / 4
+            return Gradient.Stop(color: color(DuoFold.frost(at: fraction, height: height, progress: progress)),
+                                 location: fraction)
+        }
     }
 }
 
 extension AnyTransition {
     /// Openen en sluiten met de Duo-vouw.
-    static func duoFold(height: Double, shadow: Color, hidesInstantly: Bool = false) -> AnyTransition {
-        .modifier(active: DuoFoldEffect(progress: 1, height: height, shadow: shadow, hidesInstantly: hidesInstantly),
-                  identity: DuoFoldEffect(progress: 0, height: height, shadow: shadow, hidesInstantly: hidesInstantly))
+    static func duoFold(height: Double, hidesInstantly: Bool = false) -> AnyTransition {
+        .modifier(active: DuoFoldEffect(progress: 1, height: height, hidesInstantly: hidesInstantly),
+                  identity: DuoFoldEffect(progress: 0, height: height, hidesInstantly: hidesInstantly))
     }
 }

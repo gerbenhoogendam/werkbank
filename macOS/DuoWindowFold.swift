@@ -1,14 +1,14 @@
 import AppKit
-import Observation
+import CoreImage
 import SwiftUI
 
-/// De Duo-vouw met het echte matglas (shader), op een afbeelding in een doorzichtig venster boven de plek waar het om
-/// gaat:
+/// De Duo-vouw op een afbeelding, in Core Animation, in een doorzichtig venster boven de plek waar het om gaat. Core
+/// Animation draait in de render-server, dus de vouw blijft vloeiend als de app het druk heeft (opstarten, mail laden).
 /// - Hoofdvenster en losse opstelvensters bij openen en sluiten. Titelbalk en knoppenbalk zijn AppKit, vandaar de
 ///   afbeelding. Bij openen staat het echte venster zolang achter de bureaubladachtergrond: daar wordt het opgebouwd
 ///   zonder dat je het ziet.
 /// - Mail- en opstelpanelen bij sluiten en versturen (zie `PanelStore`): het paneel verdwijnt, de afbeelding vouwt weg.
-/// Lukt de afbeelding niet, dan gaat het zonder vouw (vensters) of met de benaderde vouw (panelen).
+/// Lukt de afbeelding niet, dan gaat het zonder vouw (vensters) of met de vouw op het paneel zelf (`DuoFoldEffect`).
 @MainActor
 final class DuoWindowFold {
     static let shared = DuoWindowFold()
@@ -52,7 +52,7 @@ final class DuoWindowFold {
               let window = NSApp.windows.first(where: { windows[ObjectIdentifier($0)] == true && canFold($0) }),
               let image = Self.windowImage(window) else { return false }
         isQuitting = true
-        play(NSImage(cgImage: image, size: window.frame.size), frame: window.frame, opening: false, part: .windowClose,
+        play(image, frame: window.frame, cornerRadius: nil, shadow: .window, opening: false, part: .windowClose,
              completion: reply)
         window.orderOut(nil)
         return true
@@ -74,8 +74,8 @@ final class DuoWindowFold {
         let crop = CGRect(x: rect.minX * scale, y: (window.frame.height - rect.maxY) * scale,
                           width: rect.width * scale, height: rect.height * scale).integral
         guard rect.width > 1, rect.height > 1, let piece = image.cropping(to: crop) else { return false }
-        play(NSImage(cgImage: piece, size: rect.size), frame: window.convertToScreen(rect), cornerRadius: 12,
-             shadow: ThingsColor.cardShadow, shadowRadius: 18, opening: false, part: part) {}
+        play(piece, frame: window.convertToScreen(rect), cornerRadius: 12, shadow: .panel, opening: false,
+             part: part) {}
         return true
     }
 
@@ -102,8 +102,7 @@ final class DuoWindowFold {
                 window.level = level
                 return
             }
-            play(NSImage(cgImage: image, size: window.frame.size), frame: window.frame, opening: true,
-                 part: .windowOpen) {
+            play(image, frame: window.frame, cornerRadius: nil, shadow: .window, opening: true, part: .windowOpen) {
                 window.level = level
                 window.makeKeyAndOrderFront(nil)
             }
@@ -117,16 +116,16 @@ final class DuoWindowFold {
         let part: FoldSpeed = nextCloseIsSend ? .send : .windowClose
         nextCloseIsSend = false
         guard !isQuitting, canFold(window), let image = Self.windowImage(window) else { return }
-        play(NSImage(cgImage: image, size: window.frame.size), frame: window.frame, opening: false, part: part) {}
+        play(image, frame: window.frame, cornerRadius: nil, shadow: .window, opening: false, part: part) {}
     }
 
-    /// Speelt de vouw af in een doorzichtig venster boven `frame` (schermcoördinaten); `completion` als hij klaar is.
-    private func play(_ image: NSImage, frame: CGRect, cornerRadius: CGFloat = 0, shadow: Color = .black.opacity(0.4),
-                      shadowRadius: CGFloat = 30, opening: Bool, part: FoldSpeed,
-                      completion: @escaping () -> Void) {
+    /// Speelt de vouw af boven `frame` (schermcoördinaten); `completion` als hij klaar is. `cornerRadius` nil: de vorm
+    /// komt uit de afbeelding zelf (venster met eigen ronde hoeken).
+    private func play(_ image: CGImage, frame: CGRect, cornerRadius: CGFloat?, shadow: DuoShadow, opening: Bool,
+                      part: FoldSpeed, completion: @escaping () -> Void) {
         let margin: CGFloat = 80   // ruimte voor de schaduw
-        let overlay = NSWindow(contentRect: frame.insetBy(dx: -margin, dy: -margin), styleMask: .borderless,
-                               backing: .buffered, defer: false)
+        let overlayFrame = frame.insetBy(dx: -margin, dy: -margin)
+        let overlay = NSWindow(contentRect: overlayFrame, styleMask: .borderless, backing: .buffered, defer: false)
         overlay.isOpaque = false
         overlay.backgroundColor = .clear
         overlay.hasShadow = false
@@ -134,19 +133,24 @@ final class DuoWindowFold {
         overlay.isReleasedWhenClosed = false
         overlay.animationBehavior = .none
         overlay.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary]
-        let model = DuoWindowFoldModel(progress: opening ? 1 : 0)
-        overlay.contentView = NSHostingView(rootView: DuoWindowFoldView(
-            image: image, size: frame.size, cornerRadius: cornerRadius, shadow: shadow, shadowRadius: shadowRadius,
-            model: model))
-        overlay.contentView?.layoutSubtreeIfNeeded()
+        let host = NSView(frame: CGRect(origin: .zero, size: overlayFrame.size))
+        let root = CALayer()
+        root.frame = host.bounds
+        host.layer = root
+        host.wantsLayer = true
+        overlay.contentView = host
+
+        let fold = DuoFoldLayers(in: root, rect: CGRect(x: margin, y: margin, width: frame.width, height: frame.height),
+                                 image: image, cornerRadius: cornerRadius, shadow: shadow)
+        fold.show(progress: opening ? 1 : 0)
         overlay.orderFrontRegardless()
         overlay.displayIfNeeded()
         CATransaction.flush()
         overlays.append(overlay)
 
         let finish = { [weak self] in
-            guard !model.isFinished else { return }
-            model.isFinished = true
+            guard !fold.isFinished else { return }
+            fold.isFinished = true
             completion()
             // Pas weghalen als het echte venster weer getekend is.
             Task { @MainActor in
@@ -155,15 +159,15 @@ final class DuoWindowFold {
                 self?.overlays.removeAll { $0 === overlay }
             }
         }
+        let scale = CGFloat(image.width) / max(frame.width, 1)
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(16))   // eerst de beginstand in beeld
-            withAnimation(opening ? DuoFold.opening(part) : DuoFold.closing(part)) {
-                model.progress = opening ? 0 : 1
-            } completion: {
-                finish()
-            }
+            // Waas één keer vooraf (± 10–30 ms); daarna verschuift per beeld alleen nog het verloop.
+            let levels = await Task.detached(priority: .userInitiated) { DuoFrost.levels(of: image, scale: scale) }.value
+            fold.setFrost(levels)
+            fold.run(from: opening ? 1 : 0, to: opening ? 0 : 1, duration: part.duration,
+                     timing: DuoFold.timing(opening: opening), completion: finish)
             // Voor als de afronding uitblijft: het echte venster mag nooit verborgen blijven.
-            try? await Task.sleep(for: .seconds(part.duration + 1))
+            try? await Task.sleep(for: .seconds(part.duration + 1.5))
             finish()
         }
     }
@@ -214,32 +218,177 @@ private final class WeakView {
     }
 }
 
-@MainActor
-@Observable
-private final class DuoWindowFoldModel {
-    var progress: Double
-    @ObservationIgnored var isFinished = false
+/// Schaduw onder de vouw: een vaste vorm (`shadowPath`), dus niet elk beeld opnieuw uitgerekend.
+private struct DuoShadow {
+    let color: CGColor
+    let opacity: Float
+    let radius: CGFloat
+    let offset: CGFloat
+    let cornerRadius: CGFloat
 
-    init(progress: Double) {
-        self.progress = progress
+    static let window = DuoShadow(color: CGColor(gray: 0, alpha: 1), opacity: 0.35, radius: 30, offset: 14,
+                                  cornerRadius: 16)
+
+    /// Zoals `ThingsColor.cardShadow`.
+    @MainActor static var panel: DuoShadow {
+        let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return DuoShadow(color: CGColor(gray: 0, alpha: 1), opacity: dark ? 0.45 : 0.10, radius: 18, offset: 6,
+                         cornerRadius: 12)
     }
 }
 
-private struct DuoWindowFoldView: View {
-    let image: NSImage
-    let size: CGSize
-    let cornerRadius: CGFloat
-    let shadow: Color
-    let shadowRadius: CGFloat
-    let model: DuoWindowFoldModel
+/// Vooraf berekende waas: twee lagen op lage resolutie (meer is niet nodig voor iets wat wazig is).
+private enum DuoFrost {
+    /// Onveranderlijke afbeeldingen: veilig tussen threads.
+    struct Levels: @unchecked Sendable {
+        let medium: CGImage?
+        let heavy: CGImage?
+    }
 
-    var body: some View {
-        Image(nsImage: image)
-            .resizable()
-            .frame(width: size.width, height: size.height)
-            .modifier(DuoFoldEffect(progress: model.progress, height: size.height, cornerRadius: cornerRadius,
-                                    shadow: shadow, shadowRadius: shadowRadius, usesShader: true))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private static let context = CIContext(options: [.cacheIntermediates: false])
+
+    /// `scale`: pixels per punt van `image`.
+    static func levels(of image: CGImage, scale: CGFloat) -> Levels {
+        Levels(medium: blurred(image, radius: DuoFold.mediumFrost, scale: scale, downscale: 0.5),
+               heavy: blurred(image, radius: DuoFold.heavyFrost, scale: scale, downscale: 0.25))
+    }
+
+    private static func blurred(_ image: CGImage, radius: Double, scale: CGFloat, downscale: CGFloat) -> CGImage? {
+        let small = CIImage(cgImage: image).transformed(by: CGAffineTransform(scaleX: downscale, y: downscale))
+        let extent = small.extent.integral
+        let sigma = radius / 2.5 * Double(scale * downscale)   // waasstraal ≈ 2,5 sigma
+        let output = small.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: extent)
+        return context.createCGImage(output, from: extent)
+    }
+}
+
+/// De afbeelding als lagen: kantelen om de onderrand, de twee waaslagen met elk een verloop als masker (scherp onder,
+/// wazig boven), donkerte, en de schaduw. De lagen staan niet gespiegeld: y loopt omhoog, de onderrand is y = 0.
+@MainActor
+private final class DuoFoldLayers {
+    var isFinished = false
+
+    private let container = CALayer()
+    private let shadowCaster = CALayer()
+    private let plate = CALayer()
+    private let medium = CALayer()
+    private let heavy = CALayer()
+    private let mediumMask = CAGradientLayer()
+    private let heavyMask = CAGradientLayer()
+    private let shade = CAGradientLayer()
+    private let height: Double
+    private let shadowOpacity: Float
+
+    /// Punten van het verloop, van de onderrand (0) naar de bovenrand (1).
+    private static let fractions = (0...8).map { Double($0) / 8 }
+
+    init(in root: CALayer, rect: CGRect, image: CGImage, cornerRadius: CGFloat?, shadow: DuoShadow) {
+        height = rect.height
+        shadowOpacity = shadow.opacity
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
+        container.frame = rect
+        var perspective = CATransform3DIdentity
+        perspective.m34 = -DuoFold.perspective / max(rect.width, rect.height)
+        container.sublayerTransform = perspective
+        root.addSublayer(container)
+
+        let bounds = CGRect(origin: .zero, size: rect.size)
+        for layer in [shadowCaster, plate] {
+            layer.anchorPoint = CGPoint(x: 0.5, y: 0)   // kantelen om de onderrand
+            layer.bounds = bounds
+            layer.position = CGPoint(x: bounds.midX, y: 0)
+            container.addSublayer(layer)
+        }
+        shadowCaster.shadowPath = CGPath(roundedRect: bounds, cornerWidth: shadow.cornerRadius,
+                                         cornerHeight: shadow.cornerRadius, transform: nil)
+        shadowCaster.shadowColor = shadow.color
+        shadowCaster.shadowRadius = shadow.radius
+        shadowCaster.shadowOffset = CGSize(width: 0, height: -shadow.offset)
+
+        plate.contents = image
+        plate.contentsGravity = .resize
+        if let cornerRadius {
+            plate.cornerRadius = cornerRadius
+            plate.cornerCurve = .continuous
+            plate.masksToBounds = true
+        } else {
+            let mask = CALayer()
+            mask.frame = bounds
+            mask.contents = image
+            mask.contentsGravity = .resize
+            plate.mask = mask
+        }
+        for (layer, mask) in [(medium, mediumMask), (heavy, heavyMask)] {
+            layer.frame = bounds
+            layer.contentsGravity = .resize
+            Self.setUp(mask, bounds: bounds)
+            layer.mask = mask
+            plate.addSublayer(layer)
+        }
+        Self.setUp(shade, bounds: bounds)
+        plate.addSublayer(shade)
+        CATransaction.commit()
+    }
+
+    private static func setUp(_ gradient: CAGradientLayer, bounds: CGRect) {
+        gradient.frame = bounds
+        gradient.startPoint = CGPoint(x: 0.5, y: 0)
+        gradient.endPoint = CGPoint(x: 0.5, y: 1)
+        gradient.locations = fractions.map { NSNumber(value: $0) }
+    }
+
+    func setFrost(_ levels: DuoFrost.Levels) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        medium.contents = levels.medium
+        heavy.contents = levels.heavy
+        CATransaction.commit()
+    }
+
+    /// Zet de stand vast, zonder animatie.
+    func show(progress: Double) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (layer, keyPath, value) in values(at: progress) { layer.setValue(value, forKeyPath: keyPath) }
+        CATransaction.commit()
+    }
+
+    /// Van `from` naar `to`, als keyframes langs de tijdcurve: de render-server speelt het af.
+    func run(from: Double, to: Double, duration: Double, timing: CAMediaTimingFunction,
+             completion: @escaping () -> Void) {
+        let steps = 24
+        let samples = (0...steps).map { values(at: from + (to - from) * Double($0) / Double(steps)) }
+        let keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        CATransaction.setCompletionBlock { MainActor.assumeIsolated { completion() } }
+        for (index, (layer, keyPath, _)) in samples[0].enumerated() {
+            let animation = CAKeyframeAnimation(keyPath: keyPath)
+            animation.values = samples.map { $0[index].value }
+            animation.keyTimes = keyTimes
+            animation.duration = duration
+            animation.timingFunction = timing
+            animation.calculationMode = .linear
+            layer.setValue(samples[steps][index].value, forKeyPath: keyPath)   // eindstand
+            layer.add(animation, forKey: keyPath)
+        }
+        CATransaction.commit()
+    }
+
+    private func values(at progress: Double) -> [(layer: CALayer, keyPath: String, value: Any)] {
+        let frost = Self.fractions.map { DuoFold.frost(at: $0, height: height, progress: progress) }
+        let rotation = NSValue(caTransform3D: CATransform3DMakeRotation(-DuoFold.tilt(progress), 1, 0, 0))
+        return [
+            (plate, "transform", rotation),
+            (shadowCaster, "transform", rotation),
+            (shadowCaster, "shadowOpacity", NSNumber(value: shadowOpacity * Float(1 - min(progress * 2.5, 1)))),
+            (container, "opacity", NSNumber(value: Float(DuoFold.opacity(progress)))),
+            (mediumMask, "colors", frost.map { CGColor(gray: 1, alpha: DuoFold.mediumWeight($0)) }),
+            (heavyMask, "colors", frost.map { CGColor(gray: 1, alpha: DuoFold.heavyWeight($0)) }),
+            (shade, "colors", frost.map { CGColor(gray: 0, alpha: DuoFold.darkness($0, progress: progress)) }),
+        ]
     }
 }
 
