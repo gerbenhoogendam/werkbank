@@ -162,7 +162,9 @@ final class DuoWindowFold {
         let scale = CGFloat(image.width) / max(frame.width, 1)
         Task { @MainActor in
             // Waas één keer vooraf (± 10–30 ms); daarna verschuift per beeld alleen nog het verloop.
-            let levels = await Task.detached(priority: .userInitiated) { DuoFrost.levels(of: image, scale: scale) }.value
+            let levels = await Task.detached(priority: .userInitiated) {
+                DuoFrost.levels(of: image, scale: scale)
+            }.value
             fold.setFrost(levels)
             fold.run(from: opening ? 1 : 0, to: opening ? 0 : 1, duration: part.duration,
                      timing: DuoFold.timing(opening: opening), completion: finish)
@@ -263,7 +265,7 @@ private enum DuoFrost {
 }
 
 /// De afbeelding als lagen: kantelen om de onderrand, de twee waaslagen met elk een verloop als masker (scherp onder,
-/// wazig boven), donkerte, en de schaduw. De lagen staan niet gespiegeld: y loopt omhoog, de onderrand is y = 0.
+/// wazig boven), en de schaduw. De lagen staan niet gespiegeld: y loopt omhoog, de onderrand is y = 0.
 @MainActor
 private final class DuoFoldLayers {
     var isFinished = false
@@ -275,7 +277,6 @@ private final class DuoFoldLayers {
     private let heavy = CALayer()
     private let mediumMask = CAGradientLayer()
     private let heavyMask = CAGradientLayer()
-    private let shade = CAGradientLayer()
     private let height: Double
     private let shadowOpacity: Float
 
@@ -327,8 +328,6 @@ private final class DuoFoldLayers {
             layer.mask = mask
             plate.addSublayer(layer)
         }
-        Self.setUp(shade, bounds: bounds)
-        plate.addSublayer(shade)
         CATransaction.commit()
     }
 
@@ -387,7 +386,6 @@ private final class DuoFoldLayers {
             (container, "opacity", NSNumber(value: Float(DuoFold.opacity(progress)))),
             (mediumMask, "colors", frost.map { CGColor(gray: 1, alpha: DuoFold.mediumWeight($0)) }),
             (heavyMask, "colors", frost.map { CGColor(gray: 1, alpha: DuoFold.heavyWeight($0)) }),
-            (shade, "colors", frost.map { CGColor(gray: 0, alpha: DuoFold.darkness($0, progress: progress)) }),
         ]
     }
 }

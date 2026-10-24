@@ -81,7 +81,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Tijd schrijven; bron is de klantenlijst (kolom Domeinnaam), dan de koppeltabel, dan kaarten.
 13. **Klantenlijst**: klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN worden overal weggelaten.
 14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`). Eén vlak kantelt om de onderrand naar
-    achteren weg, achter matglas: hoe verder naar achteren, hoe waziger en donkerder. Openen gaat van plat naar
+    achteren weg, achter matglas: hoe verder naar achteren, hoe waziger (geen donkerte). Openen gaat van plat naar
     rechtop. Geldt voor het hoofdvenster en losse opstelvensters (openen, ⌘W, sluitknop, ⌘Q), mail- en opstelpanelen
     (openen, sluiten, versturen). Vensters en sluitende panelen vouwen als afbeelding in Core Animation (loopt door
     als de app bezig is) met twee vooraf berekende waaslagen; een paneel dat opengaat kantelt zelf, met een matte

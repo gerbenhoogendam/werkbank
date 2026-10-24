@@ -2,22 +2,19 @@ import QuartzCore
 import SwiftUI
 
 /// De Duo-vouw: een vlak kantelt om zijn onderrand naar achteren weg, achter het beeldscherm alsof dat matglas is.
-/// Hoe verder een deel achter het glas ligt, hoe waziger en donkerder; de onderrand blijft het scherpst. Bij openen
-/// komt het vlak van plat naar voren tot het rechtop staat, en wordt het weer scherp. (Idee: DuoLikeAnimation.)
+/// Hoe verder een deel achter het glas ligt, hoe waziger; de onderrand blijft het scherpst. Bij openen komt het vlak
+/// van plat naar voren tot het rechtop staat, en wordt het weer scherp. (Idee: DuoLikeAnimation.)
 ///
 /// Vensters, en panelen die dichtgaan, vouwen als afbeelding in Core Animation (`DuoWindowFold`): met echte waas en
 /// vloeiend, ook als de app het druk heeft. Een paneel dat opengaat is er nog niet als afbeelding; daar doet
 /// `DuoFoldEffect` het op de levende inhoud, met een matte sluier in plaats van waas (waas op een WKWebView is te
 /// zwaar).
 enum DuoFold {
-    /// Waasstraal (punten) per punt diepte achter het glas, en de grootste straal.
+    /// Waasstraal (punten) per punt diepte achter het glas.
     static let frostSpread = 0.06
-    static let maxFrost = 64.0
     /// Waaslagen: tot `mediumFrost` mengt de lichte waas in, daarboven tot `heavyFrost` de zware.
     static let mediumFrost = 12.0
     static let heavyFrost = 40.0
-    /// Licht dat per punt waasstraal verloren gaat.
-    static let darkening = 0.01
     static let perspective = 0.35
 
     static let openingCurve = (0.2, 0.75, 0.25, 1.0)
@@ -44,7 +41,7 @@ enum DuoFold {
 
     /// Waasstraal op `fraction` van de hoogte (0 onderrand, 1 bovenrand) van een vlak van `height` punten.
     static func frost(at fraction: Double, height: Double, progress: Double) -> Double {
-        min(frostSpread * fraction * height * sin(tilt(progress)), maxFrost)
+        frostSpread * fraction * height * sin(tilt(progress))
     }
 
     static func mediumWeight(_ frost: Double) -> Double {
@@ -53,15 +50,6 @@ enum DuoFold {
 
     static func heavyWeight(_ frost: Double) -> Double {
         min(max((frost - mediumFrost) / (heavyFrost - mediumFrost), 0), 1)
-    }
-
-    /// Donkerte bij een waasstraal, plus het donkere moment vlak voor plat.
-    static func darkness(_ frost: Double, progress: Double) -> Double {
-        1 - (1 - min(darkening * frost, 1)) * (1 - dim(progress))
-    }
-
-    static func dim(_ progress: Double) -> Double {
-        smoothstep(0.55, 1, progress) * 0.7
     }
 
     static func opacity(_ progress: Double) -> Double {
@@ -109,7 +97,8 @@ enum FoldSpeed: String, CaseIterable, Identifiable {
     }
 }
 
-/// De vouw op levende inhoud (een paneel dat opengaat): kantelen, een matte sluier en donkerte naar de bovenrand.
+/// De vouw op levende inhoud (een paneel dat opengaat): kantelen, met een matte sluier die naar de bovenrand toe
+/// dichter wordt.
 /// Geen waas en geen eigen schaduw, zodat het ook met mailtekst vloeiend blijft. Als overgang: `.duoFold`.
 struct DuoFoldEffect: ViewModifier, Animatable {
     /// 0: rechtop, gewoon in beeld. 1: plat achterover, weg.
@@ -127,16 +116,12 @@ struct DuoFoldEffect: ViewModifier, Animatable {
 
     func body(content: Content) -> some View {
         let veilStops = stops { ThingsColor.backgroundContent.opacity(Self.veil($0)) }
-        let shadeStops = stops { Color.black.opacity(DuoFold.darkness($0, progress: progress)) }
         content
             .overlay {
                 if progress > 0.001 {
-                    ZStack {
-                        LinearGradient(stops: veilStops, startPoint: .bottom, endPoint: .top)
-                        LinearGradient(stops: shadeStops, startPoint: .bottom, endPoint: .top)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .allowsHitTesting(false)
+                    LinearGradient(stops: veilStops, startPoint: .bottom, endPoint: .top)
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                        .allowsHitTesting(false)
                 }
             }
             .rotation3DEffect(.radians(DuoFold.tilt(progress)), axis: (x: 1, y: 0, z: 0), anchor: .bottom, anchorZ: 0,
