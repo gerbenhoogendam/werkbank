@@ -17,6 +17,8 @@ final class DuoWindowFold {
     private var windows: [ObjectIdentifier: Bool] = [:]
     private var observers: [ObjectIdentifier: NSObjectProtocol] = [:]
     private var overlays: [NSWindow] = []
+    /// Gesloten vensters die macOS bij opnieuw openen hergebruikt (Dock, menubalk): dan weer openvouwen.
+    private var closed: [ObjectIdentifier: ClosedWindow] = [:]
     /// Waar de mail- en opstelpanelen staan (`PanelProbe`).
     private var probes: [String: WeakView] = [:]
     private var isQuitting = false
@@ -26,7 +28,8 @@ final class DuoWindowFold {
     /// Onder de bureaubladachtergrond.
     private static let hiddenLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
 
-    func attach(_ window: NSWindow, isMain: Bool) {
+    /// `reused`: een eerder gesloten venster dat weer getoond wordt (de inhoud staat er al).
+    func attach(_ window: NSWindow, isMain: Bool, reused: Bool = false) {
         let key = ObjectIdentifier(window)
         guard windows[key] == nil else { return }
         windows[key] = isMain
@@ -38,7 +41,20 @@ final class DuoWindowFold {
                 DuoWindowFold.shared.windowWillClose(window)
             }
         }
-        unfold(window)
+        unfold(window, settle: reused ? .milliseconds(60) : .milliseconds(300))
+    }
+
+    /// Vlak voordat macOS een gesloten venster weer toont (Dock, menubalk): alvast achter de bureaubladachtergrond,
+    /// zodat het niet eerst even plat in beeld staat. Komt het binnen 1,5 s niet tevoorschijn, dan terug zoals het was.
+    func prepareReopen() {
+        let waiting = closed.values.compactMap(\.window).filter { !$0.isVisible }
+        for window in waiting { window.level = Self.hiddenLevel }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            for window in waiting where window.level == Self.hiddenLevel && windows[ObjectIdentifier(window)] == nil {
+                window.level = .normal
+            }
+        }
     }
 
     /// Vlak voor het sluiten van een los opstelvenster na versturen: dan geldt de duur van Versturen.
@@ -86,13 +102,16 @@ final class DuoWindowFold {
             && window.level != Self.hiddenLevel
     }
 
-    private func unfold(_ window: NSWindow) {
-        guard !window.styleMask.contains(.fullScreen) else { return }
-        let level = window.level
+    private func unfold(_ window: NSWindow, settle: Duration) {
+        let level = window.level == Self.hiddenLevel ? .normal : window.level
+        guard !window.styleMask.contains(.fullScreen) else {
+            window.level = level
+            return
+        }
         window.level = Self.hiddenLevel
         Task { @MainActor in
             // Eerst laten opbouwen (board, agenda), dan vastleggen.
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: settle)
             var image = window.isVisible ? Self.windowImage(window) : nil
             for _ in 0..<5 where image == nil && window.isVisible {
                 try? await Task.sleep(for: .milliseconds(100))
@@ -111,12 +130,41 @@ final class DuoWindowFold {
 
     private func windowWillClose(_ window: NSWindow) {
         let key = ObjectIdentifier(window)
-        windows[key] = nil
+        let isMain = windows.removeValue(forKey: key) ?? false
         if let observer = observers.removeValue(forKey: key) { NotificationCenter.default.removeObserver(observer) }
+        // Pas als het venster echt weg is; anders telt de vouw erboven als "weer in beeld".
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            watchForReappearance(window, isMain: isMain)
+        }
         let part: FoldSpeed = nextCloseIsSend ? .send : .windowClose
         nextCloseIsSend = false
         guard !isQuitting, canFold(window), let image = Self.windowImage(window) else { return }
         play(image, frame: window.frame, cornerRadius: nil, shadow: .window, opening: false, part: part) {}
+    }
+
+    /// Een gesloten venster dat later weer getoond wordt (macOS maakt dan geen nieuw venster): opnieuw koppelen.
+    private func watchForReappearance(_ window: NSWindow, isMain: Bool) {
+        let entry = ClosedWindow(window: window, isMain: isMain)
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didChangeOcclusionStateNotification] {
+            entry.observers.append(NotificationCenter.default.addObserver(forName: name, object: window,
+                                                                          queue: .main) { note in
+                MainActor.assumeIsolated {
+                    guard let window = note.object as? NSWindow else { return }
+                    DuoWindowFold.shared.windowReappeared(window)
+                }
+            })
+        }
+        closed = closed.filter { $0.value.window != nil }
+        closed[ObjectIdentifier(window)] = entry
+    }
+
+    private func windowReappeared(_ window: NSWindow) {
+        let key = ObjectIdentifier(window)
+        guard window.isVisible, window.occlusionState.contains(.visible) || window.isKeyWindow,
+              let entry = closed.removeValue(forKey: key) else { return }
+        for observer in entry.observers { NotificationCenter.default.removeObserver(observer) }
+        attach(window, isMain: entry.isMain, reused: true)
     }
 
     /// Speelt de vouw af boven `frame` (schermcoördinaten); `completion` als hij klaar is. `cornerRadius` nil: de vorm
@@ -209,6 +257,17 @@ final class DuoWindowFold {
             return true
         }
         return drawn && stride(from: 3, to: pixels.count, by: 4).contains { pixels[$0] > 0 }
+    }
+}
+
+private final class ClosedWindow {
+    weak var window: NSWindow?
+    let isMain: Bool
+    var observers: [NSObjectProtocol] = []
+
+    init(window: NSWindow, isMain: Bool) {
+        self.window = window
+        self.isMain = isMain
     }
 }
 

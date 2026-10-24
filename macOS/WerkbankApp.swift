@@ -24,6 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// De app draait door als het hoofdvenster gesloten is (de menubalkknop blijft actief).
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+    /// Klik op het Dock-icoon zonder open venster: macOS toont het gesloten hoofdvenster weer; dat vouwt dan open.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { DuoWindowFold.shared.prepareReopen() }
+        return true
+    }
+
     /// Stoppen: eerst vouwt het hoofdvenster dicht.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let folding = DuoWindowFold.shared.foldForQuit {

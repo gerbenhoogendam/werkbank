@@ -20,6 +20,15 @@ struct IdlePrompt: Equatable {
     var minutes: Int { Int((duration / 60).rounded()) }
 }
 
+/// Na versturen (macOS): even de kans om het gesprek met Enter te archiveren; de timer-pil telt af.
+struct HudCountdown: Equatable {
+    let id = UUID()
+    let start: Date
+    let duration: TimeInterval
+    /// Enter op tijd: gearchiveerd.
+    var isDone = false
+}
+
 /// Globale UI-status die door hoofdvenster, menubalk en snelle invoer gedeeld wordt.
 @MainActor
 @Observable
@@ -30,6 +39,8 @@ final class AppState {
     var toast: String?
     /// Korte melding in de zwevende timer-pil (bijvoorbeeld "Taak afronden ongedaan", "Mail verzonden").
     var hudMessage: String?
+    /// Aftellen onder de melding in de timer-pil (`SendFollowUp`).
+    var hudCountdown: HudCountdown?
     /// Vraag in de timer-pil na inactiviteit (macOS); blijft staan tot er gekozen is.
     var idlePrompt: IdlePrompt?
     var stopContext: StopContext?

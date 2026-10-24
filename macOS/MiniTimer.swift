@@ -10,6 +10,7 @@ enum WindowRouter {
     static var openMain: (() -> Void)?
 
     static func showMain() {
+        DuoWindowFold.shared.prepareReopen()
         if let openMain {
             openMain()
         } else if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
@@ -284,6 +285,10 @@ struct MiniTimerView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let countdown = appState.hudCountdown {
+                SendFuse(countdown: countdown, size: size)
+                    .frame(width: size.width * 0.3)
+            }
         }
         .padding(.horizontal, size.gap + 6)
         .frame(width: size.width, height: size.height)

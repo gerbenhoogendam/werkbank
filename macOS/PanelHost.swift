@@ -73,6 +73,14 @@ final class PanelStore {
         remove([panel], part: .mailClose, snapshot: snapshot)
     }
 
+    /// Alle mailpanelen van een gesprek (na archiveren).
+    func closeThread(_ threadID: String) {
+        remove(panels.filter { panel in
+            if case .mail(let ref) = panel { return ref.threadID == threadID }
+            return false
+        }, part: .mailClose)
+    }
+
     /// Na versturen: het gesprek of opstelblok vouwt weg.
     func closeAfterSending(id: String) {
         guard let panel = panels.first(where: { $0.id == id }) else { return }

@@ -91,6 +91,7 @@ struct MenuBarPanel: View {
             SmallIconButton(symbol: "stop.fill", label: "Stop") {
                 // De stopsheet staat in het hoofdvenster: open en activeer dat.
                 appState.requestStop(entry, in: context)
+                DuoWindowFold.shared.prepareReopen()
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
                 closePanel()
