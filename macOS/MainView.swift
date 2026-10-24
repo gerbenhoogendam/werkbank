@@ -125,6 +125,8 @@ struct MainView: View {
         }
         .providingSubtasks()
         .coordinateSpace(.named("main"))
+        // Openen en sluiten met de Duo-vouw.
+        .background(DuoWindowHook(isMain: true).frame(width: 0, height: 0))
         // ⌘Z voor handelingen in de app loopt via de UndoManager van dit venster.
         .onChange(of: undoManager, initial: true) { _, manager in UndoCenter.shared.manager = manager }
         // Nergens scrollbalken: ze nemen alleen maar ruimte in.

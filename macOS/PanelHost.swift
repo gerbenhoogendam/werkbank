@@ -13,6 +13,14 @@ enum PanelKind: Hashable, Identifiable {
         return false
     }
 
+    /// Mail en opstellen openen en sluiten met de Duo-vouw (`DuoFold`); de rest vervaagt.
+    var foldsLikeDuo: Bool {
+        switch self {
+        case .mail, .compose: true
+        case .claude, .event: false
+        }
+    }
+
     var id: String {
         switch self {
         case .compose(let ref): "compose-\(ref.id)"
@@ -30,8 +38,6 @@ final class PanelStore {
     static let shared = PanelStore()
 
     private(set) var panels: [PanelKind] = []
-    /// Panelen die nu wegklappen (na het versturen van een mail).
-    private(set) var foldingIDs: Set<String> = []
     /// Panelen waarin je iets doet (antwoord, analyse, invoer). Die sluiten niet bij een klik ernaast.
     @ObservationIgnored private var engagedIDs: Set<String> = []
 
@@ -42,16 +48,20 @@ final class PanelStore {
 
     /// Klik naast de panelen: sluit wat alleen gelezen werd. Afspraken regelen dat zelf (wijzigingen gaan voor).
     func closeUnengaged() {
-        withAnimation(.easeOut(duration: 0.18)) {
+        let closing = panels.filter { !$0.isEvent && !engagedIDs.contains($0.id) }
+        withAnimation(Self.animation(for: closing, opening: false)) {
             panels.removeAll { !$0.isEvent && !engagedIDs.contains($0.id) }
         }
         engagedIDs.formIntersection(Set(panels.map(\.id)))
     }
 
-    static let foldDuration = 0.30
+    private static func animation(for panels: [PanelKind], opening: Bool) -> Animation {
+        guard panels.contains(where: \.foldsLikeDuo) else { return .easeOut(duration: 0.18) }
+        return opening ? DuoFold.opening : DuoFold.closing
+    }
 
     func open(_ panel: PanelKind) {
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(Self.animation(for: [panel], opening: true)) {
             panels.removeAll { $0.id == panel.id }
             panels.append(panel)
             if panels.count > 2 { panels.removeFirst(panels.count - 2) }
@@ -60,27 +70,19 @@ final class PanelStore {
     }
 
     func close(_ panel: PanelKind) {
-        withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { $0.id == panel.id } }
+        withAnimation(Self.animation(for: [panel], opening: false)) { panels.removeAll { $0.id == panel.id } }
         engagedIDs.remove(panel.id)
     }
 
     func closeMail(messageID: String) {
-        withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { $0.id == "mail-\(messageID)" } }
-        engagedIDs.remove("mail-\(messageID)")
+        close(id: "mail-\(messageID)")
     }
 
-    /// Klapt een paneel van boven naar achteren weg (zoals een blad dat omvalt) en haalt het daarna weg.
-    func foldAway(id: String) {
-        guard panels.contains(where: { $0.id == id }), !foldingIDs.contains(id) else { return }
-        withAnimation(.easeIn(duration: Self.foldDuration)) { _ = foldingIDs.insert(id) }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(Self.foldDuration + 0.05))
-            panels.removeAll { $0.id == id }
-            foldingIDs.remove(id)
-            engagedIDs.remove(id)
-        }
+    /// Sluit een paneel op id (na versturen: het gesprek of opstelblok vouwt dicht).
+    func close(id: String) {
+        guard let panel = panels.first(where: { $0.id == id }) else { return }
+        close(panel)
     }
-
 }
 
 /// Legt de open panelen in het midden van het venster: één paneel met ±20% ruimte links en rechts,
@@ -92,12 +94,14 @@ struct PanelOverlay: View {
     var body: some View {
         GeometryReader { geo in
             let single = store.panels.count < 2
+            let width = single ? geo.size.width * 0.6 : (geo.size.width - 36) / 2
             HStack(spacing: 12) {
                 ForEach(store.panels) { panel in
                     PanelChrome(panel: panel)
-                        .modifier(FoldAwayEffect(angle: store.foldingIDs.contains(panel.id) ? 90 : 0))
+                        .transition(panel.foldsLikeDuo
+                                    ? AnyTransition.duoFold(width: width, shadow: ThingsColor.cardShadow)
+                                    : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 }
             }
             .padding(.horizontal, single ? geo.size.width * 0.2 : 12)
@@ -151,24 +155,7 @@ private struct PanelChrome: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(ThingsColor.separator))
+        // Binnen de Duo-vouw valt deze schaduw weg (afgesneden door de vouwvorm); het effect tekent er dan zelf een.
         .shadow(color: ThingsColor.cardShadow, radius: 18, x: 0, y: 6)
-    }
-}
-
-/// Wegklappen naar achteren rond de onderrand; hoe verder, hoe donkerder (zelfde stijl als de Maandagenda).
-private struct FoldAwayEffect: ViewModifier, Animatable {
-    var angle: Double
-
-    var animatableData: Double {
-        get { angle }
-        set { angle = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(Color.black.opacity(0.3 * min(angle / 90, 1)).allowsHitTesting(false))
-            .opacity(angle >= 89 ? 0 : 1)
-            .rotation3DEffect(.degrees(angle), axis: (x: 1, y: 0, z: 0), anchor: .bottom, anchorZ: 0, perspective: 0.35)
-            .allowsHitTesting(angle == 0)
     }
 }

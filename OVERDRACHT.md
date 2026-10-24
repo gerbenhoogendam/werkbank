@@ -1,6 +1,6 @@
 # Overdracht
 
-Stand van 23 oktober 2026, commit `29ea3e1`. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
+Stand van 24 oktober 2026. Voor een Claude-sessie die op de Mac van de eigenaar draait en de app
 zelf kan bouwen, starten en bedienen. Tot nu toe is alles gebouwd vanuit een Linux-container zonder Xcode: alleen CI
 controleerde of het compileerde, en de eigenaar testte het gedrag.
 
@@ -19,7 +19,7 @@ controleerde of het compileerde, en de eigenaar testte het gedrag.
   oude Werkbank afsluiten, nieuwe openen).
 - Alleen bouwen, zonder pull:
   `xcodegen generate --quiet && xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug -derivedDataPath DerivedData -quiet build`
-- Logica-tests: `cd WerkbankCore && swift test` (94 tests).
+- Logica-tests: `cd WerkbankCore && swift test` (104 tests).
 - Schermafbeelding: `screencapture -x /tmp/werkbank.png`.
 - Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
 - `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.
@@ -79,6 +79,12 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 12. **Logo's per klant** (`ClientDirectory.logoDomains`, `ClientLogo`): naast het klantveld, in de suggesties en in
     Tijd schrijven; bron is de klantenlijst (kolom Domeinnaam), dan de koppeltabel, dan kaarten.
 13. **Klantenlijst**: klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN worden overal weggelaten.
+14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`). Mail- en opstelpanelen openen en sluiten met
+    de vouw (ook na versturen), andere panelen vervagen zoals eerst. Het hoofdvenster en losse opstelvensters vouwen
+    open bij openen en dicht bij ⌘W, de sluitknop en ⌘Q. Na te gaan: werken waas en verkleining ook over de mailtekst
+    (WKWebView) en tekstvelden; verschijnt het hoofdvenster na het openen altijd (het staat ±0,3 s achter de
+    bureaubladachtergrond); geen flits van het venster bij openen; geen gat tussen venster en vouw bij sluiten.
+    Lukt de afbeelding van het venster niet (`CGWindowListCreateImage`), dan opent of sluit het zonder vouw.
 
 ## Open punten
 
@@ -105,6 +111,7 @@ onbekend); plan mijn dag.
 | Onderdeel | Bestanden |
 |---|---|
 | Hoofdvenster, panelen, blur | `macOS/MainView.swift`, `macOS/PanelHost.swift` |
+| Duo-vouw (openen en sluiten) | `macOS/DuoFold.swift` (effect, overgang), `macOS/DuoWindowFold.swift` (vensters) |
 | Board en slepen | `macOS/BoardView.swift`, `macOS/DragCoordinator.swift`, `Shared/Services/BoardService.swift`, `Shared/Views/CardView.swift` |
 | Agenda | `macOS/AgendaView.swift`, `macOS/EventDetailView.swift`, `Shared/Services/CalendarService.swift` |
 | Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift` |
@@ -119,5 +126,8 @@ onbekend); plan mijn dag.
 - Geen `try` of `await` rechts van `? :`; dat compileert niet.
 - Een `DropDelegate` kan tijdens één sleepactie verouderde waarden vasthouden. Gebruik `onDrop(isTargeted:)` per
   vlak of een referentiemodel. Geneste dropzones: de binnenste wint.
+- Een `layerEffect` of Metal-shader kan geen AppKit-inhoud lezen (WKWebView, `ScrollView`, tekstvelden): die worden
+  niet of als vervangend plaatje getekend. Daarom is de Duo-vouw nagebootst met `scaleEffect`, `blur`, een verloop
+  en een vorm. Een `.metal`-bestand vraagt in Xcode 26 bovendien de losse Metal-toolchain.
 - Kolommen hebben vaste sleutels (`inbox`, `todo`, `doing`, `waiting`); de namen zijn aanpasbaar.
 - `GmailSession.api(_:query:method:body:account:)` regelt het token per mailbox en één nieuwe poging bij 401.

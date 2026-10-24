@@ -23,6 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// De app draait door als het hoofdvenster gesloten is (de menubalkknop blijft actief).
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Stoppen: eerst vouwt het hoofdvenster dicht.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let folding = DuoWindowFold.shared.foldForQuit {
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return folding ? .terminateLater : .terminateNow
+    }
 }
 
 @main
