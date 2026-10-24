@@ -96,14 +96,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (balk naar een archiefdoosje); Enter in die tijd archiveert het gesprek en sluit het mailpaneel. Alleen met een
     testmailbox te testen. Na te gaan: vangt Enter ook als de cursor nog ergens in een tekstveld staat, en doet Enter
     na de 2 s weer gewoon wat het moet doen.
-16. **Inspreken** (`macOS/Dictation.swift`, `WerkbankCore/…/DictationParser.swift`). Voorkeuren › Overig ›
-    Inspreken aanzetten; de eerste keer downloadt WhisperKit het model (± 630 MB, naar Application Support/Whisper)
-    en stemt Core ML het af (± 25 s, opnieuw na elke macOS-update). F17 ingedrukt houden en spreken: "klant …, case
-    …, uitgevoerd …, kwartier". Loslaten: omzetten (Nederlands), verdelen op trefwoorden of anders door Claude,
-    klant koppelen aan de klantenlijst, snelle invoer ingevuld openen. Ongewijzigd opgeslagen velden krijgen in Tijd
-    schrijven een oranje microfoon (`TimeEntry.dictatedRaw`), die verdwijnt als je het veld zelf aanpast. Na te gaan:
-    toestemmingsvraag microfoon, downloadvoortgang in Voorkeuren, snelheid na loslaten, kwaliteit van Nederlands en
-    klantnamen, werkt het offline na de eerste keer, geheugengebruik met het model geladen.
+16. **Inspreken** (`macOS/Dictation.swift`, `WerkbankCore/…/DictationParser.swift`). Voorkeuren › Overig › Inspreken
+    aanzetten (uit: F17 meldt dat in de pil); de eerste keer downloadt WhisperKit het model (± 630 MB, naar Application
+    Support/Whisper) en stemt Core ML het af (± 25 s, opnieuw na elke macOS-update). F17 ingedrukt houden en spreken:
+    "klant …, case …, uitgevoerd …, kwartier". Loslaten: omzetten (Nederlands), verdelen op trefwoorden of anders door
+    Claude, klant koppelen aan de klantenlijst, snelle invoer ingevuld openen. Ongewijzigd opgeslagen velden krijgen in
+    Tijd schrijven een oranje microfoon (`TimeEntry.dictatedRaw`), die verdwijnt als je het veld zelf aanpast. Na te
+    gaan: toestemmingsvraag microfoon, downloadvoortgang in Voorkeuren, snelheid na loslaten, kwaliteit van Nederlands
+    en klantnamen, werkt het offline na de eerste keer, geheugengebruik met het model geladen.
 
 ## Open punten
 

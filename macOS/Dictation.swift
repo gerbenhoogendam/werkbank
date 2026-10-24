@@ -53,14 +53,13 @@ final class Dictation {
         apply(enabled: Self.isEnabled, delay: .seconds(3))
     }
 
-    /// Aan of uit (Voorkeuren › Overig). Uit: de toets is weer vrij en het model gaat uit het geheugen.
+    /// Aan of uit (Voorkeuren › Overig). Uit: het model gaat uit het geheugen. De toets blijft gevangen, zodat hij
+    /// niet als onbekende toets bij een ander venster terechtkomt (foutgeluid); de pil meldt dan dat het uit staat.
     func apply(enabled: Bool, delay: Duration = .zero) {
         UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
         if enabled {
-            KeyboardShortcuts.enable(.dictate)
             load(after: delay)
         } else {
-            KeyboardShortcuts.disable(.dictate)
             if phase == .listening { _ = recorder.stop() }
             loadTask?.cancel()
             loadTask = nil
@@ -136,13 +135,20 @@ final class Dictation {
         switch phase {
         case .ready:
             break
-        case .downloading, .loading:
-            AppState.shared.announce("Het spraakmodel wordt nog geladen")
+        case .downloading(let fraction):
+            let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
+            AppState.shared.announce("Spraakmodel downloaden: \(percent)")
+            return
+        case .loading:
+            AppState.shared.announce("Spraakmodel wordt geladen")
+            return
+        case .off:
+            AppState.shared.announce("Inspreken staat uit (Voorkeuren › Overig)", seconds: 4)
             return
         case .failed(let message):
             AppState.shared.announce(message, seconds: 4)
             return
-        case .off, .listening, .transcribing:
+        case .listening, .transcribing:
             return
         }
         Task {
