@@ -9,7 +9,7 @@ on:
 # Zelfde Xcode als op de Mac van de eigenaar (`xcodebuild -version`), zodat CI dezelfde compilerfouten ziet.
 # De runner `xcode-27` heeft /Applications/Xcode_<versie>.app voor 27.0, 27.1 en 27.2.
 env:
-  XCODE_VERSION: "27.0"
+  XCODE_VERSION: "27.1"
 
 jobs:
   core-tests:
