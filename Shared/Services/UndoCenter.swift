@@ -148,6 +148,7 @@ struct TimeEntrySnapshot {
     let todoID: UUID?
     let externalID: String?
     let mailThreadID: String?
+    let dictatedRaw: String
     let createdAt: Date
 
     init(_ entry: TimeEntry) {
@@ -170,6 +171,7 @@ struct TimeEntrySnapshot {
         todoID = entry.todoID
         externalID = entry.externalID
         mailThreadID = entry.mailThreadID
+        dictatedRaw = entry.dictatedRaw
         createdAt = entry.createdAt
     }
 
@@ -190,6 +192,7 @@ struct TimeEntrySnapshot {
         entry.isWritten = isWritten
         entry.externalID = externalID
         entry.mailThreadID = mailThreadID
+        entry.dictatedRaw = dictatedRaw
         entry.createdAt = createdAt
         context.insert(entry)
         try? context.save()

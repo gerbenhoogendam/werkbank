@@ -309,6 +309,9 @@ private struct OtherPreferences: View {
                 KeyboardShortcuts.Recorder("Sneltoets", name: .quickEntry)
                 KeyboardShortcuts.Recorder("Tweede sneltoets", name: .quickEntryAlt)
             }
+            Section("Inspreken") {
+                DictationPreferences()
+            }
             #endif
 
             Section {

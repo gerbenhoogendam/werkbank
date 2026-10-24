@@ -19,7 +19,7 @@ controleerde of het compileerde, en de eigenaar testte het gedrag.
   oude Werkbank afsluiten, nieuwe openen).
 - Alleen bouwen, zonder pull:
   `xcodegen generate --quiet && xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug -derivedDataPath DerivedData -quiet build`
-- Logica-tests: `cd WerkbankCore && swift test` (104 tests).
+- Logica-tests: `cd WerkbankCore && swift test` (113 tests).
 - Schermafbeelding: `screencapture -x /tmp/werkbank.png`.
 - Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
 - `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.
@@ -96,6 +96,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (balk naar een archiefdoosje); Enter in die tijd archiveert het gesprek en sluit het mailpaneel. Alleen met een
     testmailbox te testen. Na te gaan: vangt Enter ook als de cursor nog ergens in een tekstveld staat, en doet Enter
     na de 2 s weer gewoon wat het moet doen.
+16. **Inspreken** (`macOS/Dictation.swift`, `WerkbankCore/…/DictationParser.swift`). Voorkeuren › Overig ›
+    Inspreken aanzetten; de eerste keer downloadt WhisperKit het model (± 630 MB, naar Application Support/Whisper)
+    en stemt Core ML het af (± 25 s, opnieuw na elke macOS-update). F17 ingedrukt houden en spreken: "klant …, case
+    …, uitgevoerd …, kwartier". Loslaten: omzetten (Nederlands), verdelen op trefwoorden of anders door Claude,
+    klant koppelen aan de klantenlijst, snelle invoer ingevuld openen. Ongewijzigd opgeslagen velden krijgen in Tijd
+    schrijven een oranje microfoon (`TimeEntry.dictatedRaw`), die verdwijnt als je het veld zelf aanpast. Na te gaan:
+    toestemmingsvraag microfoon, downloadvoortgang in Voorkeuren, snelheid na loslaten, kwaliteit van Nederlands en
+    klantnamen, werkt het offline na de eerste keer, geheugengebruik met het model geladen.
 
 ## Open punten
 
@@ -106,7 +114,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 - Na verplaatsen naar een andere mailbox staan eigen antwoorden daar niet onder Verzonden.
 - Wacht op klant werkt alleen voor kaarten die sinds `dd37b1d` uit Gmail zijn gemaakt.
 - De drempel voor inactiviteit staat vast op 10 minuten; eventueel instelbaar maken in Voorkeuren.
-- TestFlight: na de nieuwe velden op `TodoCard` moet het CloudKit-schema opnieuw naar Production.
+- TestFlight: na de nieuwe velden op `TodoCard` en `TimeEntry` (`dictatedRaw`) moet het CloudKit-schema opnieuw
+  naar Production.
+- WhisperKit (`argmax-oss-swift` 1.1.1) wordt door Argmax nog niet getest met Xcode 27.1 en niet meer op macOS 14.
 - Instellingen die per Mac blijven: mailboxen (inloggen), Claude-sleutel (sleutelhanger), sneltoetsen, vensters.
 - `DropInfo.location` gaf in `MailMoveZone` geen bruikbare posities; vandaar per vlak een eigen `onDrop`.
 
@@ -125,7 +135,7 @@ onbekend); plan mijn dag.
 | Duo-vouw (openen en sluiten) | `macOS/DuoFold.swift` (model, duur, paneel openen), `macOS/DuoWindowFold.swift` (afbeeldingen) |
 | Board en slepen | `macOS/BoardView.swift`, `macOS/DragCoordinator.swift`, `Shared/Services/BoardService.swift`, `Shared/Views/CardView.swift` |
 | Agenda | `macOS/AgendaView.swift`, `macOS/EventDetailView.swift`, `Shared/Services/CalendarService.swift` |
-| Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift` |
+| Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift`, `macOS/Dictation.swift` (inspreken) |
 | Gmail | `macOS/GmailSession.swift` (API, mailboxen, verplaatsen), `macOS/GmailPanel.swift`, `macOS/MailWindow.swift`, `macOS/MailThread.swift`, `macOS/ComposeView.swift`, `macOS/SendFollowUp.swift` |
 | Claude | `macOS/ClaudeAnalysis.swift` (aanvraag, streaming), `macOS/MailReview.swift`, `macOS/DayClose.swift` |
 | Ongedaan maken | `Shared/Services/UndoCenter.swift` |

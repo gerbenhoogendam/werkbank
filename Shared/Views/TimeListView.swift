@@ -329,11 +329,14 @@ struct TimeEntryRow: View {
             ClientLogo(name: entry.client, size: 16)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(entry.title)
-                    .thingsFont(.todoTitle)
-                    .strikethrough(entry.isWritten)
-                    .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(entry.title)
+                        .thingsFont(.todoTitle)
+                        .strikethrough(entry.isWritten)
+                        .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    if !entry.dictatedFields.isEmpty { DictatedMark() }
+                }
                 Text(subtitle)
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.textSecondary)
@@ -439,6 +442,16 @@ struct TimeEntryRow: View {
 enum BookingField: Hashable {
     case client, caseTitle, performed, hours
 
+    /// Het ingesproken veld dat hierbij hoort.
+    var dictated: DictatedField? {
+        switch self {
+        case .client: .client
+        case .caseTitle: .caseTitle
+        case .performed: .performed
+        case .hours: nil
+        }
+    }
+
     var label: String {
         switch self {
         case .client: "Klant"
@@ -519,6 +532,9 @@ private struct BookingDetails: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if editing != field, let dictated = field.dictated, entry.dictatedFields.contains(dictated) {
+                DictatedMark()
+            }
             CopyButton(text: copy)
         }
     }
@@ -557,6 +573,8 @@ private struct BookingDetails: View {
             guard let hours = Self.parseHours(trimmed) else { return }
             entry.accumulated = hours * 3600 + entry.correctionSeconds
         }
+        // Zelf aangepast: nagelezen, dus geen microfoon meer.
+        if Values(entry) != before, let dictated = field.dictated { entry.dictatedFields.remove(dictated) }
         let after = Values(entry)
         guard after != before else { return }
         TimerService.save(context)
@@ -587,12 +605,14 @@ private struct BookingDetails: View {
         var title: String
         var performed: String
         var accumulated: TimeInterval
+        var dictated: String
 
         init(_ entry: TimeEntry) {
             client = entry.client
             title = entry.title
             performed = entry.workDescription
             accumulated = entry.accumulated
+            dictated = entry.dictatedRaw
         }
 
         func apply(to entry: TimeEntry) {
@@ -600,7 +620,19 @@ private struct BookingDetails: View {
             entry.title = title
             entry.workDescription = performed
             entry.accumulated = accumulated
+            entry.dictatedRaw = dictated
         }
+    }
+}
+
+/// Ingesproken en nog niet zelf aangepast: nalezen voordat je kopieert.
+struct DictatedMark: View {
+    var body: some View {
+        Image(systemName: "mic.fill")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.orange)
+            .help("Ingesproken")
+            .accessibilityLabel("Ingesproken")
     }
 }
 

@@ -1,11 +1,15 @@
 import SwiftData
 import SwiftUI
+import WerkbankCore
 
 /// Snelle support-invoer: klant, case, uitgevoerd en duur (zoals de regel in het boekhoudpakket komt). Wordt gebruikt in de menubalk (macOS),
 /// het "+"-popover van Tijd schrijven en het invoerblad op iOS.
 struct SupportEntryView: View {
     /// Snelle invoer (⌥⌘T): meteen in het klantveld beginnen.
     var autofocusClient = false
+    /// Ingesproken (macOS, `Dictation`): de velden staan al ingevuld. Wat je niet aanpast, krijgt in Tijd schrijven een
+    /// microfoon.
+    var dictation: DictatedTimeEntry? = nil
     var onFinished: () -> Void = {}
 
     @Environment(\.modelContext) private var context
@@ -91,6 +95,13 @@ struct SupportEntryView: View {
             }
         }
         .padding(2)
+        .onAppear {
+            guard let dictation else { return }
+            client = dictation.client
+            caseTitle = dictation.caseTitle
+            performed = dictation.performed
+            if let minutes = dictation.minutes, minutes > 0 { customMinutes = String(min(minutes, 999)) }
+        }
         .onChange(of: customMinutes) { _, new in
             let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
             if digits != new { customMinutes = digits }
@@ -163,12 +174,19 @@ struct SupportEntryView: View {
         caseError = title.isEmpty
         performedError = !startTimer && !TimerService.validDescription(done)
         guard !caseError, !performedError else { return }
+        let entry: TimeEntry
         if startTimer {
-            TimerService.startSupport(client: client, caseTitle: title, performed: done, in: context)
+            entry = TimerService.startSupport(client: client, caseTitle: title, performed: done, in: context)
             appState.announce("Timer gestart: \(title)")
         } else {
-            TimerService.logSupport(client: client, caseTitle: title, performed: done, minutes: minutes, in: context)
+            entry = TimerService.logSupport(client: client, caseTitle: title, performed: done, minutes: minutes,
+                                            in: context)
             appState.announce("\(minutes) min gelogd: \(title)")
+        }
+        let dictated = dictatedFields(client: client, caseTitle: title, performed: done)
+        if !dictated.isEmpty {
+            entry.dictatedFields = dictated
+            TimerService.save(context)
         }
         client = ""
         caseTitle = ""
@@ -178,6 +196,19 @@ struct SupportEntryView: View {
         caseError = false
         performedError = false
         onFinished()
+    }
+}
+
+extension SupportEntryView {
+    /// Velden die nog precies zo zijn als ingesproken.
+    private func dictatedFields(client: String, caseTitle: String, performed: String) -> Set<DictatedField> {
+        guard let dictation else { return [] }
+        let trimmed = { (text: String) in text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        var fields: Set<DictatedField> = []
+        if !dictation.client.isEmpty, trimmed(client) == trimmed(dictation.client) { fields.insert(.client) }
+        if !dictation.caseTitle.isEmpty, caseTitle == trimmed(dictation.caseTitle) { fields.insert(.caseTitle) }
+        if !dictation.performed.isEmpty, performed == trimmed(dictation.performed) { fields.insert(.performed) }
+        return fields
     }
 }
 

@@ -24,6 +24,10 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: 2.0.0
+  # Inspreken: WhisperKit (spraakherkenning op de Mac zelf), sinds 1.0 onder deze naam.
+  ArgmaxOSS:
+    url: https://github.com/argmaxinc/argmax-oss-swift
+    from: 1.1.1
 
 # Beide schema's expliciet, zodat Werkbank-iOS altijd in het schemamenu van Xcode staat.
 schemes:
@@ -54,6 +58,8 @@ targets:
     dependencies:
       - package: WerkbankCore
       - package: KeyboardShortcuts
+      - package: ArgmaxOSS
+        product: WhisperKit
     settings:
       base:
         PRODUCT_NAME: Werkbank
@@ -73,6 +79,7 @@ targets:
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
         GoogleClientID: $(GOOGLE_CLIENT_ID)
+        NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt (F17) om naar een tijdregel, op deze Mac.
         # De map Werkbank in iCloud Drive (voorkeuren voor andere Macs, Claude-geheugen, klantenlijst).
         NSUbiquitousContainers:
           iCloud.$(PRODUCT_BUNDLE_IDENTIFIER):
@@ -91,6 +98,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.personal-information.calendars: true
         com.apple.security.network.client: true
+        # Inspreken (F17).
+        com.apple.security.device.audio-input: true
         com.apple.security.files.user-selected.read-write: true
         # Het aangewezen klantenbestand na herstarten weer kunnen lezen.
         com.apple.security.files.bookmarks.app-scope: true

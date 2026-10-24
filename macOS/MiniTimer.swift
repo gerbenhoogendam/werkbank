@@ -140,6 +140,7 @@ struct MiniTimerView: View {
     private var active: [TimeEntry]
 
     private var size: MiniTimerSize { MiniTimerSize(stored: sizeRaw) }
+    private var dictation: Dictation { Dictation.shared }
 
     /// De lopende timers (tot drie, oudste boven); loopt er geen, dan de laatst gepauzeerde van de afgelopen twee uur,
     /// zodat je hem kunt hervatten.
@@ -155,11 +156,13 @@ struct MiniTimerView: View {
             .map { [$0] } ?? []
     }
 
-    private var isShown: Bool { !shown.isEmpty || appState.hudMessage != nil || appState.idlePrompt != nil }
+    private var isShown: Bool {
+        !shown.isEmpty || appState.hudMessage != nil || appState.idlePrompt != nil || dictation.isActive
+    }
 
     /// Een melding of vraag staat als één pil; anders één pil per timer.
     private var rows: Int {
-        appState.idlePrompt != nil || appState.hudMessage != nil ? 1 : max(1, shown.count)
+        appState.idlePrompt != nil || appState.hudMessage != nil || dictation.isActive ? 1 : max(1, shown.count)
     }
 
     var body: some View {
@@ -167,6 +170,11 @@ struct MiniTimerView: View {
             if let prompt = appState.idlePrompt {
                 // Blijft staan tot er gekozen is.
                 idleContent(prompt)
+                    .padding(12)
+                    .transition(.opacity)
+            } else if dictation.isActive {
+                // Inspreken gaat voor meldingen en de timer.
+                dictationContent(listening: dictation.phase == .listening)
                     .padding(12)
                     .transition(.opacity)
             } else if let message = appState.hudMessage {
@@ -185,6 +193,7 @@ struct MiniTimerView: View {
         }
         .animation(.easeOut(duration: 0.2), value: appState.hudMessage)
         .animation(.easeOut(duration: 0.2), value: appState.idlePrompt)
+        .animation(.easeOut(duration: 0.2), value: dictation.isActive)
         .onChange(of: isShown, initial: true) { _, shown in onVisibilityChange(shown) }
         .onChange(of: sizeRaw) { _, _ in onResize(rows) }
         .onChange(of: rows, initial: true) { _, count in onResize(count) }
@@ -272,6 +281,26 @@ struct MiniTimerView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    private func dictationContent(listening: Bool) -> some View {
+        HStack(spacing: size.gap) {
+            Image(systemName: listening ? "mic.fill" : "waveform")
+                .font(.system(size: size.titleFont + 3, weight: .semibold))
+                .foregroundStyle(listening ? Color(hex: 0xFF453A) : Color.white)
+            if listening {
+                DictationLevel(level: dictation.level, size: size)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.white)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, size.gap + 6)
+        .frame(width: size.width, height: size.height)
+        .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
     }
 
     private func messageContent(_ message: String) -> some View {

@@ -2,12 +2,15 @@ import AppKit
 import KeyboardShortcuts
 import SwiftData
 import SwiftUI
+import WerkbankCore
 
 extension KeyboardShortcuts.Name {
     /// Globale sneltoets voor snelle invoer (standaard ⌥⌘T, aanpasbaar in Instellingen).
     static let quickEntry = Self("quickEntry", default: .init(.t, modifiers: [.option, .command]))
     /// Tweede sneltoets voor hetzelfde paneel (standaard F16, bijvoorbeeld op een extra toets of Stream Deck).
     static let quickEntryAlt = Self("quickEntryAlt", default: .init(.f16))
+    /// Inspreken: ingedrukt houden, loslaten is klaar (standaard F17).
+    static let dictate = Self("dictate", default: .init(.f17))
 }
 
 /// Zwevend invoerpaneel in Spotlight-stijl, boven alle apps.
@@ -37,12 +40,14 @@ final class QuickEntryController {
 
     func hide() { panel?.orderOut(nil) }
 
-    func show() {
+    /// `dictation`: ingesproken (F17); Tijd schrijven staat dan al ingevuld.
+    func show(dictation: DictatedTimeEntry? = nil) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
 
         // Verse weergave bij elke keer, zodat de velden leeg zijn en direct focus krijgen.
-        let root = QuickEntryView(onClose: { [weak self] in self?.hide() },
+        let root = QuickEntryView(dictation: dictation,
+                                  onClose: { [weak self] in self?.hide() },
                                   onResize: { [weak self] height in self?.resize(to: height) })
             .environment(AppState.shared)
             .modelContainer(Persistence.container)
@@ -95,6 +100,7 @@ private struct QuickEntryHeightKey: PreferenceKey {
 
 /// Snelle invoer (⌥⌘T): standaard tijd schrijven (klant, case, uitgevoerd, tijd); als tweede een nieuwe taak in de Inbox.
 struct QuickEntryView: View {
+    var dictation: DictatedTimeEntry?
     let onClose: () -> Void
     let onResize: (CGFloat) -> Void
 
@@ -124,7 +130,7 @@ struct QuickEntryView: View {
 
             switch mode {
             case .time:
-                SupportEntryView(autofocusClient: true, onFinished: onClose)
+                SupportEntryView(autofocusClient: true, dictation: dictation, onFinished: onClose)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
             case .task:

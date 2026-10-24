@@ -148,6 +148,11 @@ enum TimeSource: String {
     }
 }
 
+/// Een veld van een tijdregel dat is ingesproken (`TimeEntry.dictatedFields`).
+enum DictatedField: String, CaseIterable {
+    case client, caseTitle = "case", performed
+}
+
 enum TimerStatus: String {
     case notStarted, running, paused, finished
 }
@@ -183,6 +188,8 @@ final class TimeEntry {
     var externalID: String?
     /// Het Gmail-gesprek van een mailtimer: één regel per gesprek, opnieuw starten telt erbij op tot hij geschreven is.
     var mailThreadID: String?
+    /// Ingesproken velden die nog niet zelf zijn aangepast ("client,case,performed"); zie `dictatedFields`.
+    var dictatedRaw: String = ""
     var createdAt: Date = Date()
 
     init(title: String, client: String, source: TimeSource, todoID: UUID? = nil) {
@@ -208,6 +215,13 @@ final class TimeEntry {
     var status: TimerStatus {
         get { TimerStatus(rawValue: statusRaw) ?? .notStarted }
         set { statusRaw = newValue.rawValue }
+    }
+
+    /// Velden die zijn ingesproken en nog niet zelf aangepast: Tijd schrijven zet er een microfoon bij, om de tekst
+    /// na te lezen voordat je hem kopieert.
+    var dictatedFields: Set<DictatedField> {
+        get { Set(dictatedRaw.split(separator: ",").compactMap { DictatedField(rawValue: String($0)) }) }
+        set { dictatedRaw = newValue.map(\.rawValue).sorted().joined(separator: ",") }
     }
 
     func elapsed(at now: Date = .now) -> TimeInterval {

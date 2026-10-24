@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WaitingWatcher.shared.start()
         IdleWatcher.shared.start()
         WerkbankSync.start()
+        Dictation.shared.start()
 
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
         KeyboardShortcuts.onKeyUp(for: .quickEntry) {
