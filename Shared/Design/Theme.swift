@@ -102,6 +102,15 @@ enum ThemeRole: String, CaseIterable, Identifiable {
 
 // MARK: - Thema
 
+/// De vormgeving naast de kleuren (kolomkoppen, kaarten, agenda, mail, tijdlijst, timerpil), zoals in de schetsen.
+enum ThemeLook: String {
+    case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark
+
+    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef).
+    var panelGap: CGFloat { self == .drukproef ? 8 : 0 }
+    var panelRadius: CGFloat { self == .drukproef ? 14 : 0 }
+}
+
 struct WerkbankTheme: Identifiable, Equatable {
     let id: String
     let name: String
@@ -117,6 +126,8 @@ struct WerkbankTheme: Identifiable, Equatable {
     var darkMailHeader = false
 
     func color(_ role: ThemeRole) -> ThemeColor { colors[role] ?? Self.standaard.colors[role] ?? ThemeColor(0, 0) }
+
+    var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
 
     static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark]
 
@@ -286,7 +297,16 @@ final class ThemeStore: @unchecked Sendable {
     private(set) var numberFamily: String?
 
     private init() {
+        Self.registerBundledFonts()
         reload()
+    }
+
+    /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef).
+    private static func registerBundledFonts() {
+        for name in ["Michroma-Regular"] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
     }
 
     // MARK: Lezen
@@ -297,6 +317,8 @@ final class ThemeStore: @unchecked Sendable {
     func themeColor(_ role: ThemeRole) -> ThemeColor {
         overrides[theme.id]?[role] ?? theme.color(role)
     }
+
+    var look: ThemeLook { theme.look }
 
     func isOverridden(_ role: ThemeRole) -> Bool { overrides[theme.id]?[role] != nil }
     var hasOverrides: Bool { !(overrides[theme.id] ?? [:]).isEmpty }
@@ -452,9 +474,23 @@ private struct ForcedDarkScheme: ViewModifier {
     }
 }
 
+private struct ForcedLightScheme: ViewModifier {
+    let isOn: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, isOn ? .light : scheme)
+    }
+}
+
 extension View {
     /// Dit deel altijd donker tekenen (bijvoorbeeld het mailpaneel van Tischsuper), ook in de lichte weergave.
     func darkScheme(_ isOn: Bool) -> some View {
         modifier(ForcedDarkScheme(isOn: isOn))
+    }
+
+    /// Dit deel altijd licht tekenen (een geel vlak met zwarte tekst), ook in de donkere weergave.
+    func lightScheme(_ isOn: Bool) -> some View {
+        modifier(ForcedLightScheme(isOn: isOn))
     }
 }

@@ -6,6 +6,8 @@ import SwiftUI
 struct CardView: View {
     let card: TodoCard
     var isTimerRunning = false
+    /// De lopende tijdregel van deze kaart (voor "loopt" met de tijd, zoals het thema dat toont).
+    var runningEntry: TimeEntry?
     /// Nieuwe kaarten openen in bewerkmodus; op macOS kun je onderaan een subtaak toevoegen.
     var isEditable = false
     var onStartTimer: () -> Void = {}
@@ -33,10 +35,11 @@ struct CardView: View {
     @State private var ignoreFocusLoss = false
     @FocusState private var focus: Field?
 
-    init(card: TodoCard, isTimerRunning: Bool = false, isEditable: Bool = false,
+    init(card: TodoCard, isTimerRunning: Bool = false, runningEntry: TimeEntry? = nil, isEditable: Bool = false,
          onStartTimer: @escaping () -> Void = {}, onOpen: @escaping () -> Void = {}) {
         self.card = card
         self.isTimerRunning = isTimerRunning
+        self.runningEntry = runningEntry
         self.isEditable = isEditable
         self.onStartTimer = onStartTimer
         self.onOpen = onOpen
@@ -63,22 +66,27 @@ struct CardView: View {
             if isEditable && addingSubtask { subtaskField }
             #endif
             actionRow
+            if isTimerRunning, let runningEntry, ThemeStore.shared.look != .standaard {
+                RunningStrip(entry: runningEntry)
+                    .padding(.bottom, 6)
+            }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, ThemeStore.shared.look == .drukproef ? 2 : 10)
         .padding(.top, 10)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottomLeading) {
+            if isTimerRunning, ThemeStore.shared.look == .wandklok { SecondHandLine() }
+        }
+        // Principes: een lopende kaart is een geel vlak met zwarte tekst.
+        .lightScheme(isTimerRunning && ThemeStore.shared.look == .principes)
         // Klein en onopvallend rechtsboven: de mail bij deze taak.
         .overlay(alignment: .topTrailing) {
             if hasBody {
                 mailButton.padding(.top, 5).padding(.trailing, 5)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
-                .fill(ThingsColor.cardBackground)
-                .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
-        )
+        .background(CardSurface(isRunning: isTimerRunning))
         .contentShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
         .onTapGesture { open() }
         .onHover { isHovering = $0 }
@@ -431,10 +439,157 @@ private struct CardFont: ViewModifier {
 
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.font(.werk(size: kind.macSize))
+        if kind == .title {
+            // De titel volgt het thema: Drukproef groot en strak, Spark vet, de Braun-thema's medium.
+            switch ThemeStore.shared.look {
+            case .drukproef: content.font(.werk(size: 14.5, weight: .medium)).tracking(-0.35)
+            case .spark: content.font(.werk(size: kind.macSize, weight: .semibold))
+            case .wandklok, .principes, .sneeuwwitje: content.font(.werk(size: kind.macSize, weight: .medium))
+            default: content.font(.werk(size: kind.macSize))
+            }
+        } else {
+            content.font(.werk(size: kind.macSize))
+        }
         #else
         content.thingsFont(kind.style)
         #endif
+    }
+}
+
+/// De achtergrond van een kaart, zoals het thema hem tekent.
+private struct CardSurface: View {
+    let isRunning: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+        switch ThemeStore.shared.look {
+        case .drukproef:
+            // Geen kaart, alleen een haarlijn erboven.
+            VStack(spacing: 0) {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                Spacer(minLength: 0)
+            }
+        case .principes:
+            shape.fill(isRunning ? ThingsColor.today : ThingsColor.cardBackground)
+        case .tischsuper:
+            shape.fill(ThingsColor.cardBackground)
+        case .wandklok:
+            shape.fill(ThingsColor.cardBackground)
+                .shadow(color: ThingsColor.cardShadow, radius: 1, y: 1)
+                .shadow(color: ThingsColor.cardShadow, radius: 12, y: 6)
+        case .sneeuwwitje:
+            shape.fill(ThingsColor.cardBackground)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
+                .shadow(color: ThingsColor.cardShadow, radius: 12, y: 6)
+        case .spark:
+            shape.fill(ThingsColor.cardBackground)
+                .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 1))
+                .shadow(color: ThingsColor.cardShadow, radius: 1, y: 1)
+        case .rekenmachine:
+            // Bol: licht verloop van boven en een schaduw eronder.
+            shape.fill(ThingsColor.cardBackground)
+                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(scheme == .dark ? 0.05 : 0.45), .clear],
+                                                   startPoint: .top, endPoint: .bottom)))
+                .overlay(shape.strokeBorder(Color.white.opacity(scheme == .dark ? 0.05 : 0.7), lineWidth: 0.5))
+                .shadow(color: ThingsColor.cardShadow, radius: 3, y: 2)
+        case .standaard:
+            shape.fill(ThingsColor.cardBackground)
+                .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
+        }
+    }
+}
+
+/// "Loopt" met de tijd onderaan een kaart waarvan de timer loopt, in de vorm van het thema.
+private struct RunningStrip: View {
+    let entry: TimeEntry
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let time = Self.format(entry.elapsed(at: context.date))
+            switch ThemeStore.shared.look {
+            case .drukproef:
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(time)
+                        .font(.werkNumbers(size: 28))
+                        .tracking(-0.8)
+                        .foregroundStyle(ThingsColor.today)
+                    Text("— LOOPT")
+                        .font(.werk(size: 10, weight: .medium))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                }
+            case .rekenmachine:
+                LCDPanel(radius: 8) {
+                    HStack {
+                        Text("LOOPT").font(.werk(size: 9)).tracking(0.8).foregroundStyle(ThemeParts.lcdLabel)
+                        Spacer()
+                        Text(time).font(.werk(size: 11.5)).monospacedDigit()
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                }
+            case .tischsuper:
+                HStack(spacing: 8) {
+                    Circle().fill(ThingsColor.running).frame(width: 7, height: 7)
+                    Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
+                    Spacer()
+                    Text(time).font(.werk(size: 11.5)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.tagBackground))
+            case .sneeuwwitje:
+                HStack {
+                    Text("Loopt").font(.werk(size: 10.5))
+                    Spacer()
+                    Text(time).font(.werk(size: 11.5, weight: .semibold)).monospacedDigit()
+                }
+                .foregroundStyle(Color(hex: 0x222220))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(ThingsColor.running))
+            case .spark:
+                HStack(spacing: 6) {
+                    Circle().fill(ThingsColor.running).frame(width: 7, height: 7)
+                    Text(time).font(.werk(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(ThingsColor.accent)
+                }
+            case .principes:
+                HStack {
+                    Text(time).font(.werk(size: 11.5, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+                    Spacer()
+                    ToggleKnob(height: 22)
+                }
+            case .wandklok, .standaard:
+                HStack {
+                    Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
+                    Spacer()
+                    Text(time).font(.werk(size: 11.5, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    static func format(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        return String(format: "%d:%02d", minutes / 60, minutes % 60)
+    }
+}
+
+/// Wandklok: een gele lijn onderaan de kaart die elke minuut volloopt, als een secondewijzer.
+private struct SecondHandLine: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let second = Double(Calendar.current.component(.second, from: context.date))
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(ThingsColor.running)
+                    .frame(width: geo.size.width * max(0.02, second / 60), height: 2)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
+        .allowsHitTesting(false)
     }
 }
 

@@ -67,13 +67,17 @@ struct BoardView: View {
     @GestureState private var columnGestureActive = false
     /// Kolom waar op dit moment een bestand/mail boven gehouden wordt.
     @State private var dropTargetColumn: BoardColumn?
+    /// Kolom waar de muis boven hangt: in een thema verschijnen + en … dan pas.
+    @State private var hoveredColumn: String?
     @GestureState private var gestureActive = false
 
     private var runningTodoIDs: Set<UUID> { Set(running.compactMap(\.todoID)) }
     private var columns: [BoardColumn] { columnRecords.map(\.column) }
 
+    private var look: ThemeLook { ThemeStore.shared.look }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: look == .drukproef ? 0 : (look == .principes ? 16 : 10)) {
             ForEach(columns) { column in
                 columnView(column)
                     .offset(x: movingColumn == column.id ? moveTranslation : 0)
@@ -91,8 +95,14 @@ struct BoardView: View {
                     }
             }
         }
-        .padding(12)
+        .padding(look == .drukproef ? 6 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Tischsuper: één oranje balk achter alle kolomkoppen.
+        .background(alignment: .top) {
+            if look == .tischsuper {
+                ThemeParts.orange.frame(height: 50)
+            }
+        }
         .background(ThingsColor.boardBackground)
         .background(
             GeometryReader { geo in
@@ -185,30 +195,44 @@ struct BoardView: View {
         let isTarget = (drag.region == .board && drag.target?.column == column && drag.isDragging)
             || dropTargetColumn == column
 
+        let themed = look != .standaard
+        let showButtons = !themed || hoveredColumn == column.id
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
-                // Op het icoon klikken opent de keuze van icoon en kleur.
-                Button {
-                    columnRequest = .icon(column.id)
-                } label: {
-                    ColumnIcon(symbol: column.symbol, color: column.color)
-                        .thingsFont(.heading)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                // Op het icoon klikken opent de keuze van icoon en kleur (in een thema via het menu).
+                if !themed {
+                    Button {
+                        columnRequest = .icon(column.id)
+                    } label: {
+                        ColumnIcon(symbol: column.symbol, color: column.color)
+                            .thingsFont(.heading)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Icoon en kleur kiezen")
+                    .accessibilityLabel("Icoon en kleur van \(column.title) kiezen")
                 }
-                .buttonStyle(.plain)
-                .help("Icoon en kleur kiezen")
-                .accessibilityLabel("Icoon en kleur van \(column.title) kiezen")
 
-                HStack(spacing: 6) {
-                    Text(column.title)
-                        .foregroundStyle(ThingsColor.textPrimary)
-                    Spacer()
-                    Text("\(columnCards.count)")
-                        .foregroundStyle(ThingsColor.textSecondary)
-                        .monospacedDigit()
+                Group {
+                    if themed {
+                        HStack(spacing: 6) {
+                            ThemedHeading(title: column.title, count: columnCards.count)
+                                .lightScheme(look == .tischsuper)
+                            Spacer(minLength: 0)
+                        }
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(column.title)
+                                .foregroundStyle(ThingsColor.textPrimary)
+                            Spacer()
+                            Text("\(columnCards.count)")
+                                .foregroundStyle(ThingsColor.textSecondary)
+                                .monospacedDigit()
+                        }
+                        .thingsFont(.heading)
+                    }
                 }
-                .thingsFont(.heading)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(column.title), \(columnCards.count) kaarten")
                 .contentShape(Rectangle())
@@ -222,11 +246,12 @@ struct BoardView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.werk(size: 11, weight: .semibold))
-                        .foregroundStyle(ThingsColor.accent)
+                        .foregroundStyle(look == .tischsuper ? Color(hex: 0x1C1C1C) : ThingsColor.accent)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .opacity(showButtons ? 1 : 0)
                 .help("Nieuwe kaart in \(column.title)")
                 .accessibilityLabel("Nieuwe kaart in \(column.title)")
 
@@ -244,21 +269,27 @@ struct BoardView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.werk(size: 11, weight: .semibold))
-                        .foregroundStyle(ThingsColor.textSecondary)
+                        .foregroundStyle(look == .tischsuper ? Color(hex: 0x1C1C1C) : ThingsColor.textSecondary)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .opacity(showButtons ? 1 : 0)
                 .help("Kolom hernoemen of verwijderen")
                 .accessibilityLabel("Kolomopties voor \(column.title)")
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.horizontal, look == .principes || look == .drukproef ? 4 : 12)
+            .padding(.top, look == .tischsuper ? 4 : 10)
+            .padding(.bottom, look == .tischsuper ? 14 : 6)
+            .onHover { inside in
+                if inside { hoveredColumn = column.id } else if hoveredColumn == column.id { hoveredColumn = nil }
+            }
 
-            Rectangle().fill(ThingsColor.separator).frame(height: 1).padding(.horizontal, 12)
+            if !themed {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1).padding(.horizontal, 12)
+            }
 
             ScrollView {
                 VStack(spacing: 0) {
@@ -287,18 +318,22 @@ struct BoardView: View {
                 )
                 .animation(ThingsMotion.reorder, value: drag.target)
                 .animation(ThingsMotion.reorder, value: items(for: column).map(\.id))
-                .padding(.horizontal, 10)
+                .padding(.horizontal, look == .principes || look == .drukproef ? 0 : (look == .tischsuper ? 8 : 10))
                 .padding(.top, 8)
                 .padding(.bottom, 4)
             }
             .scrollIndicators(.never)
+            // Tischsuper: het kolomvlak begint onder de oranje balk.
+            .background {
+                if look == .tischsuper {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isTarget ? column.color.opacity(0.18) : ThingsColor.columnBackground)
+                }
+            }
         }
+        .padding(.horizontal, look == .drukproef ? 14 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
-                .fill(isTarget ? column.color.opacity(0.10) : ThingsColor.columnBackground)
-                .animation(.easeOut(duration: 0.15), value: isTarget)
-        )
+        .background { ColumnSurface(isTarget: isTarget, targetColor: column.color, isFirst: columns.first == column) }
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: ColumnFrameKey.self, value: [column: geo.frame(in: .main)])
@@ -382,6 +417,7 @@ struct BoardView: View {
         BoardCardCell(
             card: card,
             isTimerRunning: runningTodoIDs.contains(card.id),
+            runningEntry: running.first { $0.todoID == card.id },
             onStartTimer: { TimerService.startTimer(for: card, in: context) },
             onEdit: { editing = card },
             onDelete: { BoardService.delete(card, in: context) }
@@ -404,11 +440,62 @@ struct BoardView: View {
     }
 }
 
+// MARK: - Kolomvlak
+
+/// Het vlak achter een kolom, zoals het thema het tekent (Tischsuper tekent het onder de oranje balk zelf).
+private struct ColumnSurface: View {
+    let isTarget: Bool
+    let targetColor: Color
+    let isFirst: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let fill = isTarget ? targetColor.opacity(0.10) : ThingsColor.columnBackground
+        switch ThemeStore.shared.look {
+        case .standaard:
+            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous).fill(fill)
+        case .wandklok:
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(fill)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(ThingsColor.separator.opacity(0.6), lineWidth: 1))
+        case .sneeuwwitje:
+            // Glas: licht, met een witte rand en een zachte schaduw.
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(fill.opacity(0.75))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.white.opacity(scheme == .dark ? 0.08 : 0.85), lineWidth: 1))
+                .shadow(color: ThingsColor.cardShadow, radius: 14, y: 6)
+        case .rekenmachine:
+            // Verzonken: een binnenschaduw langs de bovenrand.
+            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+            shape.fill(fill)
+                .overlay(shape.stroke(Color.black.opacity(scheme == .dark ? 0.55 : 0.18), lineWidth: 3)
+                    .blur(radius: 2)
+                    .offset(y: 1.5)
+                    .mask(shape))
+        case .tischsuper:
+            Color.clear
+        case .principes, .spark:
+            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                .fill(isTarget ? targetColor.opacity(0.10) : Color.clear)
+        case .drukproef:
+            // Geen vlak: een haarlijn tussen de kolommen.
+            HStack(spacing: 0) {
+                Rectangle().fill(ThingsColor.separator).frame(width: 1).opacity(isFirst ? 0 : 1)
+                Rectangle().fill(isTarget ? targetColor.opacity(0.08) : Color.clear)
+            }
+        }
+    }
+}
+
 // MARK: - Kaartcel met sleepgebaar
 
 private struct BoardCardCell: View {
     let card: TodoCard
     let isTimerRunning: Bool
+    let runningEntry: TimeEntry?
     let onStartTimer: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -420,7 +507,7 @@ private struct BoardCardCell: View {
     @State private var highlight = false
 
     var body: some View {
-        CardView(card: card, isTimerRunning: isTimerRunning, isEditable: true,
+        CardView(card: card, isTimerRunning: isTimerRunning, runningEntry: runningEntry, isEditable: true,
                  onStartTimer: {
                      onStartTimer()
                      appState.showToast("Timer gestart: \(card.title)")
