@@ -38,13 +38,6 @@ final class PhoneDictation {
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
-    /// Aan en gedownload: de tijdinvoer begint met inspreken. Anders met typen.
-    var canDictate: Bool {
-        guard Self.isEnabled, WhisperModel.savedFolder() != nil else { return false }
-        if case .failed = phase { return false }
-        return true
-    }
-
     /// Bij het starten en elke keer dat de app weer in beeld komt: een onderbroken download gaat verder.
     func refresh() {
         guard Self.isEnabled else {

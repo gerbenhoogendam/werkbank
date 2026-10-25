@@ -138,11 +138,14 @@ targets:
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt om naar een tijdregel, op dit toestel.
-        # Snelle actie op het beginscherm (icoon lang indrukken), zie QuickAction.
+        # Snelle acties op het beginscherm (icoon lang indrukken), zie QuickAction.
         UIApplicationShortcutItems:
-          - UIApplicationShortcutItemType: tijd-schrijven
-            UIApplicationShortcutItemTitle: Tijd schrijven
+          - UIApplicationShortcutItemType: tijd-inspreken
+            UIApplicationShortcutItemTitle: Tijd inspreken
             UIApplicationShortcutItemIconSymbolName: mic.fill
+          - UIApplicationShortcutItemType: tijd-typen
+            UIApplicationShortcutItemTitle: Tijd typen
+            UIApplicationShortcutItemIconSymbolName: keyboard
         # Types van een kaart en een kolom die op het board worden gesleept.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: nl.itgwerkbank.card

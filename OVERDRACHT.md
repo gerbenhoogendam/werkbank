@@ -147,9 +147,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.
 21. **iOS eenvoudiger** (`iOS/RootView.swift`, `iOS/TimeEntrySheet.swift`, `iOS/PhoneDictation.swift`,
     `iOS/WerkbankApp.swift`). Geen agenda en geen inplannen meer op iOS (ook niet in Voorkeuren); twee tabs. Kaarten
-    zijn op iOS één regel (`CardView.compactCard`). De Magic Plus en de snelle actie op het beginscherm
-    (`UIApplicationShortcutItems`, `QuickAction`) openen `TimeEntrySheet`: met inspreken aan neemt de microfoon één
-    keer op en knipt hem per veld (`SpeechRecorder.takeSegment`); elk stuk gaat los door Whisper
+    zijn op iOS één regel (`CardView.compactCard`). De Magic Plus opent `TimeEntrySheet` met eerst de keuze
+    Inspreken/Typen; de snelle acties op het beginscherm "Tijd inspreken" en "Tijd typen" (`UIApplicationShortcutItems`,
+    `QuickAction`, `AppState.timeEntry`) kiezen al. Inspreken zet zo nodig inspreken aan en wacht op de download; de
+    microfoon neemt één keer op en knipt per veld (`SpeechRecorder.takeSegment`); elk stuk gaat los door Whisper
     (`DictationParser.field`, klant gekoppeld aan de klantenlijst) terwijl je het volgende inspreekt; daarna
     `SupportEntryView` ingevuld. Model: hetzelfde als op de Mac als het toestel het aankan (A16+), anders small/base
     (`PhoneDictation.variant`). Het model laadt bij gebruik en gaat bij de achtergrond uit het geheugen. Gedeeld met de

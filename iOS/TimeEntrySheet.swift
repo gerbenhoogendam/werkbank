@@ -1,9 +1,9 @@
 import SwiftUI
 import WerkbankCore
 
-/// Tijd schrijven op de iPhone (Magic Plus of de snelle actie op het beginscherm). Met inspreken: klant, case en
-/// uitgevoerd na elkaar inspreken, met één tik door naar het volgende veld; daarna duur kiezen en loggen. Zonder
-/// inspreken meteen het invulformulier.
+/// Tijd schrijven op de iPhone. Eerst de keuze tussen inspreken en typen (de snelle acties op het beginscherm kiezen
+/// al). Inspreken: klant, case en uitgevoerd na elkaar, met één tik door naar het volgende veld; daarna duur kiezen en
+/// loggen. Typen: meteen het invulformulier.
 struct TimeEntrySheet: View {
     var onClose: () -> Void
 
@@ -31,7 +31,10 @@ struct TimeEntrySheet: View {
         var next: Step { Step(rawValue: rawValue + 1) ?? .review }
     }
 
+    @State private var choosing: Bool
     @State private var step: Step
+    /// Inspreken gekozen, maar het spraakmodel wordt eerst gedownload; daarna begint de opname.
+    @State private var waiting = false
     @State private var values: [Step: String] = [:]
     @State private var minutes: Int?
     /// Velden die ingesproken zijn (microfoon in Tijd schrijven).
@@ -42,15 +45,18 @@ struct TimeEntrySheet: View {
     @State private var names: [String] = []
     private var dictation: PhoneDictation { PhoneDictation.shared }
 
-    init(onClose: @escaping () -> Void) {
+    init(start: TimeEntryStart, onClose: @escaping () -> Void) {
         self.onClose = onClose
-        _step = State(initialValue: PhoneDictation.shared.canDictate ? .client : .review)
+        _choosing = State(initialValue: start == .choose)
+        _step = State(initialValue: start == .keyboard ? .review : .client)
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if step == .review && pending.isEmpty {
+                if choosing {
+                    chooser
+                } else if step == .review && pending.isEmpty {
                     form
                 } else {
                     voiceSteps
@@ -65,8 +71,49 @@ struct TimeEntrySheet: View {
             }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: step)
-        .task { await begin() }
+        .task { if !choosing { await begin() } }
+        // Het model is binnen: nu opnemen.
+        .onChange(of: dictation.phase) {
+            guard waiting, WhisperModel.savedFolder() != nil else { return }
+            waiting = false
+            Task { await record() }
+        }
         .onDisappear { _ = dictation.stopRecording() }
+    }
+
+    // MARK: Kiezen
+
+    private var chooser: some View {
+        HStack(spacing: 12) {
+            choice("Inspreken", symbol: "mic.fill", filled: true) {
+                choosing = false
+                Task { await begin() }
+            }
+            choice("Typen", symbol: "keyboard", filled: false) {
+                choosing = false
+                step = .review
+            }
+        }
+        .padding(20)
+    }
+
+    private func choice(_ title: String, symbol: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.werk(size: 34, weight: .medium))
+                Text(title)
+                    .font(.werk(size: 17, weight: .semibold))
+            }
+            .foregroundStyle(filled ? Color.white : ThingsColor.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: 150)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(filled ? ThingsColor.accent : ThingsColor.tagBackground)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Inspreken
@@ -92,9 +139,15 @@ struct TimeEntrySheet: View {
 
             Spacer(minLength: 16)
 
-            LevelBars(level: dictation.isRecording ? dictation.level : 0)
-                .frame(height: 44)
-                .padding(.bottom, 16)
+            Group {
+                if waiting {
+                    download
+                } else {
+                    LevelBars(level: dictation.isRecording ? dictation.level : 0)
+                }
+            }
+            .frame(height: 44)
+            .padding(.bottom, 16)
 
             HStack(spacing: 12) {
                 Button(action: typeInstead) {
@@ -126,10 +179,27 @@ struct TimeEntrySheet: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(step == .review)
+                .disabled(step == .review || waiting)
+                .opacity(waiting ? 0.4 : 1)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
+        }
+    }
+
+    /// Voortgang van de eerste download van het spraakmodel.
+    @ViewBuilder private var download: some View {
+        if case .downloading(let fraction) = dictation.phase {
+            HStack(spacing: 10) {
+                ProgressView(value: fraction)
+                Text(fraction.formatted(.percent.precision(.fractionLength(0))))
+                    .font(.werk(size: 13))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 40)
+        } else {
+            ProgressView()
         }
     }
 
@@ -203,10 +273,26 @@ struct TimeEntrySheet: View {
 
     // MARK: Stappen
 
+    /// Inspreken: zo nodig aanzetten (de eerste keer downloadt het model), dan opnemen.
     private func begin() async {
         guard step != .review else { return }
         names = WhisperModel.knownClients()
-        dictation.prepare()
+        if !PhoneDictation.isEnabled {
+            dictation.apply(enabled: true)
+        } else if case .failed = dictation.phase {
+            dictation.retry()
+        } else {
+            dictation.prepare()
+        }
+        guard WhisperModel.savedFolder() != nil else {
+            waiting = true
+            return
+        }
+        await record()
+    }
+
+    private func record() async {
+        guard step != .review, !dictation.isRecording else { return }
         if let message = await dictation.startRecording() {
             error = message
             step = .review
@@ -224,6 +310,7 @@ struct TimeEntrySheet: View {
     /// Stoppen met inspreken en het formulier invullen (wat al gezegd is, wordt nog omgezet).
     private func typeInstead() {
         guard step != .review else { return }
+        waiting = false
         transcribe(dictation.stopRecording(), for: step)
         step = .review
     }

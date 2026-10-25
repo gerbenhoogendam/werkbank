@@ -15,15 +15,19 @@ struct WerkbankApp: App {
     }
 }
 
-/// Snelle actie op het beginscherm (het icoon lang indrukken): "Tijd schrijven" opent de tijdinvoer. Staat in
-/// `UIApplicationShortcutItems` (project.yml).
+/// Snelle acties op het beginscherm (het icoon lang indrukken): "Tijd inspreken" en "Tijd typen" openen de
+/// tijdinvoer, meteen in die vorm. Staan in `UIApplicationShortcutItems` (project.yml).
 enum QuickAction {
-    static let timeEntry = "tijd-schrijven"
+    static let voice = "tijd-inspreken"
+    static let keyboard = "tijd-typen"
 
     @MainActor
     static func handle(_ item: UIApplicationShortcutItem) -> Bool {
-        guard item.type == timeEntry else { return false }
-        AppState.shared.isEnteringTime = true
+        switch item.type {
+        case voice:    AppState.shared.timeEntry = .voice
+        case keyboard: AppState.shared.timeEntry = .keyboard
+        default:       return false
+        }
         return true
     }
 }

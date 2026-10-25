@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// iPhone/iPad: twee tabs (Board, Tijd) in Things-stijl. De Magic Plus rechtsonder schrijft tijd (klant, case,
-/// uitgevoerd), net als de snelle actie op het beginscherm.
+/// uitgevoerd; eerst kiezen tussen inspreken en typen), net als de snelle acties op het beginscherm.
 struct RootView: View {
     enum Tab: Hashable { case board, time }
 
@@ -44,8 +44,8 @@ struct RootView: View {
         }
         .preferredColorScheme(AppearanceSetting(stored: appearanceRaw).colorScheme)
         .scrollIndicators(.never)
-        .sheet(isPresented: $state.isEnteringTime) {
-            TimeEntrySheet { appState.isEnteringTime = false }
+        .sheet(item: $state.timeEntry) { start in
+            TimeEntrySheet(start: start) { appState.timeEntry = nil }
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showArchive) {
@@ -107,7 +107,7 @@ struct RootView: View {
     }
 
     private func enterTime() {
-        appState.isEnteringTime = true
+        appState.timeEntry = .choose
     }
 
     @ToolbarContentBuilder private var settingsToolbar: some ToolbarContent {

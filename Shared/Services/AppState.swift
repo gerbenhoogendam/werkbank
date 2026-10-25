@@ -29,6 +29,13 @@ struct HudCountdown: Equatable {
     var isDone = false
 }
 
+/// iOS: hoe de tijdinvoer begint. De Magic Plus laat eerst kiezen; de snelle acties op het beginscherm kiezen al.
+enum TimeEntryStart: String, Identifiable {
+    case choose, voice, keyboard
+
+    var id: String { rawValue }
+}
+
 /// Globale UI-status die door hoofdvenster, menubalk en snelle invoer gedeeld wordt.
 @MainActor
 @Observable
@@ -45,8 +52,8 @@ final class AppState {
     var idlePrompt: IdlePrompt?
     var stopContext: StopContext?
     var isDropTargeted = false
-    /// iOS: de tijdinvoer is open (Magic Plus of de snelle actie op het beginscherm).
-    var isEnteringTime = false
+    /// iOS: de tijdinvoer is open (Magic Plus of een snelle actie op het beginscherm).
+    var timeEntry: TimeEntryStart?
 
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var hudTask: Task<Void, Never>?
