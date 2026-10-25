@@ -53,6 +53,9 @@ final class DragCoordinator {
 
     /// Concept-afspraak op de agenda (stap 2 en 3 van het inplannen).
     var draft: ScheduleDraft?
+    /// Frame van de concept-afspraak in "agenda"-coördinaten, voor de bevestigingspopover. Alleen die popover leest
+    /// dit, zodat de agenda zelf niet bij elke muisbeweging opnieuw wordt opgebouwd.
+    var draftFrame: CGRect = .zero
     /// Kaart die na het neerzetten een kleine "pop" moet maken.
     var popID: UUID?
 

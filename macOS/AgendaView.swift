@@ -23,11 +23,6 @@ private struct AgendaSizeKey: PreferenceKey {
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
 }
 
-private struct DraftFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
-
 private struct AgendaConfig: Equatable {
     var hourHeight: CGFloat
     var startHour: Int
@@ -58,7 +53,6 @@ struct AgendaView: View {
 
     @State private var offset = 0
     @State private var scrollHour = 8
-    @State private var draftFrame: CGRect = .zero
     @State private var agendaSize: CGSize = .zero
     @State private var eventDrag = EventDrag()
 
@@ -186,10 +180,9 @@ struct AgendaView: View {
         )
         .onPreferenceChange(AgendaSizeKey.self) { agendaSize = $0 }
         .onPreferenceChange(DayFrameKey.self) { drag.agenda.dayFrames = $0 }
-        .onPreferenceChange(DraftFrameKey.self) { draftFrame = $0 }
         // In een eigen view: zo rekent alleen de popover mee bij elke muisbeweging van het concept, niet de hele agenda.
         .overlay(alignment: .topLeading) {
-            ScheduleConfirmLayer(draftFrame: draftFrame, agendaSize: agendaSize, onSchedule: schedule)
+            ScheduleConfirmLayer(agendaSize: agendaSize, onSchedule: schedule)
         }
         .overlay { EventDragLayer(drag: eventDrag) }
         .onChange(of: disabledRaw, initial: true) { _, _ in eventDrag.disabledCalendarIDs = disabledIDs }
@@ -273,7 +266,7 @@ struct AgendaView: View {
                 }
             }
             .frame(maxWidth: 460)
-            .reportMainFrame { eventDrag.filterFrame = $0 }
+            .reportFrame { eventDrag.filterFrame = $0 }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -412,11 +405,12 @@ struct AgendaView: View {
 /// Bevestigingspopover van een concept-afspraak. Leest zelf `drag.draft`, zodat de agenda eromheen niet bij elke
 /// muisbeweging opnieuw wordt opgebouwd.
 private struct ScheduleConfirmLayer: View {
-    let draftFrame: CGRect
     let agendaSize: CGSize
     let onSchedule: (ScheduleDraft, String, String) -> Void
 
     @Environment(DragCoordinator.self) private var drag
+
+    private var draftFrame: CGRect { drag.draftFrame }
 
     var body: some View {
         confirmPopover
@@ -595,7 +589,8 @@ struct DayColumn: View {
                 }
 
                 if let draft = drag.draft, draft.day == day {
-                    DraftBlock(draft: draft, hourHeight: hourHeight, dayEnd: dayEnd)
+                    // Alleen de week- en dagagenda (met `onCreate`) heeft de bevestigingspopover.
+                    DraftBlock(draft: draft, hourHeight: hourHeight, dayEnd: dayEnd, reportsFrame: onCreate != nil)
                         .frame(width: max(0, width - 4), height: draftHeight(draft))
                         .offset(x: 2, y: y(draft.start))
                 }
@@ -914,6 +909,7 @@ private struct DraftBlock: View {
     let draft: ScheduleDraft
     let hourHeight: CGFloat
     let dayEnd: Date
+    let reportsFrame: Bool
 
     @Environment(DragCoordinator.self) private var drag
     @State private var gripBase: Date?
@@ -952,11 +948,9 @@ private struct DraftBlock: View {
                 }
                 .accessibilityLabel("Eindtijd aanpassen")
         }
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: DraftFrameKey.self, value: geo.frame(in: .named("agenda")))
-            }
-        )
+        .reportFrame(in: .named("agenda")) { frame in
+            if reportsFrame { drag.draftFrame = frame }
+        }
         .overlay(alignment: .bottomLeading) {
             if draft.step == .end {
                 HStack(spacing: 6) {

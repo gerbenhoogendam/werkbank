@@ -260,15 +260,15 @@ extension AgendaEvent {
 // MARK: - Zwevende laag
 
 extension View {
-    /// Geeft het frame in "main"-coördinaten direct door, bij het verschijnen en bij elke verandering. Niet via een
-    /// PreferenceKey met `value = nextValue()`: views zonder eigen waarde leveren daar `.zero` aan, en dat overschreef
-    /// het echte frame (zo kwam het frame van de agendafilters nooit aan).
-    func reportMainFrame(_ report: @escaping (CGRect) -> Void) -> some View {
+    /// Geeft het frame direct door, bij het verschijnen en bij elke verandering. Niet via een PreferenceKey met
+    /// `value = nextValue()`: views zonder eigen waarde leveren daar `.zero` aan, en dat overschreef het echte frame
+    /// (zo kwamen het frame van de agendafilters en dat van de concept-afspraak niet aan).
+    func reportFrame(in space: CoordinateSpace = .main, _ report: @escaping (CGRect) -> Void) -> some View {
         background(
             GeometryReader { geo in
                 Color.clear
-                    .onAppear { report(geo.frame(in: .main)) }
-                    .onChange(of: geo.frame(in: .main)) { _, frame in report(frame) }
+                    .onAppear { report(geo.frame(in: space)) }
+                    .onChange(of: geo.frame(in: space)) { _, frame in report(frame) }
             }
         )
     }
@@ -339,7 +339,7 @@ struct EventDragLayer: View {
                 .fill(ThingsColor.backgroundContent)
                 .shadow(color: ThingsColor.cardShadow, radius: 18, x: 0, y: 6)
         )
-        .reportMainFrame { drag.cardFrame = $0 }
+        .reportFrame { drag.cardFrame = $0 }
     }
 
     private func tile(_ target: AgendaCalendar) -> some View {

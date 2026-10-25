@@ -159,7 +159,7 @@ onbekend); plan mijn dag.
 
 - Swift 5-modus; nieuwe UI-code is `@MainActor`.
 - Een `PreferenceKey` met `reduce { value = nextValue() }` krijgt van views zonder eigen waarde `.zero` (de
-  standaardwaarde) en verliest zo het echte frame. Frames meten met `reportMainFrame` (direct doorgeven) of met een
+  standaardwaarde) en verliest zo het echte frame. Frames meten met `reportFrame(in:)` (direct doorgeven) of met een
   woordenboek dat samenvoegt (`DayFrameKey`).
 - Geen `try` of `await` rechts van `? :`; dat compileert niet.
 - Een `DropDelegate` kan tijdens één sleepactie verouderde waarden vasthouden. Gebruik `onDrop(isTargeted:)` per
