@@ -6,13 +6,15 @@ import AppKit
 import KeyboardShortcuts
 #endif
 
-/// Voorkeuren met tabs: Agenda's, Weergave, Thema, Kolommen, (Mail, Claude) en Overig.
-/// macOS: eigen venster (⌘,). iOS: als blad vanuit het tandwiel.
+/// Voorkeuren met tabs: (Agenda's), Weergave, Thema, Kolommen, (Mail, Claude) en Overig.
+/// macOS: eigen venster (⌘,). iOS: als blad vanuit het tandwiel, zonder agenda.
 struct PreferencesView: View {
     var body: some View {
         TabView {
+            #if os(macOS)
             CalendarsPreferences()
                 .tabItem { Label("Agenda's", systemImage: "calendar") }
+            #endif
             DisplayPreferences()
                 .tabItem { Label("Weergave", systemImage: "paintbrush") }
             ThemePreferences()
@@ -174,7 +176,6 @@ private struct DisplayPreferences: View {
             Section("Mail") {
                 Toggle("Logo's bij afzenders", isOn: $mailLogos)
             }
-            #endif
 
             Section("Agenda") {
                 Picker("Weergave", selection: $agendaMode) {
@@ -194,6 +195,7 @@ private struct DisplayPreferences: View {
                 Stepper("Begin: \(startHour):00", value: $startHour, in: 0...(endHour - 1))
                 Stepper("Einde: \(endHour):00", value: $endHour, in: (startHour + 1)...24)
             }
+            #endif
         }
         .formStyle(.grouped)
         .onChange(of: appearance) { _, new in
@@ -318,6 +320,10 @@ private struct OtherPreferences: View {
             }
             Section("Inspreken") {
                 DictationPreferences()
+            }
+            #else
+            Section("Inspreken") {
+                PhoneDictationPreferences()
             }
             #endif
 

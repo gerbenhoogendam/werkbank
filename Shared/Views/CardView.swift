@@ -48,6 +48,65 @@ struct CardView: View {
     private var hasBody: Bool { !(card.bodyText ?? "").isEmpty }
 
     var body: some View {
+        #if os(iOS)
+        compactCard
+        #else
+        fullCard
+        #endif
+    }
+
+    #if os(iOS)
+    /// iPhone en iPad: één compacte regel met logo, titel, afzender en subtaken, en de timer. Openen, afronden en
+    /// verplaatsen gaan via tikken, vegen en lang indrukken.
+    private var compactCard: some View {
+        HStack(alignment: .center, spacing: 8) {
+            if card.isNew {
+                Circle()
+                    .fill(ThingsColor.accent)
+                    .frame(width: 6, height: 6)
+                    .accessibilityLabel("Nieuw")
+            }
+            if let domain = card.logoDomain {
+                LogoView(domain: domain, fallbackName: card.clientLabel ?? domain, size: 14)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(card.title.isEmpty ? "Nieuwe taak" : card.title)
+                    .cardFont(.title)
+                    .foregroundStyle(card.title.isEmpty ? ThingsColor.textTertiary : ThingsColor.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if let detail = compactDetail {
+                    Text(detail)
+                        .cardFont(.meta)
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            TimerButton(isRunning: isTimerRunning, action: onStartTimer)
+        }
+        .padding(.horizontal, ThemeStore.shared.look == .drukproef ? 2 : 10)
+        .padding(.leading, isTimerRunning && ThemeStore.shared.look == .sneeuwwitje ? 8 : 0)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lightScheme(isTimerRunning && ThemeStore.shared.look == .principes)
+        .background(CardSurface(isRunning: isTimerRunning))
+        .contentShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
+        .onTapGesture { open() }
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "Open de taak") { open() }
+    }
+
+    /// Onder de titel: de afzender en hoeveel subtaken af zijn ("Jan Jansen · 1/3").
+    private var compactDetail: String? {
+        var parts: [String] = []
+        if let senderName { parts.append(senderName) }
+        if !subtasks.isEmpty { parts.append("\(subtasks.filter(\.isDone).count)/\(subtasks.count)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+    #endif
+
+    private var fullCard: some View {
         VStack(alignment: .leading, spacing: 5) {
             titleRow
             if editing { minutesRow }
@@ -420,48 +479,43 @@ struct CardView: View {
     }
 }
 
-/// Tekstgroottes op de kaart. Op de Mac zijn ze kleiner, zodat de tekst ook in smalle kolommen leesbaar blijft.
+/// Tekstgroottes op de kaart. Op de Mac klein, zodat de tekst ook in smalle kolommen leesbaar blijft; op iOS iets
+/// groter, maar compact.
 private enum CardText {
     case title, subtask, meta
 
-    #if os(macOS)
-    var macSize: CGFloat {
+    var size: CGFloat {
+        #if os(macOS)
         switch self {
         case .title:   return 12.5
         case .subtask: return 11.5
         case .meta:    return 10.5
         }
-    }
-    #else
-    var style: ThingsTextStyle {
+        #else
         switch self {
-        case .title:   return .todoTitle
-        case .subtask: return .notes
-        case .meta:    return .metadata
+        case .title:   return 14.5
+        case .subtask: return 13
+        case .meta:    return 11.5
         }
+        #endif
     }
-    #endif
 }
 
 private struct CardFont: ViewModifier {
     let kind: CardText
 
     func body(content: Content) -> some View {
-        #if os(macOS)
         if kind == .title {
             // De titel volgt het thema: Drukproef groot en strak, Spark vet, de Braun-thema's medium.
             switch ThemeStore.shared.look {
-            case .drukproef: content.font(.werk(size: 14.5, weight: .medium)).tracking(-0.35)
-            case .spark: content.font(.werk(size: kind.macSize, weight: .semibold))
-            case .wandklok, .principes, .sneeuwwitje, .karmijn: content.font(.werk(size: kind.macSize, weight: .medium))
-            default: content.font(.werk(size: kind.macSize))
+            case .drukproef: content.font(.werk(size: kind.size + 2, weight: .medium)).tracking(-0.35)
+            case .spark: content.font(.werk(size: kind.size, weight: .semibold))
+            case .wandklok, .principes, .sneeuwwitje, .karmijn: content.font(.werk(size: kind.size, weight: .medium))
+            default: content.font(.werk(size: kind.size))
             }
         } else {
-            content.font(.werk(size: kind.macSize))
+            content.font(.werk(size: kind.size))
         }
-        #else
-        content.thingsFont(kind.style)
-        #endif
     }
 }
 

@@ -249,6 +249,8 @@ struct TimeListView: View {
             .fixedSize()
             .help("Exporteer afgeronde regels als CSV")
 
+            // iOS: de Magic Plus rechtsonder opent de tijdinvoer.
+            #if os(macOS)
             Button { showSupport = true } label: {
                 Image(systemName: "plus")
                     .font(.werk(size: 13, weight: .semibold))
@@ -264,6 +266,7 @@ struct TimeListView: View {
                     .frame(width: 300)
                     .padding(12)
             }
+            #endif
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

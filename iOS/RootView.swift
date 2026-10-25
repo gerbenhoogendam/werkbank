@@ -2,29 +2,21 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// iPhone/iPad: drie tabs (Board, Agenda, Tijd) in Things-stijl, met Magic Plus rechtsonder.
+/// iPhone/iPad: twee tabs (Board, Tijd) in Things-stijl. De Magic Plus rechtsonder schrijft tijd (klant, case,
+/// uitgevoerd), net als de snelle actie op het beginscherm.
 struct RootView: View {
-    enum Tab: Hashable { case board, agenda, time }
+    enum Tab: Hashable { case board, time }
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
+    @Environment(\.scenePhase) private var scenePhase
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
-    @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
 
     @AppStorage(SettingsKey.appearance) private var appearanceRaw = AppearanceSetting.system.rawValue
     @State private var tab: Tab = .board
-    /// Kolom die het meest in beeld is (voor de Magic Plus).
-    @State private var columnID: String? = BoardColumn.inboxID
     @State private var showSettings = false
     @State private var showArchive = false
-    @State private var showQuickAdd = false
-    @State private var showSupport = false
     @State private var isImporting = false
-
-    private var currentColumn: BoardColumn {
-        let columns = columnRecords.map(\.column)
-        return columns.first { $0.id == columnID } ?? columns.first ?? .inbox
-    }
 
     var body: some View {
         @Bindable var state = appState
@@ -32,25 +24,17 @@ struct RootView: View {
         ZStack {
             TabView(selection: $tab) {
                 NavigationStack {
-                    BoardListView(columnID: $columnID)
+                    BoardListView()
                         .toolbar { boardToolbar }
-                        .tabChrome(running: running, plus: { showQuickAdd = true })
+                        .tabChrome(running: running, plus: enterTime)
                 }
                 .tabItem { Label("Board", systemImage: "square.grid.2x2") }
                 .tag(Tab.board)
 
                 NavigationStack {
-                    DayAgendaView()
-                        .toolbar { settingsToolbar }
-                        .tabChrome(running: running, plus: nil)
-                }
-                .tabItem { Label("Agenda", systemImage: "calendar") }
-                .tag(Tab.agenda)
-
-                NavigationStack {
                     TimeListView()
                         .toolbar { settingsToolbar }
-                        .tabChrome(running: [], plus: { showSupport = true })
+                        .tabChrome(running: [], plus: enterTime)
                 }
                 .tabItem { Label("Tijd", systemImage: "clock") }
                 .tag(Tab.time)
@@ -60,16 +44,9 @@ struct RootView: View {
         }
         .preferredColorScheme(AppearanceSetting(stored: appearanceRaw).colorScheme)
         .scrollIndicators(.never)
-        .sheet(isPresented: $showQuickAdd) { QuickAddSheet(column: currentColumn) }
-        .sheet(isPresented: $showSupport) {
-            NavigationStack {
-                SupportEntryView { showSupport = false }
-                    .padding()
-                    .navigationTitle("Snelle support")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Sluit") { showSupport = false } } }
-            }
-            .presentationDetents([.medium, .large])
+        .sheet(isPresented: $state.isEnteringTime) {
+            TimeEntrySheet { appState.isEnteringTime = false }
+                .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showArchive) {
             NavigationStack {
@@ -118,6 +95,19 @@ struct RootView: View {
                 .allowsHitTesting(false)
             }
         }
+        .task { PhoneDictation.shared.refresh() }
+        // Het spraakmodel uit het geheugen als de app weg is; terug in beeld gaat een onderbroken download verder.
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background: PhoneDictation.shared.unload()
+            case .active: PhoneDictation.shared.refresh()
+            default: break
+            }
+        }
+    }
+
+    private func enterTime() {
+        appState.isEnteringTime = true
     }
 
     @ToolbarContentBuilder private var settingsToolbar: some ToolbarContent {
@@ -146,7 +136,7 @@ struct RootView: View {
     }
 }
 
-/// Nieuwe kaart in de huidige kolom met `#klant` voor een label.
+/// Nieuwe kaart in een kolom (plus in de kolomkop) met `#klant` voor een label.
 struct QuickAddSheet: View {
     let column: BoardColumn
     @Environment(\.modelContext) private var context
@@ -186,8 +176,8 @@ struct QuickAddSheet: View {
 }
 
 private extension View {
-    /// Lopende-timerbalk en Magic Plus binnen een tab, zodat ze boven de tabbalk staan.
-    func tabChrome(running: [TimeEntry], plus: (() -> Void)?) -> some View {
+    /// Lopende-timerbalk en Magic Plus (tijd schrijven) binnen een tab, zodat ze boven de tabbalk staan.
+    func tabChrome(running: [TimeEntry], plus: @escaping () -> Void) -> some View {
         self
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !running.isEmpty {
@@ -200,10 +190,8 @@ private extension View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if let plus {
-                    MagicPlusButton(action: plus)
-                        .padding(ThingsMetrics.magicPlusInset)
-                }
+                MagicPlusButton(title: "Tijd schrijven", action: plus)
+                    .padding(ThingsMetrics.magicPlusInset)
             }
     }
 }

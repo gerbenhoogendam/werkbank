@@ -15,9 +15,7 @@ import WhisperKit
 final class Dictation {
     static let shared = Dictation()
     static let enabledKey = "dictation.enabled"
-    /// Het aanbevolen meertalige model van Argmax (± 630 MB).
-    static let model = "large-v3-v20240930_626MB"
-    private static let folderKey = "dictation.modelFolder"
+    static let model = WhisperModel.large
 
     enum Phase: Equatable {
         case off
@@ -38,7 +36,7 @@ final class Dictation {
     var isActive: Bool { phase == .listening || phase == .transcribing }
 
     @ObservationIgnored private var whisper: WhisperKit?
-    @ObservationIgnored private let recorder = DictationRecorder()
+    @ObservationIgnored private let recorder = SpeechRecorder()
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     /// De toets is (nog) ingedrukt; laat je los voordat de opname loopt (toestemmingsvraag), dan geen opname.
     @ObservationIgnored private var holding = false
@@ -70,7 +68,7 @@ final class Dictation {
 
     /// Opnieuw proberen na een fout (Voorkeuren); bij een kapot model eerst opnieuw downloaden.
     func retry() {
-        UserDefaults.standard.removeObject(forKey: Self.folderKey)
+        WhisperModel.forget()
         whisper = nil
         load()
     }
@@ -87,45 +85,27 @@ final class Dictation {
 
     private func prepareModel() async {
         do {
-            let folder = try await modelFolder()
+            // De bewaarde map (werkt offline); de eerste keer downloaden.
+            let folder: URL
+            if let saved = WhisperModel.savedFolder() {
+                folder = saved
+            } else {
+                folder = try await WhisperModel.download(variant: Self.model) { fraction in
+                    // Niet meer als inspreken intussen is uitgezet.
+                    if Dictation.shared.loadTask != nil { Dictation.shared.phase = .downloading(fraction) }
+                }
+            }
             guard !Task.isCancelled else { return }
             phase = .loading
-            let config = WhisperKitConfig(modelFolder: folder.path, tokenizerFolder: try Self.storage(), verbose: false,
-                                          prewarm: true, load: true, download: false)
-            let loaded = try await WhisperKit(config)
+            let loaded = try await WhisperModel.load(folder: folder)
             guard !Task.isCancelled else { return }
             whisper = loaded
             phase = .ready
         } catch {
             guard !Task.isCancelled else { return }
-            // Kapot of onvolledig model: de volgende poging downloadt opnieuw.
-            UserDefaults.standard.removeObject(forKey: Self.folderKey)
+            WhisperModel.forget()
             phase = .failed("Spraakmodel laden mislukt: \(error.localizedDescription)")
         }
-    }
-
-    /// De bewaarde map (werkt offline); de eerste keer downloaden naar Application Support.
-    private func modelFolder() async throws -> URL {
-        if let path = UserDefaults.standard.string(forKey: Self.folderKey),
-           FileManager.default.fileExists(atPath: path) {
-            return URL(fileURLWithPath: path)
-        }
-        phase = .downloading(0)
-        let folder = try await WhisperKit.download(variant: Self.model, downloadBase: try Self.storage()) { progress in
-            let fraction = progress.fractionCompleted
-            Task { @MainActor in
-                if case .downloading = Dictation.shared.phase { Dictation.shared.phase = .downloading(fraction) }
-            }
-        }
-        UserDefaults.standard.set(folder.path, forKey: Self.folderKey)
-        return folder
-    }
-
-    /// Application Support/Whisper (in de sandbox van de app).
-    private static func storage() throws -> URL {
-        try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil,
-                                    create: true)
-            .appendingPathComponent("Whisper", isDirectory: true)
     }
 
     // MARK: Opnemen
@@ -185,11 +165,13 @@ final class Dictation {
     private func finish(_ samples: [Float]) async {
         defer { if phase == .transcribing { phase = .ready } }
         guard let whisper else { return }
-        let names = Self.knownClients()
+        let names = WhisperModel.knownClients()
+        // Klantnamen en de trefwoorden als hint, de trefwoorden achteraan.
+        let hint = names.isEmpty ? nil : names.prefix(25).joined(separator: ", ") + ". Klant, case, uitgevoerd."
         do {
-            var text = try await transcribe(samples, with: whisper, hint: names)
+            var text = try await WhisperModel.transcribe(samples, with: whisper, hint: hint)
             // Een hint die misgaat geeft soms niets terug; dan zonder.
-            if text.isEmpty { text = try await transcribe(samples, with: whisper, hint: []) }
+            if text.isEmpty { text = try await WhisperModel.transcribe(samples, with: whisper, hint: nil) }
             guard !text.isEmpty else {
                 AppState.shared.announce("Niets verstaan")
                 return
@@ -197,101 +179,12 @@ final class Dictation {
             var entry = DictationParser.parse(text)
             if entry == nil { entry = await DictationSplitter.split(text, clients: names) }
             var result = entry ?? DictatedTimeEntry(performed: text)
-            result.client = Self.matchClient(result.client, known: names)
+            result.client = WhisperModel.matchClient(result.client, known: names)
             phase = .ready
             QuickEntryController.shared.show(dictation: result)
         } catch {
             AppState.shared.announce("Omzetten mislukt: \(error.localizedDescription)", seconds: 4)
         }
-    }
-
-    /// Nederlands vast; klantnamen en de trefwoorden als hint (Whisper houdt alleen het laatste stuk, dus de
-    /// trefwoorden achteraan).
-    private func transcribe(_ samples: [Float], with whisper: WhisperKit, hint names: [String]) async throws -> String {
-        var options = DecodingOptions(language: "nl", temperature: 0, usePrefillPrompt: true, skipSpecialTokens: true,
-                                      withoutTimestamps: true)
-        if !names.isEmpty, let tokenizer = whisper.tokenizer {
-            let prompt = " " + names.prefix(25).joined(separator: ", ") + ". Klant, case, uitgevoerd."
-            let tokens = tokenizer.encode(text: prompt).filter { $0 < tokenizer.specialTokens.specialTokenBegin }
-            options.promptTokens = Array(tokens.suffix(100))
-        }
-        let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
-        return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// Klantnamen uit de laatste tijdregels (meest recent eerst), voor de hint en het koppelen.
-    private static func knownClients() -> [String] {
-        var seen = Set<String>()
-        return TimerService.allEntries(in: Persistence.container.mainContext)
-            .sorted { $0.createdAt > $1.createdAt }
-            .map(\.client)
-            .filter { $0 != TimerService.noClient && !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-    }
-
-    /// Koppelt wat je zei aan de klantenlijst ("ecom" → "Schildersbedrijf Willegom"); anders zoals gezegd.
-    private static func matchClient(_ spoken: String, known: [String]) -> String {
-        let spoken = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !spoken.isEmpty else { return "" }
-        return ClientDirectory.shared.suggestions(for: spoken, known: known, limit: 1).first?.name ?? spoken
-    }
-}
-
-// MARK: - Opname
-
-/// Neemt op van de standaardmicrofoon en levert 16 kHz mono, wat Whisper verwacht.
-private final class DictationRecorder: @unchecked Sendable {
-    private let engine = AVAudioEngine()
-    private let lock = NSLock()
-    private var samples: [Float] = []
-    private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(WhisperKit.sampleRate),
-                                       channels: 1, interleaved: false)!
-
-    enum RecorderError: LocalizedError {
-        case noInput
-
-        var errorDescription: String? { "Geen microfoon gevonden" }
-    }
-
-    func start(level: @escaping @Sendable (Double) -> Void) throws {
-        lock.withLock { samples.removeAll(keepingCapacity: true) }
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0,
-              let converter = AVAudioConverter(from: format, to: target) else { throw RecorderError.noInput }
-        input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            self?.append(buffer, converter: converter, level: level)
-        }
-        engine.prepare()
-        try engine.start()
-    }
-
-    func stop() -> [Float] {
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        return lock.withLock { samples }
-    }
-
-    private func append(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter, level: (Double) -> Void) {
-        let ratio = target.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
-        guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
-        var delivered = false
-        var error: NSError?
-        _ = converter.convert(to: output, error: &error) { _, status in
-            if delivered {
-                status.pointee = .noDataNow
-                return nil
-            }
-            delivered = true
-            status.pointee = .haveData
-            return buffer
-        }
-        guard error == nil, let channel = output.floatChannelData?[0], output.frameLength > 0 else { return }
-        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength)))
-        lock.withLock { samples.append(contentsOf: chunk) }
-        let power = chunk.reduce(Float(0)) { $0 + $1 * $1 } / Float(chunk.count)
-        level(Double(min(1, sqrt(power) * 8)))
     }
 }
 

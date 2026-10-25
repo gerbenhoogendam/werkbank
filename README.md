@@ -47,7 +47,7 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 | `Shared/Services/` | Timer, board, agenda (EventKit), logo's, mailimport, instellingen |
 | `Shared/Views/` | Kaart, Tijd schrijven, stopsheet, snelle support, instellingen, inplan-bevestiging |
 | `macOS/` | Hoofdvenster, board met slepen, agenda, snelle invoer (NSPanel), menubalk |
-| `iOS/` | Tabs (Board, Agenda, Tijd), Magic Plus, inplanblad |
+| `iOS/` | Tabs (Board, Tijd), Magic Plus en snelle actie (tijdinvoer, inspreken) |
 
 ## Wat er is (macOS)
 
@@ -67,10 +67,9 @@ eindtijdcorrectie, afronden op 15 min bij inplannen, prefixregel (vdm/ndm/tijd),
 
 Het bureaubladontwerp (board + agenda + tijdlijst tegelijk, slepen tussen panelen) past niet op een telefoon. Op iOS:
 
-- Drie tabs: **Board** (alle kolommen naast elkaar, horizontaal scrollen), **Agenda** (dagoverzicht), **Tijd** (dezelfde lijst als op de Mac).
-- Kaarten pak je op door ze ingedrukt te houden en sleep je naar een andere kolom of een andere plek in dezelfde kolom (contextmenu "Verplaats naar" blijft als alternatief), timer via veeg of knop. Kolommen hernoem, voeg toe en verwijder je via het menu in de kolomkop.
-- Inplannen via een blad met datumkiezers, met dezelfde kwartier- en `GH:`-regels.
-- Magic Plus voor een nieuwe kaart (Board) of snelle support (Tijd). Lopende timer als balk onderaan.
+- Twee tabs: **Board** (alle kolommen naast elkaar, horizontaal scrollen, compacte kaarten van één regel) en **Tijd** (dezelfde lijst als op de Mac). Geen agenda.
+- Kaarten pak je op door ze ingedrukt te houden en sleep je naar een andere kolom of een andere plek in dezelfde kolom (contextmenu "Verplaats naar" blijft als alternatief), timer via veeg of knop. Een nieuwe kaart met de plus in de kolomkop; kolommen hernoem, voeg toe en verwijder je via het menu ernaast.
+- Magic Plus (beide tabs) en de snelle actie "Tijd schrijven" op het beginscherm (icoon lang indrukken) openen de tijdinvoer. Met inspreken aan (Voorkeuren › Overig): klant inspreken, tik, case inspreken, tik, uitgevoerd inspreken, tik, dan duur kiezen en loggen of een timer starten. Zonder inspreken het invulformulier. Lopende timer als balk onderaan.
 - `.eml` importeren via de menuknop of slepen (iPad).
 - Geen globale sneltoets en geen menubalk (bestaan niet op iOS).
 

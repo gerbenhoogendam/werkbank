@@ -45,11 +45,17 @@ final class AppState {
     var idlePrompt: IdlePrompt?
     var stopContext: StopContext?
     var isDropTargeted = false
+    /// iOS: de tijdinvoer is open (Magic Plus of de snelle actie op het beginscherm).
+    var isEnteringTime = false
 
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var hudTask: Task<Void, Never>?
 
     func announce(_ message: String, seconds: Double = 2.5) {
+        #if os(iOS)
+        // Geen timer-pil op iOS: dan als toast.
+        showToast(message, seconds: seconds)
+        #else
         hudMessage = message
         hudTask?.cancel()
         hudTask = Task { [weak self] in
@@ -57,6 +63,7 @@ final class AppState {
             guard !Task.isCancelled else { return }
             self?.hudMessage = nil
         }
+        #endif
     }
 
     func showToast(_ message: String, seconds: Double = 2) {

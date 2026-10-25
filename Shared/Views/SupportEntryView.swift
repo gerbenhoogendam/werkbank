@@ -7,9 +7,11 @@ import WerkbankCore
 struct SupportEntryView: View {
     /// Snelle invoer (⌥⌘T): meteen in het klantveld beginnen.
     var autofocusClient = false
-    /// Ingesproken (macOS, `Dictation`): de velden staan al ingevuld. Wat je niet aanpast, krijgt in Tijd schrijven een
-    /// microfoon.
+    /// Ingesproken (macOS `Dictation`, iPhone `TimeEntrySheet`): de velden staan al ingevuld. Wat je niet aanpast,
+    /// krijgt in Tijd schrijven een microfoon.
     var dictation: DictatedTimeEntry? = nil
+    /// Welke velden van `dictation` echt ingesproken zijn (iPhone: de rest is getypt); nil: alle ingevulde.
+    var spokenFields: Set<DictatedField>? = nil
     var onFinished: () -> Void = {}
 
     @Environment(\.modelContext) private var context
@@ -208,7 +210,7 @@ extension SupportEntryView {
         if !dictation.client.isEmpty, trimmed(client) == trimmed(dictation.client) { fields.insert(.client) }
         if !dictation.caseTitle.isEmpty, caseTitle == trimmed(dictation.caseTitle) { fields.insert(.caseTitle) }
         if !dictation.performed.isEmpty, performed == trimmed(dictation.performed) { fields.insert(.performed) }
-        return fields
+        return spokenFields.map { fields.intersection($0) } ?? fields
     }
 }
 

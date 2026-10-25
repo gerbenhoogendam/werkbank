@@ -24,7 +24,7 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: 2.0.0
-  # Inspreken: WhisperKit (spraakherkenning op de Mac zelf), sinds 1.0 onder deze naam.
+  # Inspreken: WhisperKit (spraakherkenning op het apparaat zelf), sinds 1.0 onder deze naam.
   ArgmaxOSS:
     url: https://github.com/argmaxinc/argmax-oss-swift
     from: 1.1.1
@@ -120,6 +120,8 @@ targets:
       - iOS
     dependencies:
       - package: WerkbankCore
+      - package: ArgmaxOSS
+        product: WhisperKit
     settings:
       base:
         PRODUCT_NAME: Werkbank
@@ -135,6 +137,12 @@ targets:
         CFBundleDisplayName: Werkbank
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
+        NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt om naar een tijdregel, op dit toestel.
+        # Snelle actie op het beginscherm (icoon lang indrukken), zie QuickAction.
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: tijd-schrijven
+            UIApplicationShortcutItemTitle: Tijd schrijven
+            UIApplicationShortcutItemIconSymbolName: mic.fill
         # Types van een kaart en een kolom die op het board worden gesleept.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: nl.itgwerkbank.card

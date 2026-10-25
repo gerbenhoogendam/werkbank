@@ -21,6 +21,22 @@ final class DictationParserTests: XCTestCase {
                                                 performed: "Access point vervangen", minutes: 30))
     }
 
+    func testSingleFieldIsCleanedAndCapitalized() {
+        XCTAssertEqual(DictationParser.field("schildersbedrijf Willegom.").text, "Schildersbedrijf Willegom")
+        XCTAssertEqual(DictationParser.field(" printer doet het niet ").text, "Printer doet het niet")
+        XCTAssertNil(DictationParser.field("printer, kwartier").minutes)
+    }
+
+    func testSingleFieldWithTrailingDuration() {
+        let field = DictationParser.field("driver opnieuw geïnstalleerd, kwartier.", withDuration: true)
+        XCTAssertEqual(field.text, "Driver opnieuw geïnstalleerd")
+        XCTAssertEqual(field.minutes, 15)
+        // Alleen een duur: dan is dat de tekst.
+        let only = DictationParser.field("Kwartier.", withDuration: true)
+        XCTAssertEqual(only.text, "Kwartier")
+        XCTAssertNil(only.minutes)
+    }
+
     func testWithoutKeywordsIsNil() {
         XCTAssertNil(DictationParser.parse("Ik heb bij de bakker de printer gerepareerd"))
     }

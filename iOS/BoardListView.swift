@@ -33,12 +33,10 @@ struct ColumnReference: Codable, Transferable {
 }
 
 /// Board op iPhone en iPad: alle kolommen naast elkaar, horizontaal te scrollen. Houd een kaart ingedrukt om hem op
-/// te pakken en naar een andere kolom (of een andere plek in dezelfde kolom) te slepen. Kolommen hernoem, voeg toe
-/// en verwijder je via het menu in de kolomkop; door aan de kolomkop te slepen verplaats je een kolom. Inplannen gaat via een blad (slepen naar de agenda past niet op een telefoon).
+/// te pakken en naar een andere kolom (of een andere plek in dezelfde kolom) te slepen. Een kaart toevoegen gaat met
+/// de plus in de kolomkop; kolommen hernoem, voeg toe en verwijder je via het menu ernaast; door aan de kolomkop te
+/// slepen verplaats je een kolom.
 struct BoardListView: View {
-    /// Sleutel van de kolom die het meest in beeld is; de Magic Plus voegt daar een kaart toe.
-    @Binding var columnID: String?
-
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
     @Query(filter: #Predicate<TodoCard> { $0.columnRaw != "done" }, sort: \TodoCard.sortOrder) private var cards: [TodoCard]
@@ -46,7 +44,8 @@ struct BoardListView: View {
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
     @State private var editing: TodoCard?
-    @State private var scheduling: TodoCard?
+    /// Kolom waarin een nieuwe kaart komt (plus in de kolomkop).
+    @State private var addingTo: BoardColumn?
     @State private var columnRequest: ColumnRequest?
     /// Kolom waar op dit moment een kaart boven gehouden wordt.
     @State private var targetedColumn: String?
@@ -87,7 +86,6 @@ struct BoardListView: View {
                 .frame(height: geo.size.height)
             }
             .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $columnID)
         }
         .background(ThingsColor.backgroundContent)
         .navigationBarTitleDisplayMode(.inline)
@@ -95,7 +93,7 @@ struct BoardListView: View {
         // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen, zwevende kaarten onderbrengen.
         .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
         .sheet(item: $editing) { TaskDetailView(card: $0).presentationDetents([.medium, .large]) }
-        .sheet(item: $scheduling) { ScheduleSheet(card: $0) }
+        .sheet(item: $addingTo) { QuickAddSheet(column: $0) }
         .columnManagement($columnRequest)
     }
 
@@ -129,7 +127,7 @@ struct BoardListView: View {
                              onOpen: { editing = card })
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                    .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
                     .swipeActions(edge: .leading) {
                         Button {
                             TimerService.startTimer(for: card, in: context)
@@ -205,6 +203,16 @@ struct BoardListView: View {
                 .foregroundStyle(ThingsColor.textSecondary)
                 .monospacedDigit()
             Spacer()
+            Button {
+                addingTo = column
+            } label: {
+                Image(systemName: "plus")
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .frame(width: 36, height: ThingsMetrics.minTapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Nieuwe kaart in \(column.title)")
             Menu {
                 Button { columnRequest = .rename(column.id) } label: { Label("Naam wijzigen…", systemImage: "pencil") }
                 Button { columnRequest = .icon(column.id) } label: { Label("Icoon en kleur…", systemImage: "face.smiling") }
@@ -292,7 +300,6 @@ struct BoardListView: View {
             BoardService.complete(card, in: context)
             appState.showToast("\"\(card.title)\" afgerond; te vinden in het archief")
         } label: { Label("Afronden", systemImage: "checkmark.circle") }
-        Button { scheduling = card } label: { Label("Inplannen…", systemImage: "calendar.badge.plus") }
         // Naast slepen: de weg zonder slepen (VoiceOver, Schakelbediening).
         Menu {
             ForEach(columns.filter { $0 != card.column }) { target in

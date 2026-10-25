@@ -145,6 +145,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 20. **Logo's in de maillijst** (`MailSenderIcon` in `MailTheme.swift`, Voorkeuren › Weergave › Mail › "Logo's bij
     afzenders", standaard aan, in elk thema). Het logo komt via `SenderLogoService` van de website achter het domein
     van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.
+21. **iOS eenvoudiger** (`iOS/RootView.swift`, `iOS/TimeEntrySheet.swift`, `iOS/PhoneDictation.swift`,
+    `iOS/WerkbankApp.swift`). Geen agenda en geen inplannen meer op iOS (ook niet in Voorkeuren); twee tabs. Kaarten
+    zijn op iOS één regel (`CardView.compactCard`). De Magic Plus en de snelle actie op het beginscherm
+    (`UIApplicationShortcutItems`, `QuickAction`) openen `TimeEntrySheet`: met inspreken aan neemt de microfoon één
+    keer op en knipt hem per veld (`SpeechRecorder.takeSegment`); elk stuk gaat los door Whisper
+    (`DictationParser.field`, klant gekoppeld aan de klantenlijst) terwijl je het volgende inspreekt; daarna
+    `SupportEntryView` ingevuld. Model: hetzelfde als op de Mac als het toestel het aankan (A16+), anders small/base
+    (`PhoneDictation.variant`). Het model laadt bij gebruik en gaat bij de achtergrond uit het geheugen. Gedeeld met de
+    Mac: `Shared/Services/Speech.swift` (`WhisperModel`, `SpeechRecorder`). Nieuwe kaart: plus in de kolomkop.
 
 ## Open punten
 
@@ -158,6 +167,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 - TestFlight: na de nieuwe velden op `TodoCard` en `TimeEntry` (`dictatedRaw`) moet het CloudKit-schema opnieuw
   naar Production.
 - WhisperKit (`argmax-oss-swift` 1.1.1) wordt door Argmax nog niet getest met Xcode 27.1 en niet meer op macOS 14.
+- iPhone-inspreken is niet op een toestel uitgevoerd: geheugen van het grote model (geen
+  `increased-memory-limit`-recht), hoe lang het eerste laden duurt, de drempel voor stilte (`SpeechRecorder.hasSpeech`)
+  en of de snelle actie bij een koude start het blad opent.
 - Instellingen die per Mac blijven: mailboxen (inloggen), Claude-sleutel (sleutelhanger), sneltoetsen, vensters.
 - `DropInfo.location` gaf in `MailMoveZone` geen bruikbare posities; vandaar per vlak een eigen `onDrop`.
 

@@ -539,6 +539,8 @@ struct ExpandableTodo: View {
 /// Alleen tikken. Slepen-om-in-te-voegen vergt een eigen DragGesture die de drop-positie
 /// in de lijst bepaalt; dat hangt af van je lijstimplementatie en zit hier niet in.
 struct MagicPlusButton: View {
+    /// Voor VoiceOver.
+    var title = "Nieuwe taak"
     var action: () -> Void
     @State private var taps = 0
 
@@ -556,7 +558,7 @@ struct MagicPlusButton: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.impact(weight: .light), trigger: taps)
-        .accessibilityLabel("Nieuwe taak")
+        .accessibilityLabel(title)
     }
 }
 

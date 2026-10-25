@@ -89,6 +89,17 @@ public enum DictationParser {
                                  minutes: minutes)
     }
 
+    /// Eén los ingesproken veld (iPhone: klant, case en uitgevoerd elk apart): zonder leestekens aan de randen en met
+    /// een hoofdletter. `withDuration`: een duur aan het eind ("…, kwartier") komt apart terug.
+    public static func field(_ text: String, withDuration: Bool = false) -> (text: String, minutes: Int?) {
+        let cleaned = clean(text)
+        if withDuration, let found = DurationPhrase.find(in: cleaned, atEnd: true) {
+            let rest = clean(found.remainder)
+            if !rest.isEmpty { return (capitalized(rest), found.minutes) }
+        }
+        return (capitalized(cleaned), nil)
+    }
+
     /// Eerste hele woord uit `words` binnen `range`, ongeacht hoofdletters.
     private static func firstWord(of words: [String], in text: String, range: NSRange) -> NSRange? {
         let pattern = "\\b(?:" + words.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|") + ")\\b"
