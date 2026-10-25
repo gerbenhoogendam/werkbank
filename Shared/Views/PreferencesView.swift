@@ -6,7 +6,7 @@ import AppKit
 import KeyboardShortcuts
 #endif
 
-/// Voorkeuren met vier tabs: Agenda's, Weergave, Kolommen en Overig.
+/// Voorkeuren met tabs: Agenda's, Weergave, Thema, Kolommen, (Mail, Claude) en Overig.
 /// macOS: eigen venster (⌘,). iOS: als blad vanuit het tandwiel.
 struct PreferencesView: View {
     var body: some View {
@@ -15,6 +15,8 @@ struct PreferencesView: View {
                 .tabItem { Label("Agenda's", systemImage: "calendar") }
             DisplayPreferences()
                 .tabItem { Label("Weergave", systemImage: "paintbrush") }
+            ThemePreferences()
+                .tabItem { Label("Thema", systemImage: "paintpalette") }
             ColumnsPreferences()
                 .tabItem { Label("Kolommen", systemImage: "rectangle.3.group") }
             #if os(macOS)
@@ -142,7 +144,7 @@ private struct DisplayPreferences: View {
     var body: some View {
         Form {
             Section("Uiterlijk") {
-                Picker("Thema", selection: $appearance) {
+                Picker("Licht of donker", selection: $appearance) {
                     ForEach(AppearanceSetting.allCases) { option in
                         Text(option.title).tag(option.rawValue)
                     }

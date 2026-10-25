@@ -67,7 +67,7 @@ struct MailMoveZone: View {
                 Image(systemName: "tray.and.arrow.up.fill")
                     .foregroundStyle(ThingsColor.accent)
                 Text("Verplaatsen naar")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.werk(size: 14, weight: .semibold))
                     .foregroundStyle(ThingsColor.textPrimary)
             }
             .padding(.horizontal, 4)
@@ -92,16 +92,16 @@ struct MailMoveZone: View {
             ZStack {
                 Circle().fill(isOn ? Color.white.opacity(0.22) : ThingsColor.accent.opacity(0.12))
                 Image(systemName: isOn ? "tray.and.arrow.down.fill" : "tray.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.werk(size: 13, weight: .semibold))
                     .foregroundStyle(isOn ? Color.white : ThingsColor.accent)
             }
             .frame(width: 30, height: 30)
             VStack(alignment: .leading, spacing: 1) {
                 Text(gmail.displayName(email))
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.werk(size: 13.5, weight: .semibold))
                     .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
                 Text(email)
-                    .font(.system(size: 11))
+                    .font(.werk(size: 11))
                     .foregroundStyle(isOn ? Color.white.opacity(0.8) : ThingsColor.textSecondary)
             }
             .lineLimit(1)

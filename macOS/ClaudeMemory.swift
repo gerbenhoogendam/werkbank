@@ -103,7 +103,7 @@ struct MemoryInputRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text("Geheugen")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.werk(size: 12, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)
             TextField("", text: $text, axis: .vertical)
                 .textFieldStyle(.roundedBorder)

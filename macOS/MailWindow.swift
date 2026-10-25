@@ -124,7 +124,7 @@ struct MailWindowView: View {
 
     private var grabber: some View {
         Image(systemName: "line.3.horizontal")
-            .font(.system(size: 15, weight: .semibold))
+            .font(.werk(size: 15, weight: .semibold))
             .foregroundStyle(ThingsColor.textTertiary)
             .frame(width: 96, height: 24)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(ThingsColor.backgroundSidebar))
@@ -162,7 +162,7 @@ struct MailWindowView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(ref.subject.isEmpty ? "(geen onderwerp)" : ref.subject)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.werk(size: 17, weight: .semibold))
                 .foregroundStyle(ThingsColor.textPrimary)
                 .textSelection(.enabled)
                 .padding(.trailing, 28)
@@ -426,7 +426,7 @@ private struct ThreadMailCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Text(sender.name)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.werk(size: 13, weight: .semibold))
                             .foregroundStyle(ThingsColor.textPrimary)
                         Spacer()
                         Text(Self.dateText(mail.date))
@@ -566,7 +566,7 @@ private struct ThreadAnalysisView: View {
             HStack(spacing: 8) {
                 ClaudeSpark().frame(width: 18, height: 18)
                 Text("Analyse door Claude")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.werk(size: 13, weight: .semibold))
                     .foregroundStyle(ThingsColor.textPrimary)
                 Text("\(block.modelTitle) · \(block.createdAt.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "nl_NL"))))")
                     .thingsFont(.metadata)
@@ -595,7 +595,7 @@ private struct ThreadAnalysisView: View {
 
             if !isExpanded, let summary = block.summary {
                 Text(summary)
-                    .font(.system(size: 12))
+                    .font(.werk(size: 12))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(2)
                     .padding(.leading, 26)

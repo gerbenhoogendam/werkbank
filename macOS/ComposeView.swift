@@ -172,7 +172,7 @@ struct ComposeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             trailing()
         }
-        .font(.system(size: 13))
+        .font(.werk(size: 13))
         .padding(.vertical, 8)
         .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator.opacity(0.5)).frame(height: 0.5) }
         .padding(.horizontal, 20)
@@ -245,7 +245,7 @@ struct ComposeView: View {
                 // Er staat al tekst: de suggestie eronder, Tab voegt hem toe.
                 VStack(alignment: .leading, spacing: 4) {
                     Text(activeSuggestion)
-                        .font(.system(size: 13))
+                        .font(.werk(size: 13))
                         .foregroundStyle(ThingsColor.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -272,7 +272,7 @@ struct ComposeView: View {
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
             ScrollView {
                 Text(original.quotableText)
-                    .font(.system(size: 12))
+                    .font(.werk(size: 12))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -315,7 +315,7 @@ struct ComposeView: View {
                 HStack {
                     ClaudeSpark().frame(width: 13, height: 13)
                     Text(reviewer.issues.isEmpty ? "Geen opmerkingen" : "\(reviewer.issues.count) opmerking\(reviewer.issues.count == 1 ? "" : "en")")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.werk(size: 12, weight: .semibold))
                         .foregroundStyle(ThingsColor.textPrimary)
                     Spacer()
                     if reviewer.issues.contains(where: { canApply($0) }) {
@@ -340,13 +340,13 @@ struct ComposeView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(issue.isLanguage ? "Taal" : "Inhoud")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.werk(size: 10, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
                     .background(Capsule().fill(issue.isLanguage ? Color.fieldLabel : Color.orange))
                 Text(issue.explanation)
-                    .font(.system(size: 12))
+                    .font(.werk(size: 12))
                     .foregroundStyle(ThingsColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
@@ -364,11 +364,11 @@ struct ComposeView: View {
                         .strikethrough(!issue.replacement.isEmpty)
                         .foregroundStyle(ThingsColor.textSecondary)
                     if !issue.replacement.isEmpty {
-                        Image(systemName: "arrow.right").font(.system(size: 9)).foregroundStyle(ThingsColor.textTertiary)
+                        Image(systemName: "arrow.right").font(.werk(size: 9)).foregroundStyle(ThingsColor.textTertiary)
                         Text(issue.replacement).foregroundStyle(Color.green)
                     }
                 }
-                .font(.system(size: 12))
+                .font(.werk(size: 12))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.leading, 2)

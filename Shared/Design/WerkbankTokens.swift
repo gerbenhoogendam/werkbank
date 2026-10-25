@@ -4,9 +4,9 @@ import SwiftUI
 
 extension ThingsColor {
     /// Lopende timer (pulserende stip).
-    static let running = Color.dynamic(light: 0x30B550, dark: 0x3CCB5F)
+    static var running: Color { ThemeStore.shared.color(.running) }
     /// Foutmarkering (verplichte omschrijving, eindtijd buiten bereik) — zelfde rood als deadline.
-    static let error = ThingsColor.deadline
+    static var error: Color { ThingsColor.deadline }
 }
 
 /// Nederlandse datum/tijd-weergave (vaste locale, ongeacht systeemtaal).

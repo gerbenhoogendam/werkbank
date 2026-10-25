@@ -97,7 +97,7 @@ struct MonthAgendaView: View {
 
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.werk(size: 16))
                     .foregroundStyle(ThingsColor.textTertiary)
                     .contentShape(Rectangle())
             }
@@ -112,7 +112,7 @@ struct MonthAgendaView: View {
     private func navButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.werk(size: 11, weight: .semibold))
                 .foregroundStyle(ThingsColor.textSecondary)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
@@ -272,7 +272,7 @@ private struct WeekPage: View {
                         .thingsFont(.upcomingWeekday)
                         .foregroundStyle(isToday ? ThingsColor.accent : ThingsColor.textSecondary)
                     Text("\(calendar.component(.day, from: day))")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.werk(size: 12, weight: .bold))
                         .foregroundStyle(isToday ? Color.white : ThingsColor.textPrimary)
                         .frame(minWidth: 20, minHeight: 20)
                         .background(Circle().fill(isToday ? ThingsColor.accent : .clear))

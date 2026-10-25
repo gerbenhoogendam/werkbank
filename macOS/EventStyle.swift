@@ -11,12 +11,16 @@ enum EventStyle {
         guard let c = NSColor(color).usingColorSpace(.sRGB) else {
             return (ThingsColor.textPrimary, ThingsColor.textSecondary)
         }
-        // Achtergrond van de agenda: wit (licht) of #1E1F22 (donker).
-        let background = dark ? 30.0 / 255.0 : 1.0
-        func mix(_ component: CGFloat) -> Double { Double(component) * opacity + background * (1 - opacity) }
+        // Achtergrond van de agenda, uit het thema.
+        let agenda = ThemeStore.shared.themeColor(.agenda)
+        let hex = dark ? agenda.dark : agenda.light
+        let background = [Double((hex >> 16) & 0xFF), Double((hex >> 8) & 0xFF), Double(hex & 0xFF)].map { $0 / 255 }
+        func mix(_ component: CGFloat, _ channel: Int) -> Double {
+            Double(component) * opacity + background[channel] * (1 - opacity)
+        }
         func linear(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
-        let luminance = 0.2126 * linear(mix(c.redComponent)) + 0.7152 * linear(mix(c.greenComponent))
-            + 0.0722 * linear(mix(c.blueComponent))
+        let luminance = 0.2126 * linear(mix(c.redComponent, 0)) + 0.7152 * linear(mix(c.greenComponent, 1))
+            + 0.0722 * linear(mix(c.blueComponent, 2))
         // Omslagpunt waar wit en zwart even veel contrast geven (WCAG): ongeveer 0,18.
         if luminance < 0.18 {
             return (.white, .white.opacity(0.78))

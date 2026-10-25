@@ -27,6 +27,8 @@ struct GmailPanel: View {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
                 if gmail.accounts.count > 1 { tabs }
             }
+            .background(ThingsColor.mailHeaderBackground)
+            .darkScheme(ThemeStore.shared.theme.darkMailHeader)
             .background(GeometryReader { proxy in
                 Color.clear
                     .onAppear { topBarHeight = proxy.size.height }
@@ -37,7 +39,8 @@ struct GmailPanel: View {
                 .animation(.easeOut(duration: 0.18), value: moveZoneOpen)
         }
         .frame(maxHeight: .infinity)
-        .background(ThingsColor.backgroundSidebar)
+        .background(ThingsColor.mailBackground)
+        .darkScheme(ThemeStore.shared.theme.darkMail)
         .background { mailboxShortcuts }
         .alert("Naam van de tab", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(renaming.map(GmailSession.shortName) ?? "", text: $renameText)
@@ -192,7 +195,7 @@ struct GmailPanel: View {
                 .help("\(email) · ⌘-klik om uit de combinatie te halen")
             }
         }
-        .font(.system(size: 11.5, weight: .semibold))
+        .font(.werk(size: 11.5, weight: .semibold))
         .foregroundStyle(Color.white)
         .padding(.horizontal, 3)
         .padding(.vertical, 4)
@@ -203,7 +206,7 @@ struct GmailPanel: View {
         Button(action: action) {
             Text(title)
                 .lineLimit(1)
-            .font(.system(size: 11.5, weight: isOn ? .semibold : .regular))
+            .font(.werk(size: 11.5, weight: isOn ? .semibold : .regular))
             .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
@@ -313,7 +316,7 @@ struct GmailPanel: View {
     private var signInPrompt: some View {
         VStack(spacing: 12) {
             Image(systemName: "envelope.badge.shield.half.filled")
-                .font(.system(size: 30))
+                .font(.werk(size: 30))
                 .foregroundStyle(ThingsColor.textTertiary)
             Text("Log in om je inbox hier te zien")
                 .thingsFont(.todoTitle)
@@ -344,7 +347,7 @@ struct GmailPanel: View {
     private func notice(symbol: String, title: String, text: String) -> some View {
         VStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 28))
+                .font(.werk(size: 28))
                 .foregroundStyle(ThingsColor.textTertiary)
             Text(title)
                 .thingsFont(.todoTitle)
@@ -433,13 +436,13 @@ private struct GmailRow: View {
                         .fill(message.isUnread ? ThingsColor.accent : Color.clear)
                         .frame(width: 7, height: 7)
                     Text(message.senderDisplay)
-                        .font(.system(size: 13, weight: message.isUnread ? .semibold : .regular))
+                        .font(.werk(size: 13, weight: message.isUnread ? .semibold : .regular))
                         .foregroundStyle(ThingsColor.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     if let accountLabel {
                         Text(accountLabel)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.werk(size: 10, weight: .medium))
                             .foregroundStyle(ThingsColor.textSecondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -526,7 +529,7 @@ private struct GmailRow: View {
 
             Button(action: onArchive) {
                 Image(systemName: "archivebox")
-                    .font(.system(size: 12))
+                    .font(.werk(size: 12))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .frame(width: 26, height: 24)
                     .contentShape(Rectangle())

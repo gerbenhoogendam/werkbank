@@ -93,7 +93,7 @@ struct SendFuse: View {
                     .frame(maxHeight: .infinity)
                 }
                 Image(systemName: countdown.isDone ? "archivebox.fill" : "archivebox")
-                    .font(.system(size: size.titleFont + 3, weight: .semibold))
+                    .font(.werk(size: size.titleFont + 3, weight: .semibold))
                     .foregroundStyle(countdown.isDone ? Self.green : Color.white.opacity(0.35 + 0.6 * left))
                     .scaleEffect(countdown.isDone ? 1.25 : 1)
                     .animation(.spring(response: 0.28, dampingFraction: 0.45), value: countdown.isDone)

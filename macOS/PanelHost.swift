@@ -156,7 +156,7 @@ private struct PanelChrome: View {
                             PanelStore.shared.close(panel)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 17))
+                                .font(.werk(size: 17))
                                 .foregroundStyle(ThingsColor.textTertiary)
                                 .padding(10)
                         }
@@ -172,7 +172,7 @@ private struct PanelChrome: View {
                             PanelStore.shared.close(panel)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 17))
+                                .font(.werk(size: 17))
                                 .foregroundStyle(ThingsColor.textTertiary)
                                 .padding(10)
                         }

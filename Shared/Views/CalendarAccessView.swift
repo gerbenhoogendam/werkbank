@@ -7,7 +7,7 @@ struct CalendarAccessView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "calendar")
-                .font(.system(size: 40))
+                .font(.werk(size: 40))
                 .foregroundStyle(ThingsColor.textTertiary.opacity(0.7))
 
             if service.isDenied || service.status == .writeOnly {

@@ -731,7 +731,7 @@ struct RichTextToolbar: View {
     private func toggle(_ symbol: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+                .font(.werk(size: 13, weight: .medium))
                 .foregroundStyle(on ? ThingsColor.accent : ThingsColor.textSecondary)
                 .frame(width: 26, height: 24)
                 .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -750,7 +750,7 @@ struct RichTextToolbar: View {
     private var linkEditor: some View {
         HStack(spacing: 8) {
             Text("Adres")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.werk(size: 12, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)
             TextField("", text: $linkText)
                 .textFieldStyle(.roundedBorder)

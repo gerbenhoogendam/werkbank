@@ -96,7 +96,7 @@ struct TimeListView: View {
                 }
             }
         }
-        .background(ThingsColor.backgroundContent)
+        .background(ThingsColor.timeListBackground)
         .task { await ClientDirectory.shared.refresh() }   // logo's per klant
         .fileExporter(isPresented: $isExporting, document: exportDocument,
                       contentType: .commaSeparatedText, defaultFilename: "Werkbank-tijd") { result in
@@ -111,7 +111,7 @@ struct TimeListView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.werk(size: 10, weight: .semibold))
                     .rotationEffect(.degrees(showWritten ? 90 : 0))
                 Text("Al geschreven")
                     .thingsFont(.heading)
@@ -171,7 +171,7 @@ struct TimeListView: View {
 
             Button { showSupport = true } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.werk(size: 13, weight: .semibold))
                     .foregroundStyle(ThingsColor.accent)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
@@ -208,7 +208,7 @@ struct ThingsEmptyStateSymbol: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.system(size: 40))
+                .font(.werk(size: 40))
                 .foregroundStyle(ThingsColor.textTertiary.opacity(0.6))
             if let text {
                 Text(text).thingsFont(.metadata).foregroundStyle(ThingsColor.textTertiary)
@@ -278,7 +278,7 @@ struct SmallIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 10, weight: .bold))
+                .font(.werk(size: 10, weight: .bold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(ThingsColor.tagBackground))
@@ -360,7 +360,7 @@ struct TimeEntryRow: View {
                     withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.werk(size: 10, weight: .semibold))
                         .rotationEffect(.degrees(expanded ? 180 : 0))
                         .foregroundStyle(ThingsColor.textTertiary)
                         .frame(width: 18, height: 18)
@@ -509,7 +509,7 @@ private struct BookingDetails: View {
     private func row(_ field: BookingField, copy: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(field.label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.werk(size: 12, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)
                 .frame(width: 70, alignment: .leading)
             Group {
@@ -629,7 +629,7 @@ private struct BookingDetails: View {
 struct DictatedMark: View {
     var body: some View {
         Image(systemName: "mic.fill")
-            .font(.system(size: 10, weight: .semibold))
+            .font(.werk(size: 10, weight: .semibold))
             .foregroundStyle(Color.orange)
             .help("Ingesproken")
             .accessibilityLabel("Ingesproken")
@@ -658,7 +658,7 @@ struct CopyButton: View {
             }
         } label: {
             Image(systemName: copied ? "checkmark" : symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.werk(size: 11, weight: .semibold))
                 .foregroundStyle(copied ? Color.green : ThingsColor.textSecondary)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())

@@ -112,7 +112,7 @@ struct TodoCheckbox: View {
 
                 if status != .open {
                     Image(systemName: status == .completed ? "checkmark" : "xmark")
-                        .font(.system(size: size * 0.6, weight: .bold))
+                        .font(.werk(size: size * 0.6, weight: .bold))
                         .foregroundStyle(.white)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -226,7 +226,7 @@ struct ChecklistItemRow: View {
                     if isDone {
                         Circle().fill(ThingsColor.accent)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(.werk(size: 7, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }
@@ -548,7 +548,7 @@ struct MagicPlusButton: View {
             action()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
+                .font(.werk(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: ThingsMetrics.magicPlusSize, height: ThingsMetrics.magicPlusSize)
                 .background(Circle().fill(ThingsColor.accent))
@@ -582,7 +582,7 @@ struct ThingsEmptyState: View {
 
     var body: some View {
         Image(systemName: list.symbol)
-            .font(.system(size: 64))
+            .font(.werk(size: 64))
             .foregroundStyle(ThingsColor.textTertiary.opacity(0.5))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel("\(list.title) is leeg")

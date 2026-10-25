@@ -131,7 +131,9 @@ struct MainView: View {
         .onChange(of: undoManager, initial: true) { _, manager in UndoCenter.shared.manager = manager }
         // Nergens scrollbalken: ze nemen alleen maar ruimte in.
         .scrollIndicators(.never)
-        .background(ThingsColor.backgroundContent)
+        // Letter en grootte van het thema voor tekst zonder eigen stijl.
+        .font(.werk(size: 13))
+        .background(ThingsColor.window)
         .onDrop(of: [.emailMessage, .fileURL, .gmailMessage], isTargeted: $state.isDropTargeted) { providers in
             if GmailDrop.accepts(providers) {
                 return GmailDrop.handle(providers: providers, column: .inbox, archive: false, context: context, appState: appState)
@@ -220,7 +222,7 @@ struct MainView: View {
                 .padding(10)
             VStack(spacing: 8) {
                 Image(systemName: "tray.and.arrow.down.fill")
-                    .font(.system(size: 34))
+                    .font(.werk(size: 34))
                 Text("Laat los op een kolom om de mail daar toe te voegen")
                     .thingsFont(.listTitle)
             }
@@ -251,7 +253,7 @@ private struct SplitDivider: View {
     var body: some View {
         // Een echt klikvlak van 7 pt (geen overlay buiten de eigen afmetingen), met de zichtbare lijn in het midden.
         ZStack {
-            Rectangle().fill(ThingsColor.backgroundContent)
+            Rectangle().fill(ThingsColor.window)
             Rectangle()
                 .fill(isHovering ? ThingsColor.accent : ThingsColor.separator)
                 .frame(width: isHorizontalLine ? nil : (isHovering ? 2 : 1),

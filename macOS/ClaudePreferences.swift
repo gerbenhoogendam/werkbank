@@ -47,7 +47,7 @@ struct ClaudePreferences: View {
 
             Section {
                 TextEditor(text: $context)
-                    .font(.system(size: 12))
+                    .font(.werk(size: 12))
                     .frame(minHeight: 90)
                 Button("Standaardtekst terugzetten") { context = ClaudeSettings.defaultContext }
                     .disabled(context == ClaudeSettings.defaultContext)

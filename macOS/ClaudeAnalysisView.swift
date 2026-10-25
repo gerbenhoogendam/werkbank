@@ -310,7 +310,7 @@ private struct MarkdownLine: View, Equatable {
                 switch line {
                 case .heading(let level, let content):
                     inline(content)
-                        .font(.system(size: level <= 2 ? 15 : 13, weight: .semibold))
+                        .font(.werk(size: level <= 2 ? 15 : 13, weight: .semibold))
                         .foregroundStyle(ThingsColor.textPrimary)
                         .padding(.top, level <= 2 ? 8 : 4)
                 case .bullet(let content):
@@ -327,7 +327,7 @@ private struct MarkdownLine: View, Equatable {
                     .padding(.leading, 8)
                 case .code(let content):
                     Text(content.isEmpty ? " " : content)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.werk(size: 12, design: .monospaced))
                         .textSelection(.enabled)
                         .padding(.horizontal, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -345,7 +345,7 @@ private struct MarkdownLine: View, Equatable {
                                                 options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(content)
         return Text(attributed)
-            .font(.system(size: 13))
+            .font(.werk(size: 13))
             .foregroundStyle(ThingsColor.textPrimary)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)

@@ -62,7 +62,7 @@ struct SignaturePreferences: View {
 
             Section("HTML van de handtekening") {
                 TextEditor(text: $html)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.werk(size: 11, design: .monospaced))
                     .frame(minHeight: 110)
             }
 

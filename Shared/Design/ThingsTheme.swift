@@ -66,31 +66,42 @@ extension Color {
 // MARK: - Kleurtokens (Things-Design.md §5)
 
 enum ThingsColor {
+    // De meeste kleuren komen uit het gekozen thema (`ThemeStore`); de lijstkleuren liggen vast.
+
     // Achtergronden
-    static let backgroundContent = Color.dynamic(light: 0xFFFFFF, dark: 0x1E1F22)
-    static let backgroundSidebar = Color.dynamic(light: 0xF4F5F7, dark: 0x252629)
-    static let cardShadow        = Color.dynamic(light: 0x000000, dark: 0x000000,
-                                                 lightOpacity: 0.10, darkOpacity: 0.45)
+    static var backgroundContent: Color { ThemeStore.shared.color(.surface) }
+    static var backgroundSidebar: Color { ThemeStore.shared.color(.surfaceAlt) }
+    static var cardShadow: Color { ThemeStore.shared.color(.shadow) }
+
+    // Per onderdeel
+    static var window: Color { ThemeStore.shared.color(.window) }
+    static var mailBackground: Color { ThemeStore.shared.color(.mail) }
+    static var mailHeaderBackground: Color { ThemeStore.shared.color(.mailHeader) }
+    static var boardBackground: Color { ThemeStore.shared.color(.board) }
+    static var columnBackground: Color { ThemeStore.shared.color(.column) }
+    static var cardBackground: Color { ThemeStore.shared.color(.card) }
+    static var agendaBackground: Color { ThemeStore.shared.color(.agenda) }
+    static var timeListBackground: Color { ThemeStore.shared.color(.timeList) }
 
     // Tekst
-    static let textPrimary   = Color.dynamic(light: 0x1C1C1E, dark: 0xF2F2F4)
-    static let textSecondary = Color.dynamic(light: 0x8A8A8F, dark: 0x8E8E93)
-    static let textTertiary  = Color.dynamic(light: 0xB8B8BD, dark: 0x5C5C61)
+    static var textPrimary: Color { ThemeStore.shared.color(.text) }
+    static var textSecondary: Color { ThemeStore.shared.color(.textSecondary) }
+    static var textTertiary: Color { ThemeStore.shared.color(.textTertiary) }
 
     // Structuur en interactie
-    static let separator      = Color.dynamic(light: 0xE6E6EA, dark: 0x34353A)
-    static let accent         = Color.dynamic(light: 0x1A7CF9, dark: 0x3D8EFF)
-    static let selection      = Color.dynamic(light: 0xD8E7FE, dark: 0x27416B)
-    static let checkboxStroke = Color.dynamic(light: 0xC4C4C9, dark: 0x5E5F64)
+    static var separator: Color { ThemeStore.shared.color(.separator) }
+    static var accent: Color { ThemeStore.shared.color(.accent) }
+    static var selection: Color { ThemeStore.shared.color(.selection) }
+    static var checkboxStroke: Color { ThemeStore.shared.color(.checkbox) }
 
     // Betekeniskleuren
-    static let deadline = Color.dynamic(light: 0xF2463C, dark: 0xFF5A50)
-    static let today    = Color(hex: 0xFFD02B)
+    static var deadline: Color { ThemeStore.shared.color(.deadline) }
+    static var today: Color { ThemeStore.shared.color(.today) }
     static let evening  = Color.dynamic(light: 0x5B6CD9, dark: 0x7E8CF0)
 
     // Tags
-    static let tagBackground = Color.dynamic(light: 0xEDEDF0, dark: 0x38393E)
-    static let tagText       = Color.dynamic(light: 0x6E6E73, dark: 0xB0B0B5)
+    static var tagBackground: Color { ThemeStore.shared.color(.tag) }
+    static var tagText: Color { ThemeStore.shared.color(.tagText) }
 
     // Lijstkleuren (§2.1)
     static let inbox    = Color(hex: 0x1A8CFF)
@@ -123,7 +134,8 @@ enum ThingsMetrics {
     static let checkboxTitleGap: CGFloat  = 12
     static let minTapTarget: CGFloat      = 44
 
-    static let cardRadius: CGFloat        = 10
+    /// Afronding van kaarten en kolommen: van het thema.
+    static var cardRadius: CGFloat { ThemeStore.shared.theme.cardRadius }
     static let tagRadius: CGFloat         = 4
     static let selectionRadius: CGFloat   = 6
 
@@ -204,7 +216,7 @@ private struct ThingsFontModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.font(.system(size: size, weight: style.weight))
+        content.font(.werk(size: size, weight: style.weight))
     }
 }
 

@@ -54,7 +54,7 @@ struct EventDetailView: View {
         .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 17))
+                    .font(.werk(size: 17))
                     .foregroundStyle(ThingsColor.textTertiary)
                     .padding(10)
             }
@@ -90,14 +90,14 @@ struct EventDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(event.title)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.werk(size: 20, weight: .semibold))
                             .foregroundStyle(ThingsColor.textPrimary)
                             .textSelection(.enabled)
                         HStack(spacing: 6) {
                             calendarLabel
                             if event.isRecurring {
                                 Image(systemName: "repeat")
-                                    .font(.system(size: 10))
+                                    .font(.werk(size: 10))
                                     .foregroundStyle(ThingsColor.textTertiary)
                             }
                         }
@@ -191,7 +191,7 @@ struct EventDetailView: View {
                 }
                 Section("Notities") {
                     TextEditor(text: edit.notes)
-                        .font(.system(size: 13))
+                        .font(.werk(size: 13))
                         .frame(minHeight: 110)
                 }
                 if !event.attendees.isEmpty {
@@ -261,7 +261,7 @@ struct EventDetailView: View {
                 HStack(spacing: 4) {
                     label
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(.werk(size: 8, weight: .semibold))
                         .foregroundStyle(ThingsColor.textTertiary)
                 }
                 .contentShape(Rectangle())
@@ -341,7 +341,7 @@ struct EventDetailView: View {
     @ViewBuilder private func row(_ symbol: String, _ text: String, action: (() -> Void)? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 13))
+                .font(.werk(size: 13))
                 .foregroundStyle(ThingsColor.textTertiary)
                 .frame(width: 18)
             if let action {

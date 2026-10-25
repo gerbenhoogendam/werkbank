@@ -99,7 +99,7 @@ private struct AttachmentItem: View {
                 .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 1) {
                 Text(file.name)
-                    .font(.system(size: 13))
+                    .font(.werk(size: 13))
                     .foregroundStyle(ThingsColor.textPrimary)
                     .lineLimit(1)
                 Text(sizeText)

@@ -74,7 +74,7 @@ struct AgendaView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ThingsColor.backgroundContent)
+        .background(ThingsColor.agendaBackground)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: AgendaFrameKey.self, value: geo.frame(in: .main))
@@ -296,7 +296,7 @@ struct AgendaView: View {
     private func navButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.werk(size: 11, weight: .semibold))
                 .foregroundStyle(ThingsColor.textSecondary)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
@@ -315,7 +315,7 @@ struct AgendaView: View {
                         .thingsFont(.upcomingWeekday)
                         .foregroundStyle(isToday ? ThingsColor.accent : ThingsColor.textSecondary)
                     Text("\(calendar.component(.day, from: day))")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.werk(size: 13, weight: .bold))
                         .foregroundStyle(isToday ? Color.white : ThingsColor.textPrimary)
                         .frame(minWidth: 22, minHeight: 22)
                         .background(Circle().fill(isToday ? ThingsColor.accent : .clear))
@@ -573,7 +573,7 @@ struct DayColumn: View {
                         .fill(ThingsColor.accent.opacity(0.22))
                         .overlay(alignment: .topLeading) {
                             Text("\(DutchDate.time(range.start))–\(DutchDate.time(range.end))")
-                                .font(.system(size: 10))
+                                .font(.werk(size: 10))
                                 .monospacedDigit()
                                 .foregroundStyle(ThingsColor.accent)
                                 .padding(4)
@@ -883,7 +883,7 @@ private struct EventBlock: View {
                 }
                 if !isShort {
                     Text(DutchDate.range(event.start, event.end))
-                        .font(.system(size: 10))
+                        .font(.werk(size: 10))
                         .foregroundStyle(text.secondary)
                         .monospacedDigit()
                 }
@@ -927,7 +927,7 @@ private struct DraftBlock: View {
                     .foregroundStyle(ThingsColor.textPrimary)
                     .lineLimit(2)
                 Text(DutchDate.range(draft.start, draft.end))
-                    .font(.system(size: 10))
+                    .font(.werk(size: 10))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .monospacedDigit()
             }

@@ -50,7 +50,7 @@ struct CardView: View {
             if editing { minutesRow }
             if let sender = senderName {
                 Text(sender)
-                    .font(.system(size: 11))
+                    .font(.werk(size: 11))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -76,7 +76,7 @@ struct CardView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
-                .fill(ThingsColor.backgroundContent)
+                .fill(ThingsColor.cardBackground)
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
@@ -162,7 +162,7 @@ struct CardView: View {
                     .strokeBorder(completing ? Color.clear : ThingsColor.checkboxStroke, lineWidth: 1.5)
                 if completing {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.werk(size: 9, weight: .bold))
                         .foregroundStyle(.white)
                 }
             }
@@ -217,7 +217,7 @@ struct CardView: View {
     private func bodyView(_ text: String) -> some View {
         ScrollView {
             Text(text)
-                .font(.system(size: 10.5))
+                .font(.werk(size: 10.5))
                 .foregroundStyle(ThingsColor.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -274,7 +274,7 @@ struct CardView: View {
     private var mailButton: some View {
         Button(action: toggleExpanded) {
             Image(systemName: expanded ? "envelope.open" : "envelope")
-                .font(.system(size: 9))
+                .font(.werk(size: 9))
                 .foregroundStyle(expanded ? ThingsColor.accent : ThingsColor.textTertiary)
                 .frame(width: 18, height: 18)
                 .contentShape(Rectangle())
@@ -289,7 +289,7 @@ struct CardView: View {
         Button(action: startAddingSubtask) {
             HStack(spacing: 3) {
                 Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.werk(size: 9, weight: .semibold))
                 Text("Subtaak")
                     .cardFont(.meta)
             }
@@ -431,7 +431,7 @@ private struct CardFont: ViewModifier {
 
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.font(.system(size: kind.macSize))
+        content.font(.werk(size: kind.macSize))
         #else
         content.thingsFont(kind.style)
         #endif
@@ -458,7 +458,7 @@ struct TimerButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: isRunning ? "waveform" : "play.fill")
-                .font(.system(size: 10, weight: .bold))
+                .font(.werk(size: 10, weight: .bold))
                 .foregroundStyle(isRunning ? Color.white : ThingsColor.accent)
                 .frame(width: 22, height: 22)
                 .background(Circle().fill(isRunning ? ThingsColor.running : ThingsColor.accent.opacity(0.12)))

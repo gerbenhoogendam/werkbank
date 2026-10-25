@@ -49,7 +49,7 @@ struct TrackpadSwipe: ViewModifier {
                 Rectangle().fill(action.color.opacity(0.25 + 0.75 * progress))
                 Label(action.title, systemImage: action.systemImage)
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.werk(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .scaleEffect(progress >= 1 ? 1.15 : 0.9)
                     .padding(.horizontal, 14)

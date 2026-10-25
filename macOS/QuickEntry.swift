@@ -166,11 +166,11 @@ struct QuickEntryView: View {
     private var taskField: some View {
         HStack(spacing: 12) {
             Image(systemName: BoardColumn.inbox.symbol)
-                .font(.system(size: 20))
+                .font(.werk(size: 20))
                 .foregroundStyle(BoardColumn.inbox.color)
             TextField("", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 20))
+                .font(.werk(size: 20))
                 .foregroundStyle(ThingsColor.textPrimary)
                 .focused($focused)
                 .onSubmit(submit)

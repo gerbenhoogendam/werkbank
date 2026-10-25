@@ -154,7 +154,7 @@ struct SupportEntryView: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.werk(size: 12, weight: .semibold))
             .foregroundStyle(Color.fieldLabel)
     }
 
@@ -213,6 +213,6 @@ extension SupportEntryView {
 }
 
 extension Color {
-    /// Labels van invoervelden (Klant, Case, Uitgevoerd, …): helder blauw, goed leesbaar in licht en donker.
-    static let fieldLabel = Color(red: 0x1A / 255, green: 0x8C / 255, blue: 0xFF / 255)
+    /// Labels van invoervelden (Klant, Case, Uitgevoerd, …): uit het thema; in Standaard helder blauw #1A8CFF.
+    static var fieldLabel: Color { ThemeStore.shared.color(.fieldLabel) }
 }

@@ -112,7 +112,7 @@ struct SenderAvatar: View {
             } else {
                 Circle().fill(isSent ? ThingsColor.accent : ThingsColor.textTertiary.opacity(0.5))
                 Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: size * 0.43, weight: .semibold))
+                    .font(.werk(size: size * 0.43, weight: .semibold))
                     .foregroundStyle(.white)
             }
         }

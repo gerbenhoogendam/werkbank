@@ -103,7 +103,7 @@ struct ClientField: View {
                     .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
                 if let status = record.status {
                     Text(status)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.werk(size: 10, weight: .semibold))
                         .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -115,7 +115,7 @@ struct ClientField: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 13))
+            .font(.werk(size: 13))
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)

@@ -209,12 +209,12 @@ struct MiniTimerView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.title)
-                    .font(.system(size: size.titleFont, weight: .medium))
+                    .font(.werk(size: size.titleFont, weight: .medium))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 if size != .small {
                     Text(entry.client)
-                        .font(.system(size: size.titleFont - 2))
+                        .font(.werk(size: size.titleFont - 2))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                 }
@@ -223,7 +223,7 @@ struct MiniTimerView: View {
 
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 Text(Billing.formatHMS(entry.elapsed(at: timeline.date)))
-                    .font(.system(size: size.timeFont, weight: .semibold, design: .rounded))
+                    .font(.werk(size: size.timeFont, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
                     .fixedSize()
@@ -247,15 +247,15 @@ struct MiniTimerView: View {
     private func idleContent(_ prompt: IdlePrompt) -> some View {
         HStack(spacing: size.gap) {
             Image(systemName: "moon.zzz.fill")
-                .font(.system(size: size.titleFont + 2, weight: .semibold))
+                .font(.werk(size: size.titleFont + 2, weight: .semibold))
                 .foregroundStyle(Color.orange)
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(prompt.minutes) min weg")
-                    .font(.system(size: size.titleFont + 1, weight: .semibold))
+                    .font(.werk(size: size.titleFont + 1, weight: .semibold))
                     .foregroundStyle(.white)
                 if size != .small {
                     Text("\(prompt.start.formatted(date: .omitted, time: .shortened))–\(prompt.end.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: size.titleFont - 2))
+                        .font(.werk(size: size.titleFont - 2))
                         .foregroundStyle(.white.opacity(0.6))
                 }
             }
@@ -273,7 +273,7 @@ struct MiniTimerView: View {
     private func textButton(_ title: String, prominent: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: size.titleFont, weight: .semibold))
+                .font(.werk(size: size.titleFont, weight: .semibold))
                 .foregroundStyle(prominent ? Color.black : Color.white)
                 .padding(.horizontal, size.gap + 2)
                 .frame(height: size.buttonSize)
@@ -286,7 +286,7 @@ struct MiniTimerView: View {
     private func dictationContent(listening: Bool) -> some View {
         HStack(spacing: size.gap) {
             Image(systemName: listening ? "mic.fill" : "waveform")
-                .font(.system(size: size.titleFont + 3, weight: .semibold))
+                .font(.werk(size: size.titleFont + 3, weight: .semibold))
                 .foregroundStyle(listening ? Color(hex: 0xFF453A) : Color.white)
             if listening {
                 DictationLevel(level: dictation.level, size: size)
@@ -306,10 +306,10 @@ struct MiniTimerView: View {
     private func messageContent(_ message: String) -> some View {
         HStack(spacing: size.gap) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: size.titleFont + 2, weight: .semibold))
+                .font(.werk(size: size.titleFont + 2, weight: .semibold))
                 .foregroundStyle(Color(hex: 0x3CCB5F))
             Text(message)
-                .font(.system(size: size.titleFont, weight: .medium))
+                .font(.werk(size: size.titleFont, weight: .medium))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -328,7 +328,7 @@ struct MiniTimerView: View {
     private func circleButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: size.buttonSize * 0.4, weight: .bold))
+                .font(.werk(size: size.buttonSize * 0.4, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: size.buttonSize, height: size.buttonSize)
                 .background(Circle().fill(Color.white.opacity(0.18)))

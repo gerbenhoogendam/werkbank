@@ -24,7 +24,7 @@ struct BoardColumn: Hashable, Identifiable {
 
 /// Kleuren voor kolommen (Things-lijstkleuren); een nieuwe kolom krijgt de volgende in de rij.
 enum ColumnPalette {
-    static let colors: [Color] = [ThingsColor.inbox, ThingsColor.anytime, ThingsColor.today, ThingsColor.someday,
+    static let colors: [Color] = [ThingsColor.inbox, ThingsColor.anytime, Color(hex: 0xFFD02B), ThingsColor.someday,
                                   ThingsColor.logbook, ThingsColor.upcoming, ThingsColor.evening, ThingsColor.trash]
 
     static func color(at index: Int) -> Color { colors[((index % colors.count) + colors.count) % colors.count] }

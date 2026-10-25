@@ -416,7 +416,7 @@ struct DayCloseView: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.werk(size: 12, weight: .semibold))
             .foregroundStyle(Color.fieldLabel)
     }
 
@@ -434,7 +434,7 @@ struct DayCloseView: View {
                 TextField("", text: proposal.performed, axis: .vertical)
                     .lineLimit(1...3)
                 Text(proposal.wrappedValue.basis)
-                    .font(.system(size: 11))
+                    .font(.werk(size: 11))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(1)
             }

@@ -137,7 +137,7 @@ struct LogoView: View {
                     .scaledToFit()
             } else if didFail {
                 Text(String(fallbackName.first.map { String($0) } ?? "?").uppercased())
-                    .font(.system(size: size * 0.6, weight: .semibold))
+                    .font(.werk(size: size * 0.6, weight: .semibold))
                     .foregroundStyle(ThingsColor.tagText)
                     .frame(width: size, height: size)
                     .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(ThingsColor.tagBackground))

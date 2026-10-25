@@ -279,7 +279,7 @@ struct StopSheet: View {
     private func bookingRow<Field: View>(_ label: String, @ViewBuilder field: () -> Field) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.werk(size: 13, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)
                 .frame(width: 84, alignment: .leading)
             field()
@@ -292,7 +292,7 @@ struct StopSheet: View {
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Uitgevoerd")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.werk(size: 13, weight: .semibold))
                 .foregroundStyle(Color.fieldLabel)
 
             TextEditor(text: $workDescription)

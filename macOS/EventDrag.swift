@@ -323,7 +323,7 @@ struct EventDragLayer: View {
                 Image(systemName: "calendar")
                     .foregroundStyle(ThingsColor.accent)
                 Text("Verplaatsen naar")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.werk(size: 14, weight: .semibold))
                     .foregroundStyle(ThingsColor.textPrimary)
             }
             .padding(.horizontal, 4)
@@ -348,12 +348,12 @@ struct EventDragLayer: View {
             ZStack {
                 Circle().fill(isOn ? Color.white.opacity(0.25) : target.color.opacity(0.16))
                 Image(systemName: isOn ? "calendar.badge.checkmark" : "calendar")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.werk(size: 12, weight: .semibold))
                     .foregroundStyle(isOn ? Color.white : target.color)
             }
             .frame(width: 26, height: 26)
             Text(target.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.werk(size: 13, weight: .semibold))
                 .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -392,7 +392,7 @@ private struct LiftedChip: View {
                     .foregroundStyle(ThingsColor.textPrimary)
                     .lineLimit(1)
                 Text(DutchDate.range(event.start, event.end))
-                    .font(.system(size: 10))
+                    .font(.werk(size: 10))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .monospacedDigit()
             }

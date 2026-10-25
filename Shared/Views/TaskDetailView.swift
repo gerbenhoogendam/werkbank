@@ -16,7 +16,7 @@ struct SubtaskCheckbox: View {
                 if isDone {
                     Circle().fill(ThingsColor.accent)
                     Image(systemName: "checkmark")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.werk(size: 7, weight: .bold))
                         .foregroundStyle(.white)
                 }
             }
@@ -93,7 +93,7 @@ struct TaskDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("Titel", text: $title, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.werk(size: 20, weight: .semibold))
                 .foregroundStyle(ThingsColor.textPrimary)
             HStack(spacing: 10) {
                 labeledField("Klant", text: $label, prompt: "Klantnaam")
@@ -122,7 +122,7 @@ struct TaskDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Notities").thingsFont(.heading).foregroundStyle(ThingsColor.textPrimary)
             TextEditor(text: $card.notes)
-                .font(.system(size: 13))
+                .font(.werk(size: 13))
                 .scrollContentBackground(.hidden)
                 .padding(6)
                 .frame(minHeight: 110)
@@ -133,7 +133,7 @@ struct TaskDetailView: View {
                 .overlay(alignment: .topLeading) {
                     if card.notes.isEmpty {
                         Text("Notities bij deze taak")
-                            .font(.system(size: 13))
+                            .font(.werk(size: 13))
                             .foregroundStyle(ThingsColor.textTertiary)
                             .padding(.horizontal, 11)
                             .padding(.vertical, 14)
@@ -161,7 +161,7 @@ struct TaskDetailView: View {
             }
             HStack(spacing: 6) {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.werk(size: 11, weight: .semibold))
                     .foregroundStyle(ThingsColor.accent)
                     .frame(width: 22, height: 22)
                 TextField("Nieuwe subtaak", text: $newSubtask)
@@ -184,7 +184,7 @@ struct TaskDetailView: View {
     private func mailSection(_ text: String) -> some View {
         DisclosureGroup(isExpanded: $showsMail) {
             Text(text)
-                .font(.system(size: 12))
+                .font(.werk(size: 12))
                 .foregroundStyle(ThingsColor.textSecondary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -223,7 +223,7 @@ private struct SubtaskEditRow: View {
                 BoardService.delete(subtask, in: context)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.werk(size: 10, weight: .semibold))
                     .foregroundStyle(ThingsColor.textTertiary)
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())

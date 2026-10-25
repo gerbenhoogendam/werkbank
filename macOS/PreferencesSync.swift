@@ -12,7 +12,7 @@ final class PreferencesSync {
     static let fileName = "Voorkeuren.plist"
 
     /// Wat meegaat naar andere Macs.
-    private static let keys: Set<String> = [
+    private static let keys: Set<String> = Set([
         SettingsKey.roundingMinutes, SettingsKey.agendaMode, SettingsKey.workDays, SettingsKey.startHour,
         SettingsKey.endHour, SettingsKey.defaultCalendar, SettingsKey.hiddenCalendars, SettingsKey.agendaHidden,
         SettingsKey.googleAPIKey, SettingsKey.googleCX, SettingsKey.longRunMinutes, SettingsKey.appearance,
@@ -21,7 +21,7 @@ final class PreferencesSync {
         "gmail.displayNames", ClaudeSettings.modelKey, ClaudeSettings.contextKey,
         FoldSpeed.windowOpen.key, FoldSpeed.windowClose.key, FoldSpeed.mailOpen.key, FoldSpeed.mailClose.key,
         FoldSpeed.send.key,
-    ]
+    ]).union(ThemeStore.Key.all)
     private static let calendarColorsKey = "calendar.colors"
     /// Alleen op deze Mac.
     private static let lastAppliedKey = "sync.lastApplied"
@@ -185,6 +185,7 @@ final class PreferencesSync {
         CalendarService.shared.settingsChanged()
         GmailSession.shared.reloadDisplayNames()
         AppearanceSetting.applyStored()
+        ThemeStore.shared.reload()
     }
 }
 

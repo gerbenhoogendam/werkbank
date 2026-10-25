@@ -116,7 +116,7 @@ struct ColumnIconPicker: View {
     private var preview: some View {
         HStack(spacing: 10) {
             ColumnIcon(symbol: record.symbol, color: ColumnPalette.color(at: record.colorIndex))
-                .font(.system(size: 26))
+                .font(.werk(size: 26))
             Text(record.title)
                 .thingsFont(.listTitle)
                 .foregroundStyle(ThingsColor.textPrimary)
@@ -134,7 +134,7 @@ struct ColumnIconPicker: View {
                         BoardService.setIcon(record, symbol: name, in: context)
                     } label: {
                         Image(systemName: name)
-                            .font(.system(size: 16))
+                            .font(.werk(size: 16))
                             .foregroundStyle(ColumnPalette.color(at: record.colorIndex))
                             .frame(width: 38, height: 38)
                             .background(cellBackground(selected: record.symbol == name))
@@ -191,7 +191,7 @@ struct ColumnIconPicker: View {
                         BoardService.setIcon(record, symbol: emoji, in: context)
                     } label: {
                         Text(emoji)
-                            .font(.system(size: 22))
+                            .font(.werk(size: 22))
                             .frame(width: 38, height: 38)
                             .background(cellBackground(selected: record.symbol == emoji))
                     }

@@ -93,7 +93,7 @@ struct BoardView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(ThingsColor.backgroundContent)
+        .background(ThingsColor.boardBackground)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: BoardFrameKey.self, value: geo.frame(in: .main))
@@ -221,7 +221,7 @@ struct BoardView: View {
                     InlineEditing.pendingEditID = card.id
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.werk(size: 11, weight: .semibold))
                         .foregroundStyle(ThingsColor.accent)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
@@ -243,7 +243,7 @@ struct BoardView: View {
                         .disabled(columnRecords.count <= 1)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.werk(size: 11, weight: .semibold))
                         .foregroundStyle(ThingsColor.textSecondary)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
@@ -296,7 +296,7 @@ struct BoardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
-                .fill(isTarget ? column.color.opacity(0.10) : ThingsColor.backgroundSidebar)
+                .fill(isTarget ? column.color.opacity(0.10) : ThingsColor.columnBackground)
                 .animation(.easeOut(duration: 0.15), value: isTarget)
         )
         .background(
