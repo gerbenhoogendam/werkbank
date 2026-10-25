@@ -67,14 +67,13 @@ struct MailHeaderTitle: View {
             // Het aantal ongelezen op een klein lcd-schermpje, zoals het geheugen van de rekenmachine.
             HStack(spacing: 8) {
                 Text(title.uppercased()).font(.werk(size: 10)).tracking(1).foregroundStyle(ThingsColor.textSecondary)
-                Spacer(minLength: 6)
-                Text("ONGELEZEN").font(.werk(size: 9)).tracking(1).foregroundStyle(ThingsColor.textSecondary)
                 LCDPanel(radius: 6) {
                     LCDDigits(text: "\(unread)", size: 12)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
                 }
                 .fixedSize()
+                .accessibilityLabel("\(unread) ongelezen")
             }
         case .principes:
             // Twee koppen naast elkaar met elk een regel erboven, zoals de affiche.

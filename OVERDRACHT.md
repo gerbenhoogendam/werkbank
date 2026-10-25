@@ -141,8 +141,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     `RuledHeading`, `PosterGrille`, `MiniToggle`, regels van 2 pt; Sneeuwwitje `DialKnob`, `TuningScaleCell`, `TuningBar`,
     `LidSheen`, houten uiteinden; Rekenmachine `LCDDigits` (DSEG7, met zwakke 8-en eronder) en `CalcKey`; Drukproef
     `Waveform`, koppen in drie kleuren (`DutchNumber`) en grote telcijfers; Spark Week/Dag-tabjes, persoon/bel
-    (`MailLook.isNotification`), kopregel boven de lijst en de lege envelop. De rekentoetsen onder het totaal van
-    Rekenmachine zijn vorm, geen knoppen.
+    (`MailLook.isNotification`), kopregel boven de lijst en de lege envelop.
 20. **Logo's in de maillijst** (`MailSenderIcon` in `MailTheme.swift`, Voorkeuren › Weergave › Mail › "Logo's bij
     afzenders", standaard aan, in elk thema). Het logo komt via `SenderLogoService` van de website achter het domein
     van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.

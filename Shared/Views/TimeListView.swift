@@ -981,30 +981,16 @@ private struct TimeTotalFooter: View {
             .padding(14)
             .overlay(Rectangle().strokeBorder(ThemeParts.karmijn, lineWidth: 1))
         case .rekenmachine:
-            // Het scherm met lcd-cijfers en daaronder een rij rekentoetsen, de laatste geel.
-            VStack(spacing: 10) {
-                LCDPanel(radius: 10) {
-                    HStack {
-                        Text("TOTAAL").font(.werk(size: 9)).tracking(0.9).foregroundStyle(ThemeParts.lcdLabel)
-                        Spacer()
-                        LCDDigits(text: text, size: 24)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                }
+            // Het totaal in lcd-cijfers op het scherm.
+            LCDPanel(radius: 10) {
                 HStack {
-                    CalcKey(label: "−")
+                    Text("TOTAAL").font(.werk(size: 9)).tracking(0.9).foregroundStyle(ThemeParts.lcdLabel)
                     Spacer()
-                    CalcKey(label: "+")
-                    Spacer()
-                    CalcKey(label: "×")
-                    Spacer()
-                    CalcKey(label: "=", yellow: true)
+                    LCDDigits(text: text, size: 24)
                 }
-                .accessibilityHidden(true)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ThingsColor.backgroundSidebar))
         case .wandklok:
             // Het totaal groot en vet, zoals de prijs op het horlogeblad.
             VStack(alignment: .leading, spacing: 3) {
