@@ -22,6 +22,7 @@ enum DutchDate {
     private static let weekday = formatter("EEE")
     private static let weekdayDay = formatter("EEE d MMM")
     private static let hourMinute = formatter("HH:mm")
+    private static let monthName = formatter("LLLL")
 
     private static func clean(_ s: String) -> String { s.replacingOccurrences(of: ".", with: "") }
 
@@ -31,6 +32,8 @@ enum DutchDate {
     static func weekdayShort(_ d: Date) -> String { clean(weekday.string(from: d)) }
     /// "di 29 sep"
     static func weekdayAndDay(_ d: Date) -> String { clean(weekdayDay.string(from: d)) }
+    /// "oktober"
+    static func month(_ d: Date) -> String { monthName.string(from: d) }
     /// "09:15"
     static func time(_ d: Date) -> String { hourMinute.string(from: d) }
     /// "09:15–10:15"

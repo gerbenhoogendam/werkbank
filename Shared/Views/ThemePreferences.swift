@@ -106,17 +106,26 @@ private struct ThemeColorRow: View {
 
     var body: some View {
         let color = store.themeColor(role)
+        // Een omgekeerde agenda (Karmijn) tekent in de lichte weergave met de donkere kleur, en andersom: de kolommen
+        // tonen wat je in die weergave ziet.
+        let swapped = role == .agenda && store.theme.invertedAgenda
         LabeledContent(role.title) {
             HStack(spacing: 10) {
                 ColorPicker("\(role.title), licht", selection: Binding(
-                    get: { Color(hex: color.light) },
-                    set: { new in if let hex = ThemeColor.hex(of: new) { store.setColor(role, light: hex) } }
+                    get: { Color(hex: swapped ? color.dark : color.light) },
+                    set: { new in
+                        guard let hex = ThemeColor.hex(of: new) else { return }
+                        if swapped { store.setColor(role, dark: hex) } else { store.setColor(role, light: hex) }
+                    }
                 ), supportsOpacity: false)
                 .labelsHidden()
                 .frame(width: 46)
                 ColorPicker("\(role.title), donker", selection: Binding(
-                    get: { Color(hex: color.dark) },
-                    set: { new in if let hex = ThemeColor.hex(of: new) { store.setColor(role, dark: hex) } }
+                    get: { Color(hex: swapped ? color.light : color.dark) },
+                    set: { new in
+                        guard let hex = ThemeColor.hex(of: new) else { return }
+                        if swapped { store.setColor(role, light: hex) } else { store.setColor(role, dark: hex) }
+                    }
                 ), supportsOpacity: false)
                 .labelsHidden()
                 .frame(width: 46)

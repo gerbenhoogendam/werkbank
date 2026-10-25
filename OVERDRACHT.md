@@ -119,18 +119,22 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     niet voor afspraken van een hele dag. Alleen testen in een testagenda. Na te gaan: optillen en schaduw, scrollen
     bij de rand, grepen bij korte afspraken, uitnodigingen van anderen (EventKit kan weigeren), Exchange/Google-sync.
 19. **Thema's** (`Shared/Design/Theme.swift`, `Shared/Views/ThemePreferences.swift`). Voorkeuren › Thema: Standaard
-    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef en Spark. Elk onderdeel
+    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef, Spark en Karmijn. Elk onderdeel
     heeft een rol (venster, mail, kop van mail, bord, kolom, kaart, agenda, tijdlijst, tekst, accent, …) met een kleur
     voor licht en donker; per thema kun je elke rol zelf kiezen en terugzetten. Lettertype, cijferletter en
     basisgrootte (11–17) gelden overal waar `Font.werk`/`thingsFont` staat. Tischsuper tekent het mailpaneel altijd
-    donker, Spark de kop van het mailpaneel. De schetsen staan in de Claude-canvas "Werkbank thema's". De vorm per
+    donker, Spark de kop van het mailpaneel; Karmijn tekent de agenda omgekeerd (`invertedAgenda`: crème in donker,
+    zwart in licht; in Voorkeuren staan de agendakleuren daarom per weergave omgedraaid). De schetsen staan in de Claude-canvas "Werkbank thema's". De vorm per
     thema (`ThemeLook`, `ThemeParts.swift`, `AgendaTheme.swift`, `MailTheme.swift`, `CardSurface`, `ColumnSurface`,
     `TimeTotalFooter`, `PillTheme`): kolomkoppen en -vlakken, kaarten en "loopt", agendakop, filters, dagkoppen,
     uurliniaal, afspraken, lijn van nu, mailkop/tabs/rijen, totaal in Tijd schrijven, timerpil, losse vlakken bij
-    Drukproef. Michroma (SIL OFL, `Shared/Fonts`) wordt bij het starten geregistreerd. Standaard ziet er uit als
+    Drukproef. Michroma, Anton en Playfair Display (SIL OFL, `Shared/Fonts`) worden bij het starten geregistreerd;
+    Karmijn gebruikt Anton voor koppen en cijfers (`Font.werkDisplay`, `displayTight`) en Playfair voor accenten
+    (`Font.werkSerif`). Standaard ziet er uit als
     voorheen. Afspraken houden de kleuren van je agenda's. Na te gaan: of het donkere mailpaneel in de lichte weergave
     goed leesbaar is, lettertypes met gewichten (Avenir Next), contrast van accentknoppen met witte tekst in donker,
-    smalle kolommen met de grotere titels (Drukproef), meldingen en inspreken in de pil (nog donker in elk thema).
+    smalle kolommen met de grotere titels (Drukproef, Karmijn), meldingen en inspreken in de pil (nog donker in elk
+    thema), of de meegeleverde letters op beide platformen echt laden (anders valt het terug op de systeemletter).
 
 ## Open punten
 

@@ -37,6 +37,12 @@ struct AgendaNavButton: View {
             case .spark:
                 icon(size: 12, weight: .semibold, color: ThingsColor.accent)
                     .frame(width: 24, height: 24)
+            case .karmijn:
+                Image(systemName: symbol == "chevron.left" ? "arrow.left" : "arrow.right")
+                    .font(.werk(size: 13, weight: .regular))
+                    .foregroundStyle(ThingsColor.running)
+                    .frame(width: 32, height: 32)
+                    .overlay(Circle().strokeBorder(ThingsColor.separator, lineWidth: 1))
             case .wandklok, .standaard:
                 icon(size: 11, weight: .semibold, color: ThingsColor.textSecondary)
                     .frame(width: 22, height: 22)
@@ -94,6 +100,11 @@ struct AgendaTodayButton: View {
                 Text("Vandaag")
                     .font(.werk(size: 11.5, weight: .medium))
                     .foregroundStyle(ThingsColor.accent)
+            case .karmijn:
+                KarmijnLabel(text: "Vandaag", color: ThingsColor.running)
+                    .padding(.horizontal, 12)
+                    .frame(height: 28)
+                    .overlay(Rectangle().strokeBorder(ThingsColor.running, lineWidth: 1))
             case .wandklok, .sneeuwwitje:
                 Text("Vandaag")
                     .font(.werk(size: 11, weight: .semibold))
@@ -171,6 +182,14 @@ struct AgendaCalendarChip: View {
                 RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 3, height: 13).opacity(hidden ? 0.4 : 1)
                 label(hidden ? ThingsColor.textSecondary : ThingsColor.textPrimary, size: 11.5)
             }
+        case .karmijn:
+            HStack(spacing: 6) {
+                Rectangle()
+                    .fill(hidden ? Color.clear : color)
+                    .overlay(Rectangle().strokeBorder(hidden ? ThingsColor.textSecondary : color, lineWidth: 1))
+                    .frame(width: 8, height: 8)
+                KarmijnLabel(text: title, color: hidden ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+            }
         }
     }
 
@@ -247,6 +266,21 @@ struct AgendaDayHeader: View {
                            ink: isToday ? Color.white : ThingsColor.textPrimary)
             }
             .frame(maxWidth: .infinity)
+        case .karmijn:
+            // Het dagnummer in schreef; vandaag cursief, rood en onderstreept.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                KarmijnLabel(text: weekday)
+                Text(number)
+                    .font(.werkSerif(size: 22, italic: isToday, bold: isToday))
+                    .foregroundStyle(isToday ? ThingsColor.running : ThingsColor.textPrimary)
+                    .padding(.bottom, 1)
+                    .overlay(alignment: .bottom) {
+                        if isToday { Rectangle().fill(ThingsColor.running).frame(height: 2) }
+                    }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
         case .sneeuwwitje:
             HStack(spacing: 6) {
                 Text(weekday).font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
@@ -334,6 +368,7 @@ enum AgendaLook {
         case .sneeuwwitje: (ThingsColor.accent, 2)
         case .drukproef: (ThingsColor.today, 1)
         case .spark: (ThingsColor.deadline, 2)
+        case .karmijn: (ThingsColor.running, 2)
         case .standaard: (ThingsColor.deadline, 1.5)
         }
     }
@@ -346,13 +381,14 @@ enum AgendaLook {
         case .wandklok: 8
         case .tischsuper, .drukproef, .spark: 6
         case .standaard: 4
+        case .karmijn: 0
         }
     }
 
     /// Afspraken als vol vlak (tekstkleur volgt het contrast) in plaats van een tint.
     static var solidEvents: Bool {
         switch ThemeStore.shared.look {
-        case .principes, .rekenmachine, .drukproef: true
+        case .principes, .rekenmachine, .drukproef, .karmijn: true
         default: false
         }
     }

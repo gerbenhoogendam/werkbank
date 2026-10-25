@@ -165,6 +165,16 @@ struct TimeListView: View {
                     ThemedHeading(title: "Tijd schrijven")
                     Text("Nog te factureren").font(.werk(size: 11.5)).foregroundStyle(ThingsColor.textPrimary)
                 }
+            case .karmijn:
+                VStack(alignment: .leading, spacing: 4) {
+                    KarmijnLabel(text: "Nog te factureren")
+                    Text("TIJD SCHRIJVEN")
+                        .font(.werkDisplay(size: 32))
+                        .foregroundStyle(ThingsColor.today)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .displayTight(32)
+                }
             default:
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Tijd schrijven")
@@ -748,6 +758,22 @@ private struct TimeTotalFooter: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(ThingsColor.running))
+        case .karmijn:
+            // Het totaal groot in een rood kader, met het label ernaast.
+            HStack(alignment: .center, spacing: 14) {
+                Text(text)
+                    .font(.werkNumbers(size: 42))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                    .displayTight(42)
+                VStack(alignment: .leading, spacing: 2) {
+                    KarmijnLabel(text: "Totaal", size: 9.5)
+                    KarmijnLabel(text: "Te factureren", size: 9.5)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .overlay(Rectangle().strokeBorder(ThemeParts.karmijn, lineWidth: 1))
         case .rekenmachine:
             LCDPanel(radius: 12) {
                 HStack {

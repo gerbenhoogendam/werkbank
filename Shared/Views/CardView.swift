@@ -444,7 +444,7 @@ private struct CardFont: ViewModifier {
             switch ThemeStore.shared.look {
             case .drukproef: content.font(.werk(size: 14.5, weight: .medium)).tracking(-0.35)
             case .spark: content.font(.werk(size: kind.macSize, weight: .semibold))
-            case .wandklok, .principes, .sneeuwwitje: content.font(.werk(size: kind.macSize, weight: .medium))
+            case .wandklok, .principes, .sneeuwwitje, .karmijn: content.font(.werk(size: kind.macSize, weight: .medium))
             default: content.font(.werk(size: kind.macSize))
             }
         } else {
@@ -493,6 +493,11 @@ private struct CardSurface: View {
                                                    startPoint: .top, endPoint: .bottom)))
                 .overlay(shape.strokeBorder(Color.white.opacity(scheme == .dark ? 0.05 : 0.7), lineWidth: 0.5))
                 .shadow(color: ThingsColor.cardShadow, radius: 3, y: 2)
+        case .karmijn:
+            // Recht, met een donkerrode haarlijn; een lopende kaart is alleen een rood kader.
+            Rectangle()
+                .fill(isRunning ? Color.clear : ThingsColor.cardBackground)
+                .overlay(Rectangle().strokeBorder(isRunning ? ThemeParts.karmijn : ThingsColor.separator, lineWidth: 1))
         case .standaard:
             shape.fill(ThingsColor.cardBackground)
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
@@ -559,6 +564,14 @@ private struct RunningStrip: View {
                     Spacer()
                     ToggleKnob(height: 22)
                 }
+            case .karmijn:
+                HStack(alignment: .firstTextBaseline) {
+                    KarmijnLabel(text: "Loopt", color: ThingsColor.running, size: 9.5)
+                    Spacer()
+                    Text(time).font(.werkNumbers(size: 24)).foregroundStyle(ThingsColor.textPrimary)
+                }
+                .padding(.top, 7)
+                .overlay(alignment: .top) { Rectangle().fill(ThemeParts.karmijn).frame(height: 1) }
             case .wandklok, .standaard:
                 HStack {
                     Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)

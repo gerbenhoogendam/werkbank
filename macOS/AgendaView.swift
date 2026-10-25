@@ -84,6 +84,8 @@ struct AgendaView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             service.refreshStatus()
         }
+        // Karmijn: de agenda is het omgekeerde vlak, crème in de donkere weergave en zwart in de lichte.
+        .invertedScheme(ThemeStore.shared.theme.invertedAgenda)
     }
 
     // MARK: Dagen
@@ -125,6 +127,17 @@ struct AgendaView: View {
         let sameMonth = calendar.component(.month, from: first) == calendar.component(.month, from: last)
         return sameMonth ? "\(calendar.component(.day, from: first))–\(DutchDate.short(last))"
             : "\(DutchDate.short(first)) – \(DutchDate.short(last))"
+    }
+
+    /// Karmijn: de dagen ("26–30") en de maand ("oktober") los, voor de kapitalen en de cursieve schreef.
+    private var karmijnTitle: (days: String, month: String) {
+        let days = days
+        guard let first = days.first, let last = days.last else { return ("", "") }
+        let from = calendar.component(.day, from: first)
+        if isDayMode { return ("\(from)", DutchDate.month(first)) }
+        let to = calendar.component(.day, from: last)
+        let sameMonth = calendar.component(.month, from: first) == calendar.component(.month, from: last)
+        return ("\(from)–\(to)", sameMonth ? DutchDate.month(first) : "\(DutchDate.month(first)) / \(DutchDate.month(last))")
     }
 
     // MARK: Inhoud
@@ -285,6 +298,36 @@ struct AgendaView: View {
             .padding(.horizontal, 18)
             .padding(.top, 14)
             .padding(.bottom, 10)
+        } else if look == .karmijn {
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    KarmijnLabel(text: isDayMode ? "Agenda — \(DutchDate.weekdayShort(days.first ?? .now))"
+                                 : "Agenda — week \(days.first.map { DutchDate.isoWeek($0) } ?? 0)")
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(karmijnTitle.days)
+                            .font(.werkDisplay(size: 38))
+                            .foregroundStyle(ThingsColor.textPrimary)
+                            .displayTight(38)
+                        Text(karmijnTitle.month)
+                            .font(.werkSerif(size: 32, italic: true, bold: true))
+                            .foregroundStyle(ThingsColor.running)
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 10) {
+                    calendarFilters
+                    HStack(spacing: 8) {
+                        AgendaNavButton(symbol: "chevron.left", label: "Vorige") { offset -= 1 }
+                        AgendaNavButton(symbol: "chevron.right", label: "Volgende") { offset += 1 }
+                        AgendaTodayButton { offset = 0 }
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
         } else {
             HStack(spacing: 10) {
                 let buttonsFirst = look == .tischsuper || look == .rekenmachine
@@ -444,7 +487,7 @@ struct AgendaView: View {
     private static func hourFont(_ look: ThemeLook) -> Font {
         switch look {
         case .wandklok: .werk(size: 11, weight: .light)
-        case .drukproef: .werk(size: 10)
+        case .drukproef, .karmijn: .werk(size: 10)
         case .standaard: .werk(size: ThingsTextStyle.metadata.size)
         default: .werk(size: 11)
         }
@@ -930,14 +973,18 @@ struct DayColumn: View {
             let position = y(timeline.date)
             let line = AgendaLook.nowLine
             if position >= 0 && position <= totalHeight {
+                let look = ThemeStore.shared.look
+                let mark: CGFloat = look == .karmijn ? 11 : 7
                 ZStack(alignment: .leading) {
                     Rectangle().fill(line.color).frame(height: line.thickness)
-                    if ThemeStore.shared.look != .tischsuper {
-                        Circle().fill(line.color).frame(width: 7, height: 7).offset(x: -3.5)
+                    if look == .karmijn {
+                        KarmijnStar().fill(line.color).frame(width: mark, height: mark).offset(x: -mark / 2)
+                    } else if look != .tischsuper {
+                        Circle().fill(line.color).frame(width: mark, height: mark).offset(x: -mark / 2)
                     }
                 }
                 .frame(width: width)
-                .offset(y: position - 3.5)
+                .offset(y: position - mark / 2)
             }
         }
         .allowsHitTesting(false)
@@ -1018,7 +1065,7 @@ private struct EventBlock: View {
                 shape.fill(event.color.opacity(dark ? 0.3 : 0.22))
             case .spark:
                 shape.fill(event.color.opacity(dark ? 0.2 : 0.12))
-            case .principes, .rekenmachine, .drukproef:
+            case .principes, .rekenmachine, .drukproef, .karmijn:
                 shape.fill(event.color)
             }
         }

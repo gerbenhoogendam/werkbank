@@ -14,6 +14,23 @@ struct ThemedHeading: View {
 
     var body: some View {
         switch look {
+        case .karmijn:
+            // Smalle rode kapitalen met het aantal in cursieve schreef erachter.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.werkDisplay(size: 28))
+                    .foregroundStyle(ThingsColor.today)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .displayTight(28)
+                if let count {
+                    Text("\(count)")
+                        .font(.werkSerif(size: 20, italic: true))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                } else if let detail {
+                    KarmijnLabel(text: detail)
+                }
+            }
         case .drukproef:
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title.uppercased())
@@ -192,6 +209,60 @@ struct GrilleMark: View {
     }
 }
 
+/// Klein label in kapitalen met ruime letterafstand (Karmijn): "MAIL / 12 ONGELEZEN".
+struct KarmijnLabel: View {
+    let text: String
+    var color: Color = ThingsColor.textSecondary
+    var size: CGFloat = 10
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.werk(size: size))
+            .tracking(size * 0.14)
+            .foregroundStyle(color)
+            .lineLimit(1)
+    }
+}
+
+extension View {
+    /// Anton heeft veel ruimte boven en onder de kapitalen; dit trekt de regel strak om de letters, zoals de koppen
+    /// van de affiche (`size` is de maat die aan `werkDisplay` is gegeven).
+    func displayTight(_ size: CGFloat) -> some View {
+        padding(.vertical, -size * ThemeStore.shared.scale * 0.27)
+    }
+}
+
+/// Vierpuntige ster van de affiche (Karmijn): bij ongelezen mail en aan het begin van de lijn van nu.
+struct KarmijnStar: Shape {
+    func path(in rect: CGRect) -> Path {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
+        var path = Path()
+        path.move(to: point(0.5, 0))
+        path.addLine(to: point(0.6, 0.4))
+        path.addLine(to: point(1, 0.5))
+        path.addLine(to: point(0.6, 0.6))
+        path.addLine(to: point(0.5, 1))
+        path.addLine(to: point(0.4, 0.6))
+        path.addLine(to: point(0, 0.5))
+        path.addLine(to: point(0.4, 0.4))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// Rode gloed linksboven achter het bord (Karmijn), de enige diepte in dat thema.
+struct KarmijnGlow: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        EllipticalGradient(colors: [ThemeParts.karmijn.opacity(scheme == .dark ? 0.55 : 0.12), .clear],
+                           center: UnitPoint(x: 0.18, y: 0), startRadiusFraction: 0, endRadiusFraction: 0.75)
+            .allowsHitTesting(false)
+    }
+}
+
 enum ThemeParts {
     /// Lijn boven een kopje (Principes).
     static let rule = Color.dynamic(light: 0x000000, dark: 0x5A5A5A)
@@ -203,4 +274,8 @@ enum ThemeParts {
     static let teak = Color.dynamic(light: 0xAE6630, dark: 0xC27A44)
     /// Kleur per mailbox (Spark): blauw, groen, oranje, daarna weer van voren af.
     static let mailboxColors: [Color] = [Color(hex: 0x2F7CF6), Color(hex: 0x34C759), Color(hex: 0xF5A623), Color(hex: 0xAF52DE)]
+    /// Karmijnrood voor kaders en knoppen (Karmijn); rode tekst op zwart is lichter (de rollen Vandaag en Loopt nu).
+    static let karmijn = Color(hex: 0x85051F)
+    /// Crème op een rood vlak (Karmijn).
+    static let creme = Color(hex: 0xF1E8D8)
 }

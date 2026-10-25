@@ -45,6 +45,15 @@ struct MailHeaderTitle: View {
                     Text("\(unread) ongelezen").font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
                 }
             }
+        case .karmijn:
+            // Label erboven, dan groot en rood "INBOX" zoals de kop van de affiche.
+            VStack(alignment: .leading, spacing: 3) {
+                KarmijnLabel(text: "\(title) / \(unread) ongelezen")
+                Text("INBOX")
+                    .font(.werkDisplay(size: 40))
+                    .foregroundStyle(ThingsColor.today)
+                    .displayTight(40)
+            }
         case .spark:
             HStack(spacing: 9) {
                 Image(systemName: "tray")
@@ -145,6 +154,13 @@ struct MailboxTab: View {
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isOn ? Color.white.opacity(0.1) : .clear))
+        case .karmijn:
+            // Kapitalen; de gekozen mailbox krijgt een rode lijn eronder.
+            KarmijnLabel(text: title, color: isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary, size: 11)
+                .padding(.bottom, 3)
+                .overlay(alignment: .bottom) {
+                    if isOn { Rectangle().fill(ThemeParts.karmijn).frame(height: 1) }
+                }
         case .standaard:
             Text(title)
                 .font(.werk(size: 11.5, weight: isOn ? .semibold : .regular))

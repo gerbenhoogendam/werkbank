@@ -104,7 +104,7 @@ enum ThemeRole: String, CaseIterable, Identifiable {
 
 /// De vormgeving naast de kleuren (kolomkoppen, kaarten, agenda, mail, tijdlijst, timerpil), zoals in de schetsen.
 enum ThemeLook: String {
-    case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark
+    case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn
 
     /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef).
     var panelGap: CGFloat { self == .drukproef ? 8 : 0 }
@@ -124,12 +124,15 @@ struct WerkbankTheme: Identifiable, Equatable {
     var darkMail = false
     /// Alleen de kop van het mailpaneel (mailboxen) donker.
     var darkMailHeader = false
+    /// De agenda in de omgekeerde weergave: crème in donker, zwart in licht (Karmijn). De agendakleuren gelden dan
+    /// voor die omgekeerde weergave.
+    var invertedAgenda = false
 
     func color(_ role: ThemeRole) -> ThemeColor { colors[role] ?? Self.standaard.colors[role] ?? ThemeColor(0, 0) }
 
     var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
 
-    static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark]
+    static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn]
 
     static func named(_ id: String) -> WerkbankTheme { all.first { $0.id == id } ?? standaard }
 }
@@ -262,6 +265,22 @@ extension WerkbankTheme {
         .deadline: ThemeColor(0xD70015, 0xFF453A), .tag: ThemeColor(0xEEEEF0, 0x2E2E32),
         .tagText: ThemeColor(0x6B6B70, 0x98989F), .shadow: ThemeColor(0x0F172A, 0x000000, lightOpacity: 0.06, darkOpacity: 0.4),
     ], cardRadius: 10, darkMailHeader: true)
+
+    /// Affiche in zwart, karmijn en crème: smalle kapitalen (Anton), cursieve schreef (Playfair Display), rode kaders.
+    static let karmijn = WerkbankTheme(id: "karmijn", name: "Karmijn", colors: [
+        .window: ThemeColor(0xF1E8D8, 0x0D0504), .mail: ThemeColor(0xF1E8D8, 0x0D0504),
+        .mailHeader: ThemeColor(0xF1E8D8, 0x0D0504), .board: ThemeColor(0xF1E8D8, 0x0D0504),
+        .column: ThemeColor(0xF1E8D8, 0x0D0504), .card: ThemeColor(0xF7F1E6, 0x160A08),
+        .agenda: ThemeColor(0xF1E8D8, 0x0D0504), .timeList: ThemeColor(0xF1E8D8, 0x0D0504),
+        .surface: ThemeColor(0xF1E8D8, 0x0D0504), .surfaceAlt: ThemeColor(0xE8E0D0, 0x1A0D0B),
+        .text: ThemeColor(0x0D0504, 0xF1E8D8), .textSecondary: ThemeColor(0x5E534A, 0xB3A79A),
+        .textTertiary: ThemeColor(0x6B5F55, 0x8F8378), .fieldLabel: ThemeColor(0x85051F, 0xE64A62),
+        .separator: ThemeColor(0xD6CCC1, 0x3C040D), .checkbox: ThemeColor(0x85051F, 0xC8102E),
+        .accent: ThemeColor(0x85051F, 0xE0344F), .selection: ThemeColor(0xEAD7D2, 0x3C040D),
+        .running: ThemeColor(0x85051F, 0xE64A62), .today: ThemeColor(0x85051F, 0xC8102E),
+        .deadline: ThemeColor(0x85051F, 0xE64A62), .tag: ThemeColor(0xE8DFCF, 0x241210),
+        .tagText: ThemeColor(0x5E534A, 0xB3A79A), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0, darkOpacity: 0),
+    ], fontFamily: "Helvetica Neue", numberFamily: "Anton", cardRadius: 0, invertedAgenda: true)
 }
 
 // MARK: - Opslag en de kleuren die de app gebruikt
@@ -301,9 +320,10 @@ final class ThemeStore: @unchecked Sendable {
         reload()
     }
 
-    /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef).
+    /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef, Anton en Playfair Display voor Karmijn).
     private static func registerBundledFonts() {
-        for name in ["Michroma-Regular"] {
+        for name in ["Michroma-Regular", "Anton-Regular", "PlayfairDisplay-Regular", "PlayfairDisplay-Italic",
+                     "PlayfairDisplay-BoldItalic"] {
             guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
@@ -463,6 +483,17 @@ extension Font {
     static func werkNumbers(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         ThemeStore.shared.font(size: size, weight: weight, numbers: true)
     }
+
+    /// Smalle kapitalen voor koppen (Anton, meegeleverd), geschaald met de basisgrootte.
+    static func werkDisplay(size: CGFloat) -> Font {
+        .custom("Anton-Regular", size: size * ThemeStore.shared.scale)
+    }
+
+    /// Schreefletter voor accenten (Playfair Display, meegeleverd): recht, cursief of vet cursief.
+    static func werkSerif(size: CGFloat, italic: Bool = false, bold: Bool = false) -> Font {
+        let name = italic ? (bold ? "PlayfairDisplay-BoldItalic" : "PlayfairDisplay-Italic") : "PlayfairDisplay-Regular"
+        return .custom(name, size: size * ThemeStore.shared.scale)
+    }
 }
 
 private struct ForcedDarkScheme: ViewModifier {
@@ -471,6 +502,15 @@ private struct ForcedDarkScheme: ViewModifier {
 
     func body(content: Content) -> some View {
         content.environment(\.colorScheme, isOn ? .dark : scheme)
+    }
+}
+
+private struct InvertedScheme: ViewModifier {
+    let isOn: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, isOn ? (scheme == .dark ? .light : .dark) : scheme)
     }
 }
 
@@ -487,6 +527,11 @@ extension View {
     /// Dit deel altijd donker tekenen (bijvoorbeeld het mailpaneel van Tischsuper), ook in de lichte weergave.
     func darkScheme(_ isOn: Bool) -> some View {
         modifier(ForcedDarkScheme(isOn: isOn))
+    }
+
+    /// Dit deel in de omgekeerde weergave tekenen (de crème agenda van Karmijn in de donkere weergave).
+    func invertedScheme(_ isOn: Bool) -> some View {
+        modifier(InvertedScheme(isOn: isOn))
     }
 
     /// Dit deel altijd licht tekenen (een geel vlak met zwarte tekst), ook in de donkere weergave.

@@ -77,7 +77,7 @@ struct BoardView: View {
     private var look: ThemeLook { ThemeStore.shared.look }
 
     var body: some View {
-        HStack(alignment: .top, spacing: look == .drukproef ? 0 : (look == .principes ? 16 : 10)) {
+        HStack(alignment: .top, spacing: look == .drukproef || look == .karmijn ? 0 : (look == .principes ? 16 : 10)) {
             ForEach(columns) { column in
                 columnView(column)
                     .offset(x: movingColumn == column.id ? moveTranslation : 0)
@@ -95,12 +95,14 @@ struct BoardView: View {
                     }
             }
         }
-        .padding(look == .drukproef ? 6 : 12)
+        .padding(look == .drukproef || look == .karmijn ? 6 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Tischsuper: één oranje balk achter alle kolomkoppen.
+        // Tischsuper: één oranje balk achter alle kolomkoppen. Karmijn: een rode gloed linksboven.
         .background(alignment: .top) {
             if look == .tischsuper {
                 ThemeParts.orange.frame(height: 50)
+            } else if look == .karmijn {
+                KarmijnGlow()
             }
         }
         .background(ThingsColor.boardBackground)
@@ -280,7 +282,7 @@ struct BoardView: View {
                 .help("Kolom hernoemen of verwijderen")
                 .accessibilityLabel("Kolomopties voor \(column.title)")
             }
-            .padding(.horizontal, look == .principes || look == .drukproef ? 4 : 12)
+            .padding(.horizontal, look == .principes || look == .drukproef || look == .karmijn ? 4 : 12)
             .padding(.top, look == .tischsuper ? 4 : 10)
             .padding(.bottom, look == .tischsuper ? 14 : 6)
             .onHover { inside in
@@ -318,7 +320,7 @@ struct BoardView: View {
                 )
                 .animation(ThingsMotion.reorder, value: drag.target)
                 .animation(ThingsMotion.reorder, value: items(for: column).map(\.id))
-                .padding(.horizontal, look == .principes || look == .drukproef ? 0 : (look == .tischsuper ? 8 : 10))
+                .padding(.horizontal, look == .principes || look == .drukproef || look == .karmijn ? 0 : (look == .tischsuper ? 8 : 10))
                 .padding(.top, 8)
                 .padding(.bottom, 4)
             }
@@ -331,7 +333,7 @@ struct BoardView: View {
                 }
             }
         }
-        .padding(.horizontal, look == .drukproef ? 14 : 0)
+        .padding(.horizontal, look == .drukproef || look == .karmijn ? 14 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background { ColumnSurface(isTarget: isTarget, targetColor: column.color, isFirst: columns.first == column) }
         .background(
@@ -480,7 +482,7 @@ private struct ColumnSurface: View {
         case .principes, .spark:
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
                 .fill(isTarget ? targetColor.opacity(0.10) : Color.clear)
-        case .drukproef:
+        case .drukproef, .karmijn:
             // Geen vlak: een haarlijn tussen de kolommen.
             HStack(spacing: 0) {
                 Rectangle().fill(ThingsColor.separator).frame(width: 1).opacity(isFirst ? 0 : 1)

@@ -107,6 +107,7 @@ struct GmailPanel: View {
         case .standaard: 38
         case .tischsuper: 78
         case .principes, .drukproef: 54
+        case .karmijn: 72
         default: 46
         }
     }
@@ -186,20 +187,25 @@ struct GmailPanel: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 10)
         } else {
-            HStack(spacing: look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0 : (look == .standaard ? 4 : 6))) {
-                if hasPartialCombination { combinedPill }
+            HStack(spacing: look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0 : (look == .standaard ? 4 : (look == .karmijn ? 9 : 6)))) {
+                if hasPartialCombination {
+                    combinedPill
+                    if look == .karmijn { tabSlash }
+                }
                 ForEach(accounts, id: \.self) { email in
                     tab(title: gmail.displayName(email),
                         isOn: !gmail.isCombined && gmail.activeAccount == email) {
                         select(email)
                     }
                     .help("\(email) · ⌘-klik om te combineren")
+                    // Karmijn: schuine strepen tussen de mailboxen, zoals de labels van de affiche.
+                    if look == .karmijn { tabSlash }
                 }
                 tab(title: "Alles", isOn: gmail.isAllCombined) {
                     selection.selectedID = nil
                     Task { await gmail.showCombined() }
                 }
-                if look == .standaard || look == .principes || look == .drukproef { Spacer(minLength: 0) }
+                if look == .standaard || look == .principes || look == .drukproef || look == .karmijn { Spacer(minLength: 0) }
             }
             .padding(3)
             .background {
@@ -213,6 +219,10 @@ struct GmailPanel: View {
                 if look == .standaard { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
             }
         }
+    }
+
+    private var tabSlash: some View {
+        KarmijnLabel(text: "/", size: 11).padding(.bottom, 3)
     }
 
     /// Kleur van een mailbox (Spark): op volgorde van de mailboxen.
@@ -443,7 +453,7 @@ struct GmailPanel: View {
                             }
                         }
                     }
-                    .padding(.horizontal, MailLook.cardRows ? 8 : 0)
+                    .padding(.horizontal, MailLook.cardRows ? 8 : (look == .karmijn ? 6 : 0))
                     .padding(.top, MailLook.cardRows ? 4 : 0)
                 }
             }
@@ -492,6 +502,13 @@ private struct GmailRow: View {
             } else if isHovering {
                 shape.fill(Color.primary.opacity(0.05))
             }
+        case .karmijn:
+            // Een rood kader om de gekozen rij, recht zoals de rest van het thema.
+            if isSelected {
+                Rectangle().strokeBorder(ThemeParts.karmijn, lineWidth: 1)
+            } else if isHovering {
+                Rectangle().fill(Color.primary.opacity(0.05))
+            }
         }
     }
 
@@ -515,9 +532,15 @@ private struct GmailRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(message.isUnread ? MailLook.unreadDot : Color.clear)
-                        .frame(width: 7, height: 7)
+                    if look == .karmijn {
+                        KarmijnStar()
+                            .fill(message.isUnread ? ThingsColor.running : Color.clear)
+                            .frame(width: 8, height: 8)
+                    } else {
+                        Circle()
+                            .fill(message.isUnread ? MailLook.unreadDot : Color.clear)
+                            .frame(width: 7, height: 7)
+                    }
                     if look == .spark, let accountColor {
                         RoundedRectangle(cornerRadius: 1.5).fill(accountColor).frame(width: 3, height: 14)
                     }

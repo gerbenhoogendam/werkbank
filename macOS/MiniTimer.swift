@@ -219,7 +219,9 @@ struct MiniTimerView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                if look == .drukproef || look == .rekenmachine, size != .small {
+                if look == .karmijn, size != .small {
+                    KarmijnLabel(text: entry.client, color: pill.text2, size: size.titleFont - 3.5)
+                } else if look == .drukproef || look == .rekenmachine, size != .small {
                     Text(entry.client.uppercased())
                         .font(.werk(size: size.titleFont - 3, weight: .medium))
                         .tracking(look == .rekenmachine ? 0.8 : 0.2)
@@ -230,7 +232,7 @@ struct MiniTimerView: View {
                     .font(.werk(size: size.titleFont, weight: .medium))
                     .foregroundStyle(pill.text)
                     .lineLimit(1)
-                if size != .small, look != .drukproef, look != .rekenmachine {
+                if size != .small, look != .drukproef, look != .rekenmachine, look != .karmijn {
                     Text(entry.client)
                         .font(.werk(size: size.titleFont - 2))
                         .foregroundStyle(pill.text2)
@@ -255,7 +257,7 @@ struct MiniTimerView: View {
                         .font(Self.timeFont(look, size: size.timeFont))
                         .monospacedDigit()
                         .tracking(look == .drukproef ? -1 : 0)
-                        .foregroundStyle(look == .drukproef ? ThingsColor.today : pill.text)
+                        .foregroundStyle(look == .drukproef || look == .karmijn ? ThingsColor.today : pill.text)
                         .fixedSize()
                 }
             }
@@ -274,14 +276,20 @@ struct MiniTimerView: View {
         }
         .padding(.horizontal, size.gap + 6)
         .frame(width: size.width, height: size.height)
-        .background(Capsule().fill(pill.background).shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 3))
-        .overlay(Capsule().strokeBorder(pill.border, lineWidth: 1))
+        .background(pillShape(pill).fill(pill.background).shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 3))
+        .overlay(pillShape(pill).strokeBorder(pill.border, lineWidth: 1))
+    }
+
+    /// Een capsule, of een rechthoek met kleine hoeken als het thema dat wil (Karmijn).
+    private func pillShape(_ pill: PillTheme) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: pill.radius ?? size.height / 2, style: .continuous)
     }
 
     private static func timeFont(_ look: ThemeLook, size: CGFloat) -> Font {
         switch look {
         case .standaard: .werk(size: size, weight: .semibold, design: .rounded)
         case .drukproef: .werkNumbers(size: size * 0.85)
+        case .karmijn: .werkNumbers(size: size)
         case .wandklok, .sneeuwwitje: .werk(size: size, weight: .light)
         case .tischsuper: .werk(size: size, weight: .ultraLight)
         default: .werk(size: size, weight: .medium)
@@ -299,6 +307,8 @@ struct MiniTimerView: View {
                 .background {
                     if ThemeStore.shared.look == .rekenmachine {
                         RoundKey(tint: ThingsColor.today)
+                    } else if ThemeStore.shared.look == .karmijn {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous).fill(pill.stopFill)
                     } else {
                         Circle().fill(pill.stopFill)
                     }
@@ -402,6 +412,8 @@ struct MiniTimerView: View {
                         RoundKey()
                     } else if ThemeStore.shared.look == .drukproef {
                         Circle().strokeBorder(ThingsColor.checkboxStroke, lineWidth: 1)
+                    } else if ThemeStore.shared.look == .karmijn {
+                        Circle().strokeBorder(ThingsColor.separator, lineWidth: 1)
                     } else {
                         Circle().fill(pill.buttonFill)
                     }
@@ -425,6 +437,8 @@ private struct PillTheme {
     var buttonIcon: Color
     var stopFill: Color
     var stopIcon: Color
+    /// Hoekafronding; nil is een capsule.
+    var radius: CGFloat? = nil
 
     static var current: PillTheme {
         switch ThemeStore.shared.look {
@@ -460,6 +474,10 @@ private struct PillTheme {
             PillTheme(background: ThingsColor.cardBackground, border: ThingsColor.separator, text: ThingsColor.textPrimary,
                       text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
                       buttonIcon: ThingsColor.accent, stopFill: ThingsColor.today, stopIcon: .white)
+        case .karmijn:
+            PillTheme(background: ThingsColor.backgroundContent, border: ThemeParts.karmijn, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, showsDot: false, buttonFill: .clear,
+                      buttonIcon: ThingsColor.running, stopFill: ThemeParts.karmijn, stopIcon: ThemeParts.creme, radius: 4)
         }
     }
 }
