@@ -24,7 +24,7 @@ struct GmailPanel: View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 header
-                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                if look == .standaard { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
                 if gmail.accounts.count > 1 { tabs }
             }
             .background(ThingsColor.mailHeaderBackground)
@@ -99,14 +99,31 @@ struct GmailPanel: View {
 
     // MARK: Kop
 
+    private var look: ThemeLook { ThemeStore.shared.look }
+    private var unreadCount: Int { gmail.messages.filter(\.isUnread).count }
+
+    private var headerHeight: CGFloat {
+        switch look {
+        case .standaard: 38
+        case .tischsuper: 78
+        case .principes, .drukproef: 54
+        default: 46
+        }
+    }
+
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "envelope.fill")
-                .foregroundStyle(ThingsColor.accent)
-            Text(headerTitle)
-                .lineLimit(1)
-                .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.textPrimary)
+            if look == .standaard {
+                Image(systemName: "envelope.fill")
+                    .foregroundStyle(ThingsColor.accent)
+                Text(headerTitle)
+                    .lineLimit(1)
+                    .thingsFont(.heading)
+                    .foregroundStyle(ThingsColor.textPrimary)
+            } else {
+                MailHeaderTitle(title: headerTitle, unread: unreadCount)
+                    .lineLimit(1)
+            }
             Spacer()
             if gmail.state == .signedIn {
                 if gmail.isLoading {
@@ -133,8 +150,8 @@ struct GmailPanel: View {
                 accountMenu
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 38)
+        .padding(.horizontal, look == .standaard ? 12 : 14)
+        .frame(height: headerHeight)
     }
 
     private var headerTitle: String {
@@ -148,25 +165,60 @@ struct GmailPanel: View {
     /// Een eigen selectie (niet alles): die mailboxen staan samen in één blauwe pil vooraan.
     private var hasPartialCombination: Bool { gmail.isCombined && !gmail.isAllCombined }
 
-    private var tabs: some View {
-        HStack(spacing: 4) {
-            if hasPartialCombination { combinedPill }
-            ForEach(gmail.accounts.filter { !hasPartialCombination || !gmail.combinedAccounts.contains($0) }, id: \.self) { email in
-                tab(title: gmail.displayName(email),
-                    isOn: !gmail.isCombined && gmail.activeAccount == email) {
-                    select(email)
+    @ViewBuilder private var tabs: some View {
+        let accounts = gmail.accounts.filter { !hasPartialCombination || !gmail.combinedAccounts.contains($0) }
+        if look == .spark {
+            // Spark: de mailboxen onder elkaar in de donkerblauwe kop, elk met een kleurstreepje.
+            VStack(spacing: 2) {
+                if hasPartialCombination { combinedPill.frame(maxWidth: .infinity, alignment: .leading) }
+                ForEach(accounts, id: \.self) { email in
+                    let isOn = !gmail.isCombined && gmail.activeAccount == email
+                    MailboxTab(title: gmail.displayName(email), isOn: isOn, color: mailboxColor(email),
+                               count: isOn ? unreadCount : nil) { select(email) }
+                        .help("\(email) · ⌘-klik om te combineren")
                 }
-                .help("\(email) · ⌘-klik om te combineren")
+                MailboxTab(title: "Alles", isOn: gmail.isAllCombined, color: ThingsColor.textSecondary,
+                           count: gmail.isAllCombined ? unreadCount : nil) {
+                    selection.selectedID = nil
+                    Task { await gmail.showCombined() }
+                }
             }
-            tab(title: "Alles", isOn: gmail.isAllCombined) {
-                selection.selectedID = nil
-                Task { await gmail.showCombined() }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 10)
+        } else {
+            HStack(spacing: look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0 : (look == .standaard ? 4 : 6))) {
+                if hasPartialCombination { combinedPill }
+                ForEach(accounts, id: \.self) { email in
+                    tab(title: gmail.displayName(email),
+                        isOn: !gmail.isCombined && gmail.activeAccount == email) {
+                        select(email)
+                    }
+                    .help("\(email) · ⌘-klik om te combineren")
+                }
+                tab(title: "Alles", isOn: gmail.isAllCombined) {
+                    selection.selectedID = nil
+                    Task { await gmail.showCombined() }
+                }
+                if look == .standaard || look == .principes || look == .drukproef { Spacer(minLength: 0) }
             }
-            Spacer(minLength: 0)
+            .padding(3)
+            .background {
+                if look == .wandklok || look == .sneeuwwitje {
+                    Capsule().fill(ThingsColor.separator.opacity(0.6))
+                }
+            }
+            .padding(.horizontal, look == .standaard ? 5 : 9)
+            .padding(.vertical, look == .standaard ? 3 : 6)
+            .overlay(alignment: .bottom) {
+                if look == .standaard { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+    }
+
+    /// Kleur van een mailbox (Spark): op volgorde van de mailboxen.
+    private func mailboxColor(_ email: String) -> Color {
+        let index = gmail.accounts.firstIndex(of: email) ?? 0
+        return ThemeParts.mailboxColors[index % ThemeParts.mailboxColors.count]
     }
 
     /// Klik: alleen deze mailbox. ⌘-klik: erbij zetten of eruit halen.
@@ -203,17 +255,7 @@ struct GmailPanel: View {
     }
 
     private func tab(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .lineLimit(1)
-            .font(.werk(size: 11.5, weight: isOn ? .semibold : .regular))
-            .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(isOn ? ThingsColor.accent : Color.clear))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        MailboxTab(title: title, isOn: isOn, action: action)
     }
 
     /// Een mail op een mailbox in "Verplaatsen naar" laten vallen: het gesprek verhuist naar die mailbox.
@@ -379,12 +421,13 @@ struct GmailPanel: View {
                 // ScrollView, geen List: een List nam het slepen van de rij over. De veegacties (twee vingers op het
                 // trackpad: links archiveert, rechts maakt een taak) staan los in `TrackpadSwipe`.
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    LazyVStack(spacing: MailLook.cardRows ? 2 : 0) {
                         ForEach(gmail.messages) { message in
                             GmailRow(message: message,
                                      isBusy: gmail.busyMessageIDs.contains(message.id),
                                      isSelected: selection.selectedID == message.id,
                                      accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(gmail.displayName) : nil,
+                                accountColor: gmail.account(for: message.id).map(mailboxColor),
                                      onSelect: { selection.selectedID = message.id },
                                      onArchive: { archive(message) },
                                      onDragStarted: { dragState.begin(account: gmail.account(for: message.id)) })
@@ -394,9 +437,14 @@ struct GmailPanel: View {
                                     trailing: SwipeAction(systemImage: "archivebox", title: "Archiveren",
                                                           color: ThingsColor.textSecondary) { archive(message) }
                                 )
-                            Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                            if !MailLook.cardRows {
+                                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                                    .padding(.horizontal, look == .standaard ? 0 : 12)
+                            }
                         }
                     }
+                    .padding(.horizontal, MailLook.cardRows ? 8 : 0)
+                    .padding(.top, MailLook.cardRows ? 4 : 0)
                 }
             }
         }
@@ -408,6 +456,8 @@ private struct GmailRow: View {
     let isBusy: Bool
     let isSelected: Bool
     var accountLabel: String? = nil
+    /// Kleurstreepje van de mailbox voor de afzender (Spark).
+    var accountColor: Color? = nil
     let onSelect: () -> Void
     let onArchive: () -> Void
     let onDragStarted: () -> Void
@@ -417,9 +467,32 @@ private struct GmailRow: View {
     var body: some View {
         header
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? ThingsColor.selection : (isHovering ? ThingsColor.selection.opacity(0.5) : Color.clear))
+            .background { rowBackground }
             .opacity(isBusy ? 0.5 : 1)
             .onHover { isHovering = $0 }
+    }
+
+    /// Gekozen of aangewezen rij, zoals het thema hem tekent.
+    @ViewBuilder private var rowBackground: some View {
+        let look = ThemeStore.shared.look
+        let radius: CGFloat = look == .principes || look == .sneeuwwitje || look == .rekenmachine ? 14 : (look == .drukproef ? 10 : 12)
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        switch look {
+        case .standaard, .spark:
+            isSelected ? ThingsColor.selection : (isHovering ? ThingsColor.selection.opacity(0.5) : Color.clear)
+        case .wandklok, .sneeuwwitje, .rekenmachine:
+            if isSelected {
+                shape.fill(ThingsColor.cardBackground).shadow(color: ThingsColor.cardShadow, radius: 8, y: 3)
+            } else if isHovering {
+                shape.fill(Color.primary.opacity(0.04))
+            }
+        case .tischsuper, .principes, .drukproef:
+            if isSelected {
+                shape.fill(ThingsColor.cardBackground)
+            } else if isHovering {
+                shape.fill(Color.primary.opacity(0.05))
+            }
+        }
     }
 
     private func open() {
@@ -429,14 +502,27 @@ private struct GmailRow: View {
     // MARK: Rij (één klik markeert, dubbelklik opent de mail, slepen naar een kolom)
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 4) {
+        let look = ThemeStore.shared.look
+        return HStack(alignment: .top, spacing: MailLook.avatars ? 10 : 4) {
+            if MailLook.avatars {
+                Text(MailLook.initials(message.senderDisplay))
+                    .font(.werk(size: 11, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .background {
+                        if look == .rekenmachine { RoundKey() } else { Circle().fill(ThingsColor.tagBackground) }
+                    }
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(message.isUnread ? ThingsColor.accent : Color.clear)
+                        .fill(message.isUnread ? MailLook.unreadDot : Color.clear)
                         .frame(width: 7, height: 7)
+                    if look == .spark, let accountColor {
+                        RoundedRectangle(cornerRadius: 1.5).fill(accountColor).frame(width: 3, height: 14)
+                    }
                     Text(message.senderDisplay)
-                        .font(.werk(size: 13, weight: message.isUnread ? .semibold : .regular))
+                        .font(.werk(size: 13, weight: look == .spark ? .bold : (message.isUnread ? .semibold : .regular)))
                         .foregroundStyle(ThingsColor.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: 4)

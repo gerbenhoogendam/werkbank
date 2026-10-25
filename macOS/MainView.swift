@@ -38,9 +38,11 @@ struct MainView: View {
             HStack(spacing: 0) {
                 if gmailVisible {
                     GmailPanel()
+                        .themePanel()
                         .frame(width: clamp(gmailWidth, Self.gmailRange))
                     SplitDivider(isHorizontalLine: false,
                                  label: "Schuif de breedte van het Gmail-paneel",
+                                 fill: dividerFill(ThingsColor.mailBackground),
                                  onChanged: { translation in
                                      let start = gmailDragStart ?? gmailWidth
                                      gmailDragStart = start
@@ -53,8 +55,10 @@ struct MainView: View {
                 GeometryReader { geo in
                     VStack(spacing: 0) {
                         BoardView()
+                            .themePanel()
                             .frame(height: geo.size.height * clamp(boardFraction, Self.boardRange))
                         SplitDivider(isHorizontalLine: true,
+                                     fill: dividerFill(ThingsColor.agendaBackground),
                                      onChanged: { translation in
                                          let start = boardDragStart ?? boardFraction
                                          boardDragStart = start
@@ -65,8 +69,10 @@ struct MainView: View {
                             .zIndex(1)
                         HStack(spacing: 0) {
                             AgendaView()
+                                .themePanel()
                                 .frame(width: geo.size.width * clamp(agendaFraction, Self.agendaRange))
                             SplitDivider(isHorizontalLine: false,
+                                         fill: dividerFill(ThingsColor.agendaBackground),
                                          onChanged: { translation in
                                              let start = agendaDragStart ?? agendaFraction
                                              agendaDragStart = start
@@ -76,6 +82,7 @@ struct MainView: View {
                                          onReset: { agendaFraction = Self.defaultAgendaFraction })
                                 .zIndex(1)
                             TimeListView()
+                                .themePanel()
                         }
                     }
                     // Over het hele venster, behalve het Gmail-paneel.
@@ -87,6 +94,8 @@ struct MainView: View {
                     }
                 }
             }
+            // Drukproef: losse vlakken met de vensterkleur eromheen.
+            .padding(ThemeStore.shared.look.panelGap)
             // Mail en Claude in beeld: de rest van de app vervaagt, zodat je je op de inhoud richt. Een klik in het
             // vervaagde deel sluit wat je alleen las (niet waar je een antwoord, analyse of invoer in bent begonnen).
             .blur(radius: focusMode ? 7 : 0)
@@ -237,11 +246,36 @@ private func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double {
     min(max(value, range.lowerBound), range.upperBound)
 }
 
+extension MainView {
+    /// Kleur van de strook tussen twee panelen: in Standaard wit, in een thema die van het paneel ernaast, en bij
+    /// losse vlakken (Drukproef) de vensterkleur.
+    fileprivate func dividerFill(_ neighbour: Color) -> Color {
+        switch ThemeStore.shared.look {
+        case .standaard: ThingsColor.backgroundContent
+        case .drukproef: ThingsColor.window
+        default: neighbour
+        }
+    }
+}
+
+extension View {
+    /// Een paneel van het hoofdvenster; bij losse vlakken (Drukproef) met afgeronde hoeken.
+    @ViewBuilder func themePanel() -> some View {
+        let radius = ThemeStore.shared.look.panelRadius
+        if radius > 0 {
+            clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        } else {
+            self
+        }
+    }
+}
+
 /// Scheidingslijn tussen twee panelen die je door te slepen kunt verschuiven.
 private struct SplitDivider: View {
     /// `true`: een horizontale lijn (verschuift op en neer); `false`: een verticale lijn (links/rechts).
     let isHorizontalLine: Bool
     var label: String? = nil
+    var fill: Color = ThingsColor.backgroundContent
     let onChanged: (CGFloat) -> Void
     let onEnded: () -> Void
     let onReset: () -> Void
@@ -253,9 +287,10 @@ private struct SplitDivider: View {
     var body: some View {
         // Een echt klikvlak van 7 pt (geen overlay buiten de eigen afmetingen), met de zichtbare lijn in het midden.
         ZStack {
-            Rectangle().fill(ThingsColor.window)
+            Rectangle().fill(fill)
             Rectangle()
-                .fill(isHovering ? ThingsColor.accent : ThingsColor.separator)
+                .fill(isHovering ? ThingsColor.accent
+                      : (ThemeStore.shared.look.panelGap > 0 ? Color.clear : ThingsColor.separator))
                 .frame(width: isHorizontalLine ? nil : (isHovering ? 2 : 1),
                        height: isHorizontalLine ? (isHovering ? 2 : 1) : nil)
         }

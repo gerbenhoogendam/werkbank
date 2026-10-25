@@ -201,47 +201,112 @@ struct MiniTimerView: View {
 
     private func content(_ entry: TimeEntry) -> some View {
         let isRunning = entry.status == .running
+        let pill = PillTheme.current
+        let look = ThemeStore.shared.look
+        let stop = {
+            // De stopsheet staat in het hoofdvenster.
+            appState.requestStop(entry, in: context)
+            WindowRouter.showMain()
+        }
         return HStack(spacing: size.gap) {
             // Een stilstaande stip: een knipperende liet de pil de hele dag tientallen keren per seconde hertekenen.
-            Circle()
-                .fill(isRunning ? Color(hex: 0x3CCB5F) : Color.orange)
-                .frame(width: size.dot, height: size.dot)
+            if look == .sneeuwwitje {
+                GrilleMark()
+            } else if pill.showsDot {
+                Circle()
+                    .fill(isRunning ? pill.dot : Color.orange)
+                    .frame(width: size.dot, height: size.dot)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
+                if look == .drukproef || look == .rekenmachine, size != .small {
+                    Text(entry.client.uppercased())
+                        .font(.werk(size: size.titleFont - 3, weight: .medium))
+                        .tracking(look == .rekenmachine ? 0.8 : 0.2)
+                        .foregroundStyle(pill.text2)
+                        .lineLimit(1)
+                }
                 Text(entry.title)
                     .font(.werk(size: size.titleFont, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(pill.text)
                     .lineLimit(1)
-                if size != .small {
+                if size != .small, look != .drukproef, look != .rekenmachine {
                     Text(entry.client)
                         .font(.werk(size: size.titleFont - 2))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(pill.text2)
                         .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                Text(Billing.formatHMS(entry.elapsed(at: timeline.date)))
-                    .font(.werk(size: size.timeFont, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
+                let time = Billing.formatHMS(entry.elapsed(at: timeline.date))
+                if look == .rekenmachine {
+                    LCDPanel(radius: 8) {
+                        Text(time)
+                            .font(.werk(size: size.timeFont * 0.8, weight: .light))
+                            .monospacedDigit()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 2)
+                    }
                     .fixedSize()
+                } else {
+                    Text(time)
+                        .font(Self.timeFont(look, size: size.timeFont))
+                        .monospacedDigit()
+                        .tracking(look == .drukproef ? -1 : 0)
+                        .foregroundStyle(look == .drukproef ? ThingsColor.today : pill.text)
+                        .fixedSize()
+                }
             }
 
             circleButton(isRunning ? "pause.fill" : "play.fill", label: isRunning ? "Pauze" : "Hervat") {
                 if isRunning { TimerService.pause(entry, in: context) } else { TimerService.start(entry, in: context) }
             }
-            circleButton("stop.fill", label: "Stop") {
-                // De stopsheet staat in het hoofdvenster.
-                appState.requestStop(entry, in: context)
-                WindowRouter.showMain()
+            if look == .principes {
+                Button(action: stop) { ToggleKnob(height: size.buttonSize) }
+                    .buttonStyle(.plain)
+                    .help("Stop")
+                    .accessibilityLabel("Stop")
+            } else {
+                stopButton(action: stop)
             }
         }
         .padding(.horizontal, size.gap + 6)
         .frame(width: size.width, height: size.height)
-        .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+        .background(Capsule().fill(pill.background).shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 3))
+        .overlay(Capsule().strokeBorder(pill.border, lineWidth: 1))
+    }
+
+    private static func timeFont(_ look: ThemeLook, size: CGFloat) -> Font {
+        switch look {
+        case .standaard: .werk(size: size, weight: .semibold, design: .rounded)
+        case .drukproef: .werkNumbers(size: size * 0.85)
+        case .wandklok, .sneeuwwitje: .werk(size: size, weight: .light)
+        case .tischsuper: .werk(size: size, weight: .ultraLight)
+        default: .werk(size: size, weight: .medium)
+        }
+    }
+
+    /// Stopknop van de timerpil in de vorm van het thema.
+    private func stopButton(action: @escaping () -> Void) -> some View {
+        let pill = PillTheme.current
+        return Button(action: action) {
+            RoundedRectangle(cornerRadius: ThemeStore.shared.look == .drukproef ? 0 : 2, style: .continuous)
+                .fill(pill.stopIcon)
+                .frame(width: size.buttonSize * 0.3, height: size.buttonSize * 0.3)
+                .frame(width: size.buttonSize, height: size.buttonSize)
+                .background {
+                    if ThemeStore.shared.look == .rekenmachine {
+                        RoundKey(tint: ThingsColor.today)
+                    } else {
+                        Circle().fill(pill.stopFill)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .help("Stop")
+        .accessibilityLabel("Stop")
     }
 
     private func idleContent(_ prompt: IdlePrompt) -> some View {
@@ -326,15 +391,75 @@ struct MiniTimerView: View {
     }
 
     private func circleButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let pill = PillTheme.current
+        return Button(action: action) {
             Image(systemName: symbol)
                 .font(.werk(size: size.buttonSize * 0.4, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(pill.buttonIcon)
                 .frame(width: size.buttonSize, height: size.buttonSize)
-                .background(Circle().fill(Color.white.opacity(0.18)))
+                .background {
+                    if ThemeStore.shared.look == .rekenmachine {
+                        RoundKey()
+                    } else if ThemeStore.shared.look == .drukproef {
+                        Circle().strokeBorder(ThingsColor.checkboxStroke, lineWidth: 1)
+                    } else {
+                        Circle().fill(pill.buttonFill)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+/// Kleuren van de timerpil per thema (de pil van Standaard is donker doorschijnend).
+private struct PillTheme {
+    var background: Color
+    var border: Color
+    var text: Color
+    var text2: Color
+    var dot: Color
+    var showsDot = true
+    var buttonFill: Color
+    var buttonIcon: Color
+    var stopFill: Color
+    var stopIcon: Color
+
+    static var current: PillTheme {
+        switch ThemeStore.shared.look {
+        case .standaard:
+            PillTheme(background: .black.opacity(0.82), border: .white.opacity(0.14), text: .white, text2: .white.opacity(0.6),
+                      dot: Color(hex: 0x3CCB5F), buttonFill: .white.opacity(0.18), buttonIcon: .white,
+                      stopFill: .white.opacity(0.18), stopIcon: .white)
+        case .wandklok:
+            PillTheme(background: ThingsColor.cardBackground, border: ThingsColor.separator, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.accent, stopIcon: .white)
+        case .tischsuper:
+            PillTheme(background: Color(hex: 0x161616), border: .white.opacity(0.08), text: Color(hex: 0xEEEEED),
+                      text2: Color(hex: 0xA8A6A2), dot: ThemeParts.orange, buttonFill: .white.opacity(0.12),
+                      buttonIcon: .white, stopFill: ThemeParts.orange, stopIcon: Color(hex: 0x1C1C1C))
+        case .principes:
+            PillTheme(background: Color(hex: 0xF7C001), border: .clear, text: .black, text2: .black.opacity(0.7),
+                      dot: .black, showsDot: false, buttonFill: .black.opacity(0.14), buttonIcon: .black,
+                      stopFill: .black, stopIcon: .white)
+        case .sneeuwwitje:
+            PillTheme(background: ThingsColor.cardBackground, border: ThingsColor.separator, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.accent, stopIcon: .white)
+        case .rekenmachine:
+            PillTheme(background: Color(hex: 0x1F1D1B), border: .white.opacity(0.06), text: Color(hex: 0xECE8E2),
+                      text2: Color(hex: 0xA39C93), dot: ThingsColor.today, showsDot: false, buttonFill: .clear,
+                      buttonIcon: Color(hex: 0xD9D4CC), stopFill: ThingsColor.today, stopIcon: Color(hex: 0x1F1D1B))
+        case .drukproef:
+            PillTheme(background: ThingsColor.backgroundContent, border: .clear, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.today, showsDot: false, buttonFill: .clear,
+                      buttonIcon: ThingsColor.today, stopFill: ThingsColor.textPrimary, stopIcon: ThingsColor.backgroundContent)
+        case .spark:
+            PillTheme(background: ThingsColor.cardBackground, border: ThingsColor.separator, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.accent, stopFill: ThingsColor.today, stopIcon: .white)
+        }
     }
 }
