@@ -19,7 +19,7 @@ controleerde of het compileerde, en de eigenaar testte het gedrag.
   oude Werkbank afsluiten, nieuwe openen).
 - Alleen bouwen, zonder pull:
   `xcodegen generate --quiet && xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug -derivedDataPath DerivedData -quiet build`
-- Logica-tests: `cd WerkbankCore && swift test` (114 tests).
+- Logica-tests: `cd WerkbankCore && swift test` (115 tests).
 - Schermafbeelding: `screencapture -x /tmp/werkbank.png`.
 - Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
 - `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.

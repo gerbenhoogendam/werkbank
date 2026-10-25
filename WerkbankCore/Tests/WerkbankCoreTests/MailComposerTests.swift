@@ -75,14 +75,39 @@ final class MailComposerTests: XCTestCase {
         XCTAssertEqual(ReplyBuilder.subject("hallo", forward: false), "Re: hallo")
         XCTAssertEqual(ReplyBuilder.subject("hallo", forward: true), "Fwd: hallo")
         let all = ReplyBuilder.recipients(from: "A <a@x.nl>", replyTo: "", to: "me@x.nl, b@x.nl", cc: "c@x.nl, A <a@x.nl>",
-                                          myAddresses: ["ME@x.nl"], replyAll: true)
+                                          replyingAs: "me@x.nl", myAddresses: ["ME@x.nl"], replyAll: true)
         XCTAssertEqual(all.to.map(\.address), ["a@x.nl"])
         XCTAssertEqual(all.cc.map(\.address), ["b@x.nl", "c@x.nl"])
         XCTAssertEqual(ReplyBuilder.references(old: "<1@x>", messageID: "<2@x>"), "<1@x> <2@x>")
         // Eigen verzonden mail: antwoord gaat naar de oorspronkelijke ontvangers.
         let own = ReplyBuilder.recipients(from: "Ik <me@x.nl>", replyTo: "", to: "klant@y.nl", cc: "collega@x.nl",
-                                          myAddresses: ["me@x.nl"], replyAll: true)
+                                          replyingAs: "me@x.nl", myAddresses: ["me@x.nl"], replyAll: true)
         XCTAssertEqual(own.to.map(\.address), ["klant@y.nl"])
         XCTAssertEqual(own.cc.map(\.address), ["collega@x.nl"])
+    }
+
+    /// Mail tussen twee eigen mailboxen: vanuit de ontvangende mailbox gaat het antwoord terug naar de afzender,
+    /// vanuit de verzendende mailbox naar de ontvanger. Nooit een leeg Aan-veld.
+    func testReplyBetweenOwnMailboxes() {
+        let accounts = ["gh@itg.nl", "support@itg.nl"]
+        for replyAll in [false, true] {
+            let received = ReplyBuilder.recipients(from: "gh <gh@itg.nl>", replyTo: "", to: "support@itg.nl", cc: "",
+                                                   replyingAs: "support@itg.nl", myAddresses: accounts, replyAll: replyAll)
+            XCTAssertEqual(received.to.map(\.address), ["gh@itg.nl"])
+            XCTAssertEqual(received.cc.map(\.address), [])
+            let sent = ReplyBuilder.recipients(from: "gh <gh@itg.nl>", replyTo: "", to: "support@itg.nl", cc: "",
+                                               replyingAs: "gh@itg.nl", myAddresses: accounts, replyAll: replyAll)
+            XCTAssertEqual(sent.to.map(\.address), ["support@itg.nl"])
+        }
+        // Allen: andere eigen mailboxen niet in Cc.
+        let all = ReplyBuilder.recipients(from: "klant@y.nl", replyTo: "", to: "support@itg.nl, gh@itg.nl",
+                                          cc: "collega@y.nl", replyingAs: "support@itg.nl", myAddresses: accounts,
+                                          replyAll: true)
+        XCTAssertEqual(all.to.map(\.address), ["klant@y.nl"])
+        XCTAssertEqual(all.cc.map(\.address), ["collega@y.nl"])
+        // Aan jezelf: terug naar dat adres.
+        let selfMail = ReplyBuilder.recipients(from: "support@itg.nl", replyTo: "", to: "support@itg.nl", cc: "",
+                                               replyingAs: "support@itg.nl", myAddresses: accounts, replyAll: false)
+        XCTAssertEqual(selfMail.to.map(\.address), ["support@itg.nl"])
     }
 }

@@ -328,20 +328,28 @@ public enum ReplyBuilder {
         return ["re:", "aw:"].contains { lower.hasPrefix($0) } ? trimmed : "Re: " + trimmed
     }
 
-    /// Ontvangers van een antwoord. Bij "allen" gaat de rest van Aan en Cc mee, zonder jezelf en zonder dubbelen.
-    /// Is de mail door jezelf verstuurd, dan gaat het antwoord naar de oorspronkelijke ontvangers (zoals in Mail).
-    public static func recipients(from: String, replyTo: String, to: String, cc: String, myAddresses: [String],
-                                  replyAll: Bool) -> (to: [MailAddress], cc: [MailAddress]) {
-        let mine = Set(myAddresses.map { $0.lowercased() })
+    /// Ontvangers van een antwoord. Bij "allen" gaat de rest van Aan en Cc mee, zonder dubbelen en zonder eigen
+    /// adressen in Cc. Is de mail verstuurd vanuit de mailbox waarmee je antwoordt (`replyingAs`), dan gaat het antwoord
+    /// naar de oorspronkelijke ontvangers (zoals in Mail). Een andere eigen mailbox is gewoon een correspondent: een
+    /// mail van gh@ aan support@, beantwoord vanuit support@, gaat terug naar gh@.
+    public static func recipients(from: String, replyTo: String, to: String, cc: String, replyingAs: String,
+                                  myAddresses: [String], replyAll: Bool) -> (to: [MailAddress], cc: [MailAddress]) {
+        let mine = Set((myAddresses + [replyingAs]).map { $0.lowercased() }.filter { !$0.isEmpty })
+        let me = replyingAs.isEmpty ? mine : [replyingAs.lowercased()]
         let sender = MailAddress.parse(replyTo.isEmpty ? from : replyTo).valid
-        let fromMe = !sender.isEmpty && sender.allSatisfy { mine.contains($0.address.lowercased()) }
+        let fromMe = !sender.isEmpty && sender.allSatisfy { me.contains($0.address.lowercased()) }
         let primary = fromMe ? MailAddress.parse(to).valid : sender
-        var seen = Set(mine)
+        var seen = me
         func unique(_ list: [MailAddress]) -> [MailAddress] {
             list.filter { seen.insert($0.address.lowercased()).inserted }
         }
-        guard replyAll else { return (unique(primary), []) }
-        let toList = unique(primary)
+        var toList = unique(primary)
+        // Mail aan jezelf: dan toch naar dat adres, liever dan een leeg Aan-veld.
+        if toList.isEmpty, let first = primary.first ?? sender.first {
+            toList = [first]
+        }
+        guard replyAll else { return (toList, []) }
+        seen.formUnion(mine)
         let ccList = unique((fromMe ? [] : MailAddress.parse(to).valid) + MailAddress.parse(cc).valid)
         return (toList, ccList)
     }
