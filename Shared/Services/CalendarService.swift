@@ -217,7 +217,46 @@ final class CalendarService {
         }
     }
 
+    /// Andere begin- en eindtijd (een afspraak verslepen in de agenda). Bij een herhalende afspraak kiest
+    /// `thisAndFuture` of alleen dit voorkomen verschuift of ook alle volgende.
+    func reschedule(_ event: AgendaEvent, start: Date, end: Date, thisAndFuture: Bool) throws {
+        guard end > start else { throw CalendarError.invalidRange }
+        guard let ek = ekEvent(for: event) else { throw CalendarError.eventNotFound }
+        guard ek.calendar.allowsContentModifications else { throw CalendarError.eventReadOnly }
+        let oldStart: Date = ek.startDate
+        let oldEnd: Date = ek.endDate
+        let undoable = !thisAndFuture && !ek.hasRecurrenceRules
+        ek.startDate = start
+        ek.endDate = end
+        do {
+            try store.save(ek, span: thisAndFuture ? .futureEvents : .thisEvent)
+        } catch {
+            store.reset()
+            throw error
+        }
+        revision += 1
+        if undoable, let identifier = ek.eventIdentifier {
+            UndoCenter.shared.record("Afspraak verschuiven", undo: { [weak self] in
+                self?.setTimes(identifier: identifier, start: oldStart, end: oldEnd)
+            }, redo: { [weak self] in
+                self?.setTimes(identifier: identifier, start: start, end: end)
+            })
+        }
+    }
+
     // MARK: Ongedaan maken (alleen afspraken die niet herhalen)
+
+    private func setTimes(identifier: String, start: Date, end: Date) {
+        guard let ek = store.event(withIdentifier: identifier), ek.calendar.allowsContentModifications else { return }
+        ek.startDate = start
+        ek.endDate = end
+        do {
+            try store.save(ek, span: .thisEvent)
+            revision += 1
+        } catch {
+            store.reset()
+        }
+    }
 
     private func removeEvent(identifier: String) {
         guard let ek = store.event(withIdentifier: identifier), ek.calendar.allowsContentModifications else { return }

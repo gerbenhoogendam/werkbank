@@ -60,6 +60,7 @@ struct AgendaView: View {
     @State private var scrollHour = 8
     @State private var draftFrame: CGRect = .zero
     @State private var agendaSize: CGSize = .zero
+    @State private var eventDrag = EventDrag()
 
     private var startHour: Int { min(max(startHourSetting, 0), 23) }
     private var endHour: Int { min(max(endHourSetting, startHour + 1), 24) }
@@ -148,7 +149,8 @@ struct AgendaView: View {
                                     hourHeight: hourHeight,
                                     dayEnd: dayEnd(day),
                                     onTapEvent: { EventDetailStore.shared.present(.existing($0), day: day) },
-                                    onCreate: { start, end in EventDetailStore.shared.present(.new(start: start, end: end), day: day) }
+                                    onCreate: { start, end in EventDetailStore.shared.present(.new(start: start, end: end), day: day) },
+                                    eventDrag: eventDrag
                                 )
                             }
                         }
@@ -161,7 +163,7 @@ struct AgendaView: View {
                         scrollHour = min(max(calendar.component(.hour, from: .now) - 1, startHour), max(startHour, endHour - 1))
                         proxy.scrollTo("hour-\(scrollHour)", anchor: .top)
                     }
-                    .task(id: drag.isDragging && drag.region == .agenda) {
+                    .task(id: (drag.isDragging && drag.region == .agenda) || eventDrag.isDragging) {
                         await autoScroll(proxy)
                     }
                 }
@@ -188,6 +190,21 @@ struct AgendaView: View {
         // In een eigen view: zo rekent alleen de popover mee bij elke muisbeweging van het concept, niet de hele agenda.
         .overlay(alignment: .topLeading) {
             ScheduleConfirmLayer(draftFrame: draftFrame, agendaSize: agendaSize, onSchedule: schedule)
+        }
+        .overlay { EventDragLayer(drag: eventDrag) }
+        .onPreferenceChange(CalendarFilterFrameKey.self) { eventDrag.filterFrame = $0 }
+        .onChange(of: disabledRaw, initial: true) { _, _ in eventDrag.disabledCalendarIDs = disabledIDs }
+        .confirmationDialog(
+            "Herhalende afspraak",
+            isPresented: Binding(get: { eventDrag.pending != nil }, set: { if !$0 { eventDrag.dismissPending() } }),
+            titleVisibility: .visible,
+            presenting: eventDrag.pending
+        ) { pending in
+            Button("Alleen deze afspraak") { eventDrag.perform(pending, thisAndFuture: false) }
+            Button("Deze en alle volgende") { eventDrag.perform(pending, thisAndFuture: true) }
+            Button("Annuleer", role: .cancel) { eventDrag.dismissPending() }
+        } message: { pending in
+            Text(pending.question)
         }
         .onAppear {
             drag.onAgendaDrop = { card, slot in
@@ -246,7 +263,8 @@ struct AgendaView: View {
 
             Spacer(minLength: 8)
 
-            // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's.
+            // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's. Een afspraak die je hierheen
+            // sleept kan naar een andere agenda (EventDragLayer).
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     // Alleen agenda's die in Voorkeuren aan staan zijn hier te kiezen.
@@ -256,6 +274,11 @@ struct AgendaView: View {
                 }
             }
             .frame(maxWidth: 460)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: CalendarFilterFrameKey.self, value: geo.frame(in: .main))
+                }
+            )
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -352,12 +375,18 @@ struct AgendaView: View {
 
     // MARK: Acties
 
+    /// Scrolt mee als een kaart of afspraak bij de boven- of onderrand hangt (niet boven de agendafilters).
     private func autoScroll(_ proxy: ScrollViewProxy) async {
-        guard drag.isDragging, drag.region == .agenda else { return }
+        guard (drag.isDragging && drag.region == .agenda) || eventDrag.isDragging else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(160))
-            guard drag.isDragging else { return }
-            let y = drag.pointer.y
+            guard drag.isDragging || eventDrag.isDragging else { return }
+            if eventDrag.isDragging {
+                // Na het scrollen staat er een andere tijd onder de muis.
+                eventDrag.refresh()
+                if eventDrag.overCalendars || eventDrag.isOutside { continue }
+            }
+            let y = eventDrag.isDragging ? eventDrag.pointer.y : drag.pointer.y
             let viewport = drag.agenda.scrollViewport
             var hour = scrollHour
             if y < viewport.minY + 36 {
@@ -448,6 +477,8 @@ struct DayColumn: View {
     let onTapEvent: (AgendaEvent) -> Void
     /// Vasthouden en slepen over een leeg stuk van de kolom: begin- en eindtijd van een nieuwe afspraak.
     var onCreate: ((Date, Date) -> Void)?
+    /// Afspraken optillen en verslepen (alleen in de week- en dagagenda).
+    var eventDrag: EventDrag?
 
     @Environment(DragCoordinator.self) private var drag
     @Environment(AppState.self) private var appState
@@ -457,6 +488,8 @@ struct DayColumn: View {
     @State private var mailHoverY: CGFloat?
     /// Het tijdvak dat je nu met de muis opspant.
     @State private var createRange: (start: Date, end: Date)?
+    /// Valt terug als het slepen van een afspraak zonder einde stopt (dan gaat alles terug).
+    @GestureState private var eventGestureActive = false
 
     /// Verplaatsing van een herhalende afspraak die nog op de keuze "alleen deze / ook volgende" wacht.
     private struct PendingMove: Identifiable {
@@ -469,7 +502,8 @@ struct DayColumn: View {
     // Expliciet, omdat de privé-eigenschappen de automatische init buiten dit bestand verbergen
     // (ook de Maandagenda gebruikt deze kolom).
     init(day: Date, events: [AgendaEvent], startHour: Int, endHour: Int, hourHeight: CGFloat,
-         dayEnd: Date, onTapEvent: @escaping (AgendaEvent) -> Void, onCreate: ((Date, Date) -> Void)? = nil) {
+         dayEnd: Date, onTapEvent: @escaping (AgendaEvent) -> Void, onCreate: ((Date, Date) -> Void)? = nil,
+         eventDrag: EventDrag? = nil) {
         self.day = day
         self.events = events
         self.startHour = startHour
@@ -478,6 +512,7 @@ struct DayColumn: View {
         self.dayEnd = dayEnd
         self.onTapEvent = onTapEvent
         self.onCreate = onCreate
+        self.eventDrag = eventDrag
     }
 
     private var totalHeight: CGFloat { hourHeight * CGFloat(endHour - startHour) }
@@ -517,9 +552,14 @@ struct DayColumn: View {
                     let bottom = min(totalHeight, y(event.end))
                     let laneWidth = width / CGFloat(slot.laneCount)
                     if bottom > top {
+                        let draggable = eventDrag != nil && EventDrag.canDrag(event)
+                        let height = max(18, bottom - top - 1)
                         EventBlock(event: event)
-                            .frame(width: max(0, laneWidth - 3), height: max(18, bottom - top - 1))
+                            .frame(width: max(0, laneWidth - 3), height: height)
+                            .overlay { if draggable { resizeEdges(event, height: height) } }
+                            .opacity(eventDrag?.isLifted(event) == true ? 0.3 : 1)
                             .offset(x: laneWidth * CGFloat(slot.lane) + 1.5, y: top)
+                            .gesture(eventGesture(event, mode: .move), including: draggable ? .all : .none)
                             // Klikken opent de details; "Tijd schrijven" zit in het contextmenu en in het detailpaneel.
                             .onTapGesture { onTapEvent(event) }
                             .contextMenu {
@@ -527,6 +567,10 @@ struct DayColumn: View {
                                 moveMenu(for: event)
                             }
                     }
+                }
+
+                if let preview = eventDrag?.preview {
+                    liftedPreview(preview, width: width)
                 }
 
                 if let slot = drag.agendaSlot, slot.day == day {
@@ -567,6 +611,9 @@ struct DayColumn: View {
             }
             .frame(width: width, height: totalHeight, alignment: .topLeading)
             .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
+            .onChange(of: eventGestureActive) { _, active in
+                if !active { eventDrag?.cancel() }
+            }
             .onDrop(of: [.gmailMessage], delegate: MailDropDelegate(hoverY: $mailHoverY, perform: handleMailDrop))
             .background(
                 Color.clear.preference(key: DayFrameKey.self, value: [day: geo.frame(in: .main)])
@@ -587,6 +634,75 @@ struct DayColumn: View {
             Button("Annuleer", role: .cancel) {}
         } message: { move in
             Text("\"\(move.event.title)\" verplaatsen naar \(move.calendar.title).")
+        }
+    }
+
+    // MARK: Een afspraak verslepen
+
+    /// Het hele blok (andere tijd of dag) of een rand (begin of eind). De kaart "Verplaatsen naar" bij de
+    /// agendafilters en de vraag bij herhalende afspraken regelt `EventDrag`.
+    private func eventGesture(_ event: AgendaEvent, mode: EventDrag.Mode) -> some Gesture {
+        DragGesture(minimumDistance: mode == .move ? 3 : 1, coordinateSpace: .main)
+            .updating($eventGestureActive) { _, active, _ in active = true }
+            .onChanged { value in
+                guard let eventDrag else { return }
+                if !eventDrag.isDragging {
+                    eventDrag.begin(event, mode: mode, column: day, location: value.startLocation, geometry: drag.agenda)
+                }
+                eventDrag.update(value.location)
+                (mode == .move ? NSCursor.closedHand : NSCursor.resizeUpDown).set()
+            }
+            .onEnded { value in
+                eventDrag?.end(value.location)
+                NSCursor.arrow.set()
+            }
+    }
+
+    /// Grepen op de boven- en onderrand, alleen waar het echte begin of einde in deze kolom valt.
+    @ViewBuilder private func resizeEdges(_ event: AgendaEvent, height: CGFloat) -> some View {
+        let startOfDay = calendar.startOfDay(for: day)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
+        let grip = min(6, height / 4)
+        VStack(spacing: 0) {
+            if event.start >= startOfDay {
+                edge(grip).gesture(eventGesture(event, mode: .start)).accessibilityLabel("Begintijd aanpassen")
+            }
+            Spacer(minLength: 0)
+            if event.end <= nextDay {
+                edge(grip).gesture(eventGesture(event, mode: .end)).accessibilityLabel("Eindtijd aanpassen")
+            }
+        }
+    }
+
+    private func edge(_ height: CGFloat) -> some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeUpDown.set() } else if eventDrag?.isDragging != true { NSCursor.arrow.set() }
+            }
+    }
+
+    /// Het opgetilde blok op de plek waar het komt te staan, over de volle breedte van de kolom.
+    @ViewBuilder private func liftedPreview(_ event: AgendaEvent, width: CGFloat) -> some View {
+        let startOfDay = calendar.startOfDay(for: day)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
+        if event.start < nextDay, event.end > startOfDay {
+            let top = max(0, y(event.start))
+            let bottom = min(totalHeight, y(event.end))
+            if bottom > top {
+                EventBlock(event: event, isLifted: true)
+                    .frame(width: max(0, width - 4), height: max(18, bottom - top - 1))
+                    .scaleEffect(1.02)
+                    .shadow(color: Color.black.opacity(0.28), radius: 10, x: 0, y: 6)
+                    .offset(x: 2, y: top)
+                    .transition(.scale(scale: 0.98).combined(with: .opacity))
+                    .animation(.spring(response: 0.16, dampingFraction: 0.86), value: event.start)
+                    .animation(.spring(response: 0.16, dampingFraction: 0.86), value: event.end)
+                    .allowsHitTesting(false)
+                    .zIndex(3)
+            }
         }
     }
 
@@ -750,6 +866,8 @@ struct DayColumn: View {
 
 private struct EventBlock: View {
     let event: AgendaEvent
+    /// Opgetild tijdens het slepen: dekkend, en de tijd staat er ook bij een kort blok bij.
+    var isLifted = false
 
     @AppStorage(SettingsKey.eventOpacity) private var opacity = EventStyle.defaultOpacity
     @Environment(\.colorScheme) private var colorScheme
@@ -761,10 +879,18 @@ private struct EventBlock: View {
         HStack(spacing: 0) {
             Rectangle().fill(event.color).frame(width: 3)
             VStack(alignment: .leading, spacing: 1) {
-                Text(event.title)
-                    .thingsFont(.tag)
-                    .foregroundStyle(text.primary)
-                    .lineLimit(isShort ? 1 : 2)
+                if isShort && isLifted {
+                    Text("\(DutchDate.range(event.start, event.end))  \(event.title)")
+                        .thingsFont(.tag)
+                        .foregroundStyle(text.primary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                } else {
+                    Text(event.title)
+                        .thingsFont(.tag)
+                        .foregroundStyle(text.primary)
+                        .lineLimit(isShort ? 1 : 2)
+                }
                 if !isShort {
                     Text(DutchDate.range(event.start, event.end))
                         .font(.system(size: 10))
@@ -778,6 +904,7 @@ private struct EventBlock: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(event.color.opacity(opacity))
+        .background(isLifted ? ThingsColor.backgroundContent : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .contentShape(Rectangle())
         .help("\(event.title)\n\(DutchDate.range(event.start, event.end))")

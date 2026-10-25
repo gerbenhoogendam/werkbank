@@ -19,7 +19,7 @@ controleerde of het compileerde, en de eigenaar testte het gedrag.
   oude Werkbank afsluiten, nieuwe openen).
 - Alleen bouwen, zonder pull:
   `xcodegen generate --quiet && xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug -derivedDataPath DerivedData -quiet build`
-- Logica-tests: `cd WerkbankCore && swift test` (115 tests).
+- Logica-tests: `cd WerkbankCore && swift test` (120 tests).
 - Schermafbeelding: `screencapture -x /tmp/werkbank.png`.
 - Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
 - `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.
@@ -111,6 +111,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     de handtekening staat er direct onder. Na te gaan: hoe het eruitziet bij de ontvanger (Gmail, Outlook, Apple Mail),
     lijsten met Return en Backspace, ⌘Z na lijst en inspringen, plakken van opgemaakte tekst uit een website, opmaak na
     loshalen van het opstelvenster.
+18. **Afspraken verslepen** (`macOS/EventDrag.swift`, `WerkbankCore/…/EventDragMath.swift`, `DayColumn`). In de week-
+    en dagagenda: het blok optillen en naar een andere tijd of dag slepen (per kwartier, de duur blijft gelijk), de
+    boven- of onderrand voor begin of eind, of naar de agendafilters rechtsboven; daar klapt "Verplaatsen naar" open
+    met de schrijfbare agenda's die in Voorkeuren aan staan. Loslaten buiten de tijdlijn laat alles staan. Herhalende
+    afspraken vragen "alleen deze / ook volgende"; losse afspraken kunnen terug met ⌘Z. Niet in de maandagenda en
+    niet voor afspraken van een hele dag. Alleen testen in een testagenda. Na te gaan: optillen en schaduw, scrollen
+    bij de rand, grepen bij korte afspraken, uitnodigingen van anderen (EventKit kan weigeren), Exchange/Google-sync.
 
 ## Open punten
 
