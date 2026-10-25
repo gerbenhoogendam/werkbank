@@ -320,10 +320,11 @@ final class ThemeStore: @unchecked Sendable {
         reload()
     }
 
-    /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef, Anton en Playfair Display voor Karmijn).
+    /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef, Anton en Playfair Display voor Karmijn,
+    /// DSEG7 voor de lcd-cijfers van Rekenmachine).
     private static func registerBundledFonts() {
         for name in ["Michroma-Regular", "Anton-Regular", "PlayfairDisplay-Regular", "PlayfairDisplay-Italic",
-                     "PlayfairDisplay-BoldItalic"] {
+                     "PlayfairDisplay-BoldItalic", "DSEG7Classic-Italic"] {
             guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
@@ -487,6 +488,11 @@ extension Font {
     /// Smalle kapitalen voor koppen (Anton, meegeleverd), geschaald met de basisgrootte.
     static func werkDisplay(size: CGFloat) -> Font {
         .custom("Anton-Regular", size: size * ThemeStore.shared.scale)
+    }
+
+    /// Lcd-cijfers met zeven segmenten (DSEG7, meegeleverd), iets schuin zoals op het schermpje van de ET 66.
+    static func werkLCD(size: CGFloat) -> Font {
+        .custom("DSEG7Classic-Italic", size: size * ThemeStore.shared.scale)
     }
 
     /// Schreefletter voor accenten (Playfair Display, meegeleverd): recht, cursief of vet cursief.

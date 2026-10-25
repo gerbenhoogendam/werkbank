@@ -7,11 +7,28 @@ import SwiftUI
 struct MailHeaderTitle: View {
     let title: String
     let unread: Int
+    /// Aantal mails in de lijst (Tischsuper: "12 / 48").
+    var total = 0
+    /// Naam van de getoonde mailbox (Drukproef: "in Support.").
+    var mailbox = ""
 
     var body: some View {
         switch ThemeStore.shared.look {
+        case .wandklok:
+            // Groot en vet zoals het horlogeblad, met een productcode in kapitalen eronder.
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.werk(size: 22, weight: .bold))
+                    .kerning(-0.6)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                Text("\(mailbox.uppercased()) · \(unread) ONGELEZEN")
+                    .font(.werk(size: 10))
+                    .tracking(0.6)
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
         case .tischsuper:
-            // De datum groot en dun, zoals het jaartal op de RT 20-pagina.
+            // De datum groot en dun, zoals het jaartal op de RT 20-pagina; rechts de teller zoals 01 / 08.
             HStack(alignment: .bottom, spacing: 10) {
                 Text(Date.now.formatted(.dateTime.day()))
                     .font(.werk(size: 52, weight: .ultraLight))
@@ -22,29 +39,56 @@ struct MailHeaderTitle: View {
                     Text(Date.now.formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "nl_NL"))))
                         .font(.werk(size: 12))
                         .foregroundStyle(ThingsColor.textPrimary)
-                    Text("\(Date.now.formatted(.dateTime.month(.wide).locale(Locale(identifier: "nl_NL")))) · \(unread) ongelezen")
+                    Text(Date.now.formatted(.dateTime.month(.wide).locale(Locale(identifier: "nl_NL"))))
                         .font(.werk(size: 11))
                         .foregroundStyle(ThingsColor.textSecondary)
                 }
                 .padding(.bottom, 4)
+                Spacer(minLength: 6)
+                ThemeParts.counter(unread, total)
+                    .padding(.bottom, 4)
             }
         case .drukproef:
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                Text(title.uppercased()).font(.werk(size: 11, weight: .medium)).foregroundStyle(ThingsColor.textPrimary)
-                Text("ONGELEZEN (N°\(String(format: "%02d", unread)))").font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    Text(title.uppercased()).font(.werk(size: 11, weight: .medium)).foregroundStyle(ThingsColor.textPrimary)
+                    Text("ONGELEZEN (N°\(String(format: "%02d", unread)))").font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
+                }
+                // Een kop in drie kleuren zoals op de poster.
+                (Text(DutchNumber.word(unread)).foregroundColor(ThingsColor.textPrimary)
+                    + Text(" nieuw -").foregroundColor(ThingsColor.today)
+                    + Text("\nin \(mailbox).").foregroundColor(ThingsColor.textSecondary))
+                    .font(.werk(size: 26, weight: .medium))
+                    .kerning(-1.4)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
             }
         case .rekenmachine:
-            HStack(spacing: 10) {
+            // Het aantal ongelezen op een klein lcd-schermpje, zoals het geheugen van de rekenmachine.
+            HStack(spacing: 8) {
                 Text(title.uppercased()).font(.werk(size: 10)).tracking(1).foregroundStyle(ThingsColor.textSecondary)
-                Text("\(unread) ongelezen").font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
+                Spacer(minLength: 6)
+                Text("ONGELEZEN").font(.werk(size: 9)).tracking(1).foregroundStyle(ThingsColor.textSecondary)
+                LCDPanel(radius: 6) {
+                    LCDDigits(text: "\(unread)", size: 12)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                }
+                .fixedSize()
             }
         case .principes:
-            VStack(alignment: .leading, spacing: 8) {
-                Rectangle().fill(ThemeParts.rule).frame(height: 2)
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(title).font(.werk(size: 15, weight: .medium)).foregroundStyle(ThingsColor.textPrimary)
-                    Text("\(unread) ongelezen").font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
+            // Twee koppen naast elkaar met elk een regel erboven, zoals de affiche.
+            HStack(alignment: .top, spacing: 14) {
+                RuledHeading(text: title)
+                VStack(alignment: .leading, spacing: 8) {
+                    Rectangle().fill(ThemeParts.rule).frame(height: 2)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("\(unread)").font(.werk(size: 15, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(ThingsColor.textPrimary)
+                        Text("ongelezen").font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .karmijn:
             // Label erboven, dan groot en rood "INBOX" zoals de kop van de affiche.
@@ -57,12 +101,15 @@ struct MailHeaderTitle: View {
             }
         case .spark:
             HStack(spacing: 9) {
+                Image(systemName: "chevron.down")
+                    .font(.werk(size: 8, weight: .bold))
+                    .foregroundStyle(ThingsColor.textSecondary)
                 Image(systemName: "tray")
                     .font(.werk(size: 13, weight: .medium))
-                Text(title.uppercased()).font(.werk(size: 12, weight: .medium)).tracking(0.3)
+                Text("INBOX").font(.werk(size: 12, weight: .medium)).tracking(0.3)
             }
             .foregroundStyle(ThingsColor.textPrimary)
-        case .wandklok, .sneeuwwitje, .standaard:
+        case .sneeuwwitje, .standaard:
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title).font(.werk(size: 15, weight: .semibold)).foregroundStyle(ThingsColor.textPrimary)
                 Text("\(unread) ongelezen").font(.werk(size: 11)).monospacedDigit().foregroundStyle(ThingsColor.textSecondary)
@@ -92,9 +139,15 @@ struct MailboxTab: View {
     @ViewBuilder private var label: some View {
         switch ThemeStore.shared.look {
         case .wandklok, .sneeuwwitje:
-            Text(title)
-                .font(.werk(size: 11, weight: isOn ? .semibold : .regular))
-                .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+            HStack(spacing: 6) {
+                // Sneeuwwitje: een houten streepje bij de gekozen mailbox.
+                if isOn && ThemeStore.shared.look == .sneeuwwitje {
+                    RoundedRectangle(cornerRadius: 1.5).fill(ThemeParts.elm).frame(width: 3, height: 12)
+                }
+                Text(title)
+                    .font(.werk(size: 11, weight: isOn ? .semibold : .regular))
+                    .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+            }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 5)
                 .background {
@@ -104,14 +157,10 @@ struct MailboxTab: View {
                     }
                 }
         case .tischsuper:
-            Text(title)
-                .font(.werk(size: 11))
-                .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+            // Een pianotoets van de platenspeler met het label eronder; de gekozen mailbox is oranje.
+            PianoKey(title: title, fill: isOn ? ThemeParts.orange : Color(hex: 0x303030),
+                     ink: isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(isOn ? Color(hex: 0x303030) : .clear))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(isOn ? Color.clear : Color(hex: 0x303030), lineWidth: 1))
         case .principes:
             Text(title)
                 .font(.werk(size: 11, weight: isOn ? .medium : .regular))
@@ -231,6 +280,13 @@ enum MailLook {
         case .drukproef, .rekenmachine: ThingsColor.today
         default: ThingsColor.running
         }
+    }
+
+    /// Een afzender die een machine is (noreply, notificaties): Spark toont dan een belletje in plaats van een persoontje.
+    static func isNotification(_ address: String?) -> Bool {
+        guard let local = address?.lowercased().split(separator: "@").first else { return false }
+        return ["noreply", "no-reply", "donotreply", "do-not-reply", "notification", "notify", "alert", "mailer-daemon",
+                "bounce", "newsletter"].contains { local.contains($0) }
     }
 
     static func initials(_ name: String) -> String {

@@ -97,16 +97,16 @@ struct TimeListView: View {
                 }
             }
             if look != .standaard {
-                TimeTotalFooter(hours: parts.outstanding)
+                TimeTotalFooter(hours: parts.outstanding, count: toWrite.count)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
             }
         }
-        // Tischsuper: een teakrand langs de linkerkant.
-        .padding(.leading, look == .tischsuper ? 8 : 0)
+        // Tischsuper: een teakrand langs de buitenkant, zoals de platenspeler (de andere zit links van de mail).
+        .padding(.trailing, look == .tischsuper ? 9 : 0)
         .background(ThingsColor.timeListBackground)
-        .overlay(alignment: .leading) {
-            if look == .tischsuper { ThemeParts.teak.frame(width: 8) }
+        .overlay(alignment: .trailing) {
+            if look == .tischsuper { ThemeParts.teak.frame(width: 9) }
         }
         .task { await ClientDirectory.shared.refresh() }   // logo's per klant
         .fileExporter(isPresented: $isExporting, document: exportDocument,
@@ -127,6 +127,15 @@ struct TimeListView: View {
                 if ThemeStore.shared.look == .karmijn {
                     KarmijnLabel(text: "Al geschreven")
                     Text("\(count)").font(.werkSerif(size: 15, italic: true))
+                } else if ThemeStore.shared.look == .spark {
+                    // Een grijze sectie zoals Folders in Spark, met het aantal in een grijs chipje.
+                    Text("Al geschreven")
+                        .font(.werk(size: 11.5))
+                    Text("\(count)")
+                        .font(.werk(size: 11))
+                        .monospacedDigit()
+                        .padding(.horizontal, 6)
+                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(ThingsColor.tagBackground))
                 } else {
                     Text("Al geschreven")
                         .thingsFont(.heading)
@@ -159,11 +168,34 @@ struct TimeListView: View {
                         .monospacedDigit()
                 }
             case .drukproef:
-                ThemedHeading(title: "Tijd schrijven", detail: "Te factureren (N°\(String(format: "%02d", count)))")
+                VStack(alignment: .leading, spacing: 10) {
+                    ThemedHeading(title: "Tijd schrijven", detail: "Te factureren (N°\(String(format: "%02d", count)))")
+                    // Een kop in drie kleuren zoals op de poster.
+                    (Text("\(DutchNumber.word(count)) \(count == 1 ? "regel" : "regels")").foregroundColor(ThingsColor.textPrimary)
+                        + Text(" open -").foregroundColor(ThingsColor.today)
+                        + Text("\nnog te schrijven.").foregroundColor(ThingsColor.textSecondary))
+                        .font(.werk(size: 24, weight: .medium))
+                        .kerning(-1.2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             case .principes:
-                VStack(alignment: .leading, spacing: 2) {
-                    ThemedHeading(title: "Tijd schrijven")
-                    Text("Nog te factureren").font(.werk(size: 11.5)).foregroundStyle(ThingsColor.textSecondary)
+                // Twee koppen naast elkaar met elk een regel erboven, zoals de affiche.
+                HStack(alignment: .top, spacing: 14) {
+                    RuledHeading(text: "Tijd\nschrijven")
+                    RuledHeading(text: "Nog te\nfactureren")
+                }
+            case .wandklok:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tijd schrijven")
+                        .font(.werk(size: 22, weight: .bold))
+                        .kerning(-0.6)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    DashLabel(text: "nog te factureren")
+                }
+            case .tischsuper:
+                VStack(alignment: .leading, spacing: 3) {
+                    SuperscriptTitle(title: "Tijd schrijven", superscript: "\(count)")
+                    ThemeParts.labelValue("Status", "nog te factureren")
                 }
             case .rekenmachine:
                 VStack(alignment: .leading, spacing: 3) {
@@ -183,8 +215,7 @@ struct TimeListView: View {
             default:
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Tijd schrijven")
-                        .font(.werk(size: 15, weight: ThemeStore.shared.look == .spark ? .bold
-                                    : (ThemeStore.shared.look == .tischsuper ? .medium : .semibold)))
+                        .font(.werk(size: 15, weight: ThemeStore.shared.look == .spark ? .bold : .semibold))
                         .foregroundStyle(ThingsColor.textPrimary)
                     Text("Nog te factureren").font(.werk(size: 11.5)).foregroundStyle(ThingsColor.textSecondary)
                 }
@@ -439,10 +470,16 @@ struct TimeEntryRow: View {
                         .lineLimit(1)
                     if !entry.dictatedFields.isEmpty { DictatedMark() }
                 }
-                Text(subtitle)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .lineLimit(1)
+                Group {
+                    if ThemeStore.shared.look == .tischsuper {
+                        ThemeParts.labelValue("Klant", subtitle)
+                    } else {
+                        Text(subtitle)
+                            .thingsFont(.metadata)
+                            .foregroundStyle(ThingsColor.textSecondary)
+                    }
+                }
+                .lineLimit(1)
             }
             .contentShape(Rectangle())
             .modifier(OpenGestures(entry: entry, expanded: $expanded, editingField: $editingField))
@@ -450,14 +487,45 @@ struct TimeEntryRow: View {
 
             if entry.status == .finished { expandButton }
 
-            Text(trailingTime)
-                .thingsFont(.todoTitle)
-                .monospacedDigit()
-                .foregroundStyle(ThingsColor.textSecondary)
+            trailingTimeView
 
             if entry.status == .finished { copyButton }
 
             controls
+        }
+        // Principes: een regel van 2 pt boven elke rij, zoals de lijst met principes.
+        .overlay(alignment: .top) {
+            if ThemeStore.shared.look == .principes {
+                Rectangle().fill(ThemeParts.rowRule).frame(height: 2)
+            }
+        }
+    }
+
+    /// De duur rechts, zoals het thema cijfers toont.
+    @ViewBuilder private var trailingTimeView: some View {
+        switch ThemeStore.shared.look {
+        case .tischsuper:
+            Text(trailingTime)
+                .font(.werk(size: 15, weight: .ultraLight))
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textPrimary)
+        case .drukproef:
+            Text(trailingTime)
+                .font(.werkNumbers(size: 11))
+                .foregroundStyle(ThingsColor.textPrimary)
+        case .spark:
+            Text(trailingTime)
+                .font(.werk(size: 11.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textPrimary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.tagBackground))
+        default:
+            Text(trailingTime)
+                .thingsFont(.todoTitle)
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textSecondary)
         }
     }
 
@@ -844,6 +912,8 @@ struct CopyButton: View {
 /// Totaal nog te factureren onderaan Tijd schrijven, zoals het thema het toont.
 private struct TimeTotalFooter: View {
     let hours: Double
+    /// Aantal regels dat nog geschreven moet worden.
+    var count = 0
 
     private var text: String {
         let minutes = Int((hours * 60).rounded())
@@ -866,25 +936,34 @@ private struct TimeTotalFooter: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .principes:
-            HStack {
-                Text("Totaal").font(.werk(size: 11.5))
-                Spacer()
-                Text(text).font(.werk(size: 18, weight: .medium)).monospacedDigit()
+            // De blauwe capsule van de affiche, met het luidsprekerrooster rechts.
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Totaal").font(.werk(size: 11)).opacity(0.8)
+                    Text(text).font(.werk(size: 20, weight: .medium)).monospacedDigit()
+                }
+                Spacer(minLength: 4)
+                PosterGrille(color: Color(hex: 0x062C52), columnWidth: 28)
             }
             .foregroundStyle(Color.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.leading, 20)
+            .padding(.trailing, 18)
+            .padding(.vertical, 10)
             .background(Capsule().fill(ThingsColor.accent))
         case .sneeuwwitje:
-            HStack {
-                Text("Totaal").font(.werk(size: 11.5))
-                Spacer()
-                Text(text).font(.werk(size: 18)).monospacedDigit()
+            // Een witte kaart met het totaal op een schaal van 0 tot 8 uur.
+            VStack(spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Totaal").font(.werk(size: 11.5)).foregroundStyle(ThingsColor.textSecondary)
+                    Spacer()
+                    Text(text).font(.werk(size: 22, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+                }
+                TuningBar(fraction: hours / 8, labels: ["0", "2", "4", "6", "8"])
             }
-            .foregroundStyle(Color(hex: 0x222220))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(ThingsColor.running))
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                .fill(ThingsColor.cardBackground)
+                .shadow(color: ThingsColor.cardShadow, radius: 12, y: 6))
         case .karmijn:
             // Het totaal groot in een rood kader, met het label ernaast.
             HStack(alignment: .center, spacing: 14) {
@@ -902,24 +981,70 @@ private struct TimeTotalFooter: View {
             .padding(14)
             .overlay(Rectangle().strokeBorder(ThemeParts.karmijn, lineWidth: 1))
         case .rekenmachine:
-            LCDPanel(radius: 12) {
-                HStack {
-                    Text("TOTAAL").font(.werk(size: 10)).tracking(0.8).foregroundStyle(ThemeParts.lcdLabel)
-                    Spacer()
-                    Text(text).font(.werk(size: 20, weight: .light)).monospacedDigit()
+            // Het scherm met lcd-cijfers en daaronder een rij rekentoetsen, de laatste geel.
+            VStack(spacing: 10) {
+                LCDPanel(radius: 10) {
+                    HStack {
+                        Text("TOTAAL").font(.werk(size: 9)).tracking(0.9).foregroundStyle(ThemeParts.lcdLabel)
+                        Spacer()
+                        LCDDigits(text: text, size: 24)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                HStack {
+                    CalcKey(label: "−")
+                    Spacer()
+                    CalcKey(label: "+")
+                    Spacer()
+                    CalcKey(label: "×")
+                    Spacer()
+                    CalcKey(label: "=", yellow: true)
+                }
+                .accessibilityHidden(true)
             }
-        case .wandklok, .tischsuper, .spark, .standaard:
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ThingsColor.backgroundSidebar))
+        case .wandklok:
+            // Het totaal groot en vet, zoals de prijs op het horlogeblad.
+            VStack(alignment: .leading, spacing: 3) {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1).padding(.bottom, 9)
+                DashLabel(text: "totaal", size: 11)
+                Text(text)
+                    .font(.werk(size: 34, weight: .bold))
+                    .kerning(-1)
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textPrimary)
+                Text("\(count) \(count == 1 ? "regel" : "regels")")
+                    .font(.werk(size: 11))
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case .tischsuper:
+            // De voetregel van het RT 20-blad naast het totaal, dun en groot.
+            VStack(spacing: 10) {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ThemeParts.labelValue("Totaal", "te factureren")
+                        ThemeParts.labelValue("Regels", "\(count)")
+                    }
+                    Spacer()
+                    Text(text)
+                        .font(.werk(size: 34, weight: .ultraLight))
+                        .kerning(-1.2)
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.textPrimary)
+                }
+            }
+        case .spark, .standaard:
             VStack(spacing: 10) {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
                 HStack(alignment: .firstTextBaseline) {
                     Text("Totaal").font(.werk(size: 11.5)).foregroundStyle(ThingsColor.textSecondary)
                     Spacer()
                     Text(text)
-                        .font(.werk(size: 20, weight: ThemeStore.shared.look == .spark ? .bold
-                                    : (ThemeStore.shared.look == .tischsuper ? .ultraLight : .light)))
+                        .font(.werk(size: 20, weight: ThemeStore.shared.look == .spark ? .bold : .light))
                         .monospacedDigit()
                         .foregroundStyle(ThingsColor.textPrimary)
                 }

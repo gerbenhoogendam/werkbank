@@ -119,18 +119,30 @@ struct AgendaView: View {
         return ("Week \(DutchDate.isoWeek(first))", "\(DutchDate.short(first)) – \(DutchDate.short(last))")
     }
 
-    /// Drukproef: groot "26–30 okt".
-    private var bigTitle: String {
+    /// Korte maand ("okt"), of twee als de week over een maandgrens loopt ("okt/nov").
+    private var shortMonth: String {
         let days = days
         guard let first = days.first, let last = days.last else { return "" }
-        if isDayMode { return DutchDate.short(first) }
-        let sameMonth = calendar.component(.month, from: first) == calendar.component(.month, from: last)
-        return sameMonth ? "\(calendar.component(.day, from: first))–\(DutchDate.short(last))"
-            : "\(DutchDate.short(first)) – \(DutchDate.short(last))"
+        func month(_ date: Date) -> String { DutchDate.short(date).split(separator: " ").last.map(String.init) ?? "" }
+        return month(first) == month(last) ? month(first) : "\(month(first))/\(month(last))"
     }
 
-    /// Karmijn: de dagen ("26–30") en de maand ("oktober") los, voor de kapitalen en de cursieve schreef.
-    private var karmijnTitle: (days: String, month: String) {
+    /// Drukproef: "26–30" in inkt, "okt -" in rood en "week 44." grijs, zoals de koppen van de poster.
+    private var drukproefTitle: Text {
+        Text(splitTitle.days).foregroundColor(ThingsColor.textPrimary)
+            + Text(" \(shortMonth) -").foregroundColor(ThingsColor.today)
+            + Text(" week \(weekCounter.week).").foregroundColor(ThingsColor.textSecondary)
+    }
+
+    /// Weeknummer en het aantal weken in dat jaar (Tischsuper: "44 / 52").
+    private var weekCounter: (week: Int, total: Int) {
+        let date = days.first ?? .now
+        let iso = Calendar(identifier: .iso8601)
+        return (DutchDate.isoWeek(date), iso.range(of: .weekOfYear, in: .yearForWeekOfYear, for: date)?.count ?? 52)
+    }
+
+    /// De dagen ("26–30") en de maand ("oktober") los, voor koppen die ze elk anders zetten (Karmijn, Principes, Drukproef).
+    private var splitTitle: (days: String, month: String) {
         let days = days
         guard let first = days.first, let last = days.last else { return ("", "") }
         let from = calendar.component(.day, from: first)
@@ -181,6 +193,11 @@ struct AgendaView: View {
                             }
                             }
                             .background(TimelineWell())
+                        }
+                        .overlay(alignment: .topLeading) {
+                            if ThemeStore.shared.look == .tischsuper, days.contains(where: { calendar.isDateInToday($0) }) {
+                                AgendaNeedle(startHour: startHour, endHour: endHour, hourHeight: hourHeight)
+                            }
                         }
                         .padding(.top, 8)
                         .padding(.trailing, 4)
@@ -283,10 +300,9 @@ struct AgendaView: View {
                     calendarFilters
                 }
                 HStack(alignment: .center, spacing: 10) {
-                    Text(bigTitle)
+                    drukproefTitle
                         .font(.werk(size: 40, weight: .medium))
                         .tracking(-2)
-                        .foregroundStyle(ThingsColor.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                     Spacer(minLength: 8)
@@ -304,11 +320,11 @@ struct AgendaView: View {
                     KarmijnLabel(text: isDayMode ? "Agenda — \(DutchDate.weekdayShort(days.first ?? .now))"
                                  : "Agenda — week \(days.first.map { DutchDate.isoWeek($0) } ?? 0)")
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(karmijnTitle.days)
+                        Text(splitTitle.days)
                             .font(.werkDisplay(size: 38))
                             .foregroundStyle(ThingsColor.textPrimary)
                             .displayTight(38)
-                        Text(karmijnTitle.month)
+                        Text(splitTitle.month)
                             .font(.werkSerif(size: 32, italic: true, bold: true))
                             .foregroundStyle(ThingsColor.running)
                     }
@@ -328,15 +344,79 @@ struct AgendaView: View {
             .padding(.horizontal, 18)
             .padding(.top, 14)
             .padding(.bottom, 8)
+        } else if look == .wandklok {
+            // Groot en vet zoals het horlogeblad, met een streeplabel eronder.
+            HStack(alignment: .bottom, spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(titleParts.main)
+                        .font(.werk(size: 22, weight: .bold))
+                        .kerning(-0.6)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    if !titleParts.detail.isEmpty { DashLabel(text: titleParts.detail) }
+                }
+                .lineLimit(1)
+                navigation(look)
+                    .padding(.leading, 6)
+                Spacer(minLength: 8)
+                calendarFilters
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+        } else if look == .tischsuper {
+            HStack(spacing: 10) {
+                navigation(look)
+                SuperscriptTitle(title: titleParts.main, superscript: isDayMode ? "" : "\(splitTitle.days) \(shortMonth)")
+                    .padding(.leading, 4)
+                Spacer(minLength: 8)
+                calendarFilters
+                // De paginateller van het RT 20-blad: week van het jaar.
+                ThemeParts.counter(weekCounter.week, weekCounter.total)
+                    .padding(.leading, 8)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        } else if look == .principes {
+            // Twee koppen naast elkaar met elk een regel erboven, zoals de affiche.
+            HStack(alignment: .top, spacing: 14) {
+                RuledHeading(text: titleParts.main).frame(width: 120)
+                RuledHeading(text: "\(splitTitle.days) \(splitTitle.month)").frame(width: 170)
+                navigation(look)
+                    .padding(.top, 9)
+                Spacer(minLength: 8)
+                calendarFilters
+                    .padding(.top, 13)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
         } else {
             HStack(spacing: 10) {
-                let buttonsFirst = look == .tischsuper || look == .rekenmachine
+                let buttonsFirst = look == .rekenmachine
                 if buttonsFirst { navigation(look) }
                 if look == .standaard {
                     Text(title)
                         .thingsFont(.heading)
                         .foregroundStyle(ThingsColor.textPrimary)
                         .monospacedDigit()
+                } else if look == .rekenmachine {
+                    // WEEK met het weeknummer in lcd-cijfers op een eigen schermpje.
+                    LCDPanel(radius: 8) {
+                        HStack(spacing: 8) {
+                            Text("WEEK").font(.werk(size: 9)).tracking(0.9).foregroundStyle(ThemeParts.lcdLabel)
+                            LCDDigits(text: "\(weekCounter.week)", size: 15)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                    }
+                    .fixedSize()
+                    if !titleParts.detail.isEmpty {
+                        Text(titleParts.detail)
+                            .font(.werk(size: 11.5))
+                            .monospacedDigit()
+                            .foregroundStyle(ThingsColor.textSecondary)
+                            .lineLimit(1)
+                    }
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(titleParts.main)
@@ -351,6 +431,7 @@ struct AgendaView: View {
                     }
                     .lineLimit(1)
                 }
+                if look == .spark { sparkTabs }
                 if !buttonsFirst { navigation(look) }
 
                 Spacer(minLength: 8)
@@ -362,10 +443,35 @@ struct AgendaView: View {
         }
     }
 
+    /// Spark: Week en Dag als de tabjes Smart en Classic, met een blauwe onderstreping.
+    private var sparkTabs: some View {
+        HStack(spacing: 16) {
+            sparkTab("week", "Week")
+            sparkTab("day", "Dag")
+        }
+        .padding(.leading, 4)
+    }
+
+    private func sparkTab(_ mode: String, _ label: String) -> some View {
+        let isOn = agendaMode == mode
+        return Button { agendaMode = mode } label: {
+            Text(label)
+                .font(.werk(size: 11.5, weight: .medium))
+                .foregroundStyle(isOn ? ThingsColor.accent : ThingsColor.textPrimary)
+                .padding(.vertical, 3)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(isOn ? ThingsColor.running : Color.clear).frame(height: 2).offset(y: 4)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
     private func navigation(_ look: ThemeLook) -> some View {
         HStack(spacing: look == .standaard ? 2 : 6) {
             AgendaNavButton(symbol: "chevron.left", label: "Vorige") { offset -= 1 }
-            if look == .tischsuper || look == .rekenmachine || look == .principes || look == .sneeuwwitje {
+            if look == .tischsuper || look == .rekenmachine || look == .principes {
                 AgendaNavButton(symbol: "chevron.right", label: "Volgende") { offset += 1 }
                 AgendaTodayButton { offset = 0 }
             } else {
@@ -407,7 +513,18 @@ struct AgendaView: View {
 
     private func dayHeaderRow(_ days: [Date]) -> some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: gutterWidth, height: 1)
+            if ThemeStore.shared.look == .tischsuper {
+                // Zoals MW en kHz boven de schaal van de platenspeler.
+                Text("UUR")
+                    .font(.werk(size: 9))
+                    .tracking(0.5)
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .frame(width: gutterWidth - 10, alignment: .trailing)
+                    .frame(width: gutterWidth, alignment: .leading)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            } else {
+                Color.clear.frame(width: gutterWidth, height: 1)
+            }
             ForEach(days, id: \.self) { day in
                 let isToday = calendar.isDateInToday(day)
                 if ThemeStore.shared.look == .standaard {
@@ -460,7 +577,8 @@ struct AgendaView: View {
             ForEach(startHour..<endHour, id: \.self) { hour in
                 Text(Self.hourLabel(hour, look: look))
                     .font(Self.hourFont(look))
-                    .foregroundStyle(look == .tischsuper ? ThingsColor.textSecondary : ThingsColor.textTertiary)
+                    .foregroundStyle(look == .tischsuper ? ThingsColor.textSecondary
+                                     : (look == .wandklok ? ThingsColor.textPrimary : ThingsColor.textTertiary))
                     .monospacedDigit()
                     .frame(width: gutterWidth - (ruler ? 16 : 6), height: hourHeight,
                            alignment: look == .drukproef ? .topLeading : .topTrailing)
@@ -486,7 +604,7 @@ struct AgendaView: View {
 
     private static func hourFont(_ look: ThemeLook) -> Font {
         switch look {
-        case .wandklok: .werk(size: 11, weight: .light)
+        case .wandklok: .werk(size: 11.5)
         case .drukproef, .karmijn: .werk(size: 10)
         case .standaard: .werk(size: ThingsTextStyle.metadata.size)
         default: .werk(size: 11)
@@ -973,15 +1091,10 @@ struct DayColumn: View {
             let position = y(timeline.date)
             let line = AgendaLook.nowLine
             if position >= 0 && position <= totalHeight {
-                let look = ThemeStore.shared.look
-                let mark: CGFloat = look == .karmijn ? 11 : 7
+                let mark = NowMarker.size
                 ZStack(alignment: .leading) {
                     Rectangle().fill(line.color).frame(height: line.thickness)
-                    if look == .karmijn {
-                        KarmijnStar().fill(line.color).frame(width: mark, height: mark).offset(x: -mark / 2)
-                    } else if look != .tischsuper {
-                        Circle().fill(line.color).frame(width: mark, height: mark).offset(x: -mark / 2)
-                    }
+                    NowMarker(color: line.color).offset(x: -mark / 2)
                 }
                 .frame(width: width)
                 .offset(y: position - mark / 2)

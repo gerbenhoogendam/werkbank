@@ -219,7 +219,8 @@ struct BoardView: View {
                 Group {
                     if themed {
                         HStack(spacing: 6) {
-                            ThemedHeading(title: column.title, count: columnCards.count)
+                            ThemedHeading(title: column.title, count: columnCards.count,
+                                          highlight: columnCards.contains { runningTodoIDs.contains($0.id) })
                                 .lightScheme(look == .tischsuper)
                             Spacer(minLength: 0)
                         }
@@ -246,11 +247,7 @@ struct BoardView: View {
                     let card = BoardService.addCard(title: "", column: column, in: context)
                     InlineEditing.pendingEditID = card.id
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.werk(size: 11, weight: .semibold))
-                        .foregroundStyle(look == .tischsuper ? Color(hex: 0x1C1C1C) : ThingsColor.accent)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                    addLabel
                 }
                 .buttonStyle(.plain)
                 .opacity(showButtons ? 1 : 0)
@@ -269,11 +266,7 @@ struct BoardView: View {
                     Button("Kolom verwijderen…", role: .destructive) { columnRequest = .delete(column.id) }
                         .disabled(columnRecords.count <= 1)
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.werk(size: 11, weight: .semibold))
-                        .foregroundStyle(look == .tischsuper ? Color(hex: 0x1C1C1C) : ThingsColor.textSecondary)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                    menuLabel
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -353,6 +346,55 @@ struct BoardView: View {
                 return GmailDrop.handle(providers: providers, column: column, archive: false, context: context, appState: appState)
             }
             return MailImporter.handle(providers: providers, column: column, context: context, appState: appState)
+        }
+    }
+
+    /// Plusknop in de kolomkop, in de vorm van het thema.
+    @ViewBuilder private var addLabel: some View {
+        switch look {
+        case .wandklok:
+            // Grafiet rondje met een witte plus, zoals de knop op het horlogeblad.
+            Image(systemName: "plus")
+                .font(.werk(size: 10, weight: .bold))
+                .foregroundStyle(ThingsColor.cardBackground)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(ThemeParts.graphite))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        case .tischsuper:
+            // Zwart rondje zoals de knoppen op het RT 20-blad.
+            Image(systemName: "plus")
+                .font(.werk(size: 9, weight: .heavy))
+                .foregroundStyle(Color.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color(hex: 0x111111)))
+                .contentShape(Rectangle())
+        case .rekenmachine:
+            CalcKey(label: "+", size: 22)
+                .contentShape(Rectangle())
+        default:
+            Image(systemName: "plus")
+                .font(.werk(size: 11, weight: .semibold))
+                .foregroundStyle(ThingsColor.accent)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+    }
+
+    @ViewBuilder private var menuLabel: some View {
+        if look == .tischsuper {
+            Image(systemName: "equal")
+                .font(.werk(size: 9, weight: .heavy))
+                .foregroundStyle(Color.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color(hex: 0x111111)))
+                .contentShape(Rectangle())
+        } else {
+            Image(systemName: "ellipsis")
+                .font(.werk(size: 11, weight: .semibold))
+                .foregroundStyle(ThingsColor.textSecondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
         }
     }
 
@@ -462,9 +504,10 @@ private struct ColumnSurface: View {
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(ThingsColor.separator.opacity(0.6), lineWidth: 1))
         case .sneeuwwitje:
-            // Glas: licht, met een witte rand en een zachte schaduw.
+            // Glas: licht, met een witte rand, een zachte schaduw en de glans van het deksel.
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(fill.opacity(0.75))
+                .overlay(LidSheen().clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous)))
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(Color.white.opacity(scheme == .dark ? 0.08 : 0.85), lineWidth: 1))

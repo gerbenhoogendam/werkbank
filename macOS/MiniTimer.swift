@@ -212,6 +212,19 @@ struct MiniTimerView: View {
             // Een stilstaande stip: een knipperende liet de pil de hele dag tientallen keren per seconde hertekenen.
             if look == .sneeuwwitje {
                 GrilleMark()
+            } else if look == .wandklok {
+                // Een kleine wijzerplaat; de wijzers tonen de verstreken tijd.
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    ClockFace(elapsed: entry.elapsed(at: timeline.date), size: size.buttonSize)
+                }
+            } else if look == .tischsuper {
+                SpeakerGrille(color: Color(hex: 0x5A5856))
+            } else if look == .principes {
+                // De schuifknop links stopt de timer, zoals op de affiche.
+                Button(action: stop) { ToggleKnob(height: size.buttonSize) }
+                    .buttonStyle(.plain)
+                    .help("Stop")
+                    .accessibilityLabel("Stop")
             } else if pill.showsDot {
                 Circle()
                     .fill(isRunning ? pill.dot : Color.orange)
@@ -219,7 +232,16 @@ struct MiniTimerView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                if look == .karmijn, size != .small {
+                if look == .wandklok, size != .small {
+                    Text(entry.client.uppercased())
+                        .font(.werk(size: size.titleFont - 3.5))
+                        .tracking(0.6)
+                        .foregroundStyle(pill.text2)
+                        .lineLimit(1)
+                } else if look == .tischsuper, size != .small {
+                    ThemeParts.labelValue("Klant", entry.client, size: size.titleFont - 2)
+                        .lineLimit(1)
+                } else if look == .karmijn, size != .small {
                     KarmijnLabel(text: entry.client, color: pill.text2, size: size.titleFont - 3.5)
                 } else if look == .drukproef || look == .rekenmachine, size != .small {
                     Text(entry.client.uppercased())
@@ -232,7 +254,7 @@ struct MiniTimerView: View {
                     .font(.werk(size: size.titleFont, weight: .medium))
                     .foregroundStyle(pill.text)
                     .lineLimit(1)
-                if size != .small, look != .drukproef, look != .rekenmachine, look != .karmijn {
+                if size != .small, ![.drukproef, .rekenmachine, .karmijn, .wandklok, .tischsuper].contains(look) {
                     Text(entry.client)
                         .font(.werk(size: size.titleFont - 2))
                         .foregroundStyle(pill.text2)
@@ -242,16 +264,34 @@ struct MiniTimerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                let time = Billing.formatHMS(entry.elapsed(at: timeline.date))
+                let elapsed = entry.elapsed(at: timeline.date)
+                let time = Billing.formatHMS(elapsed)
                 if look == .rekenmachine {
                     LCDPanel(radius: 8) {
-                        Text(time)
-                            .font(.werk(size: size.timeFont * 0.8, weight: .light))
-                            .monospacedDigit()
+                        LCDDigits(text: time, size: size.timeFont * 0.62)
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 2)
+                            .padding(.vertical, 5)
                     }
                     .fixedSize()
+                } else if look == .wandklok {
+                    // De seconden in goud, zoals de gele secondewijzer.
+                    ThemeParts.secondsTinted(time)
+                        .font(.werk(size: size.timeFont, weight: .bold))
+                        .kerning(-0.5)
+                        .monospacedDigit()
+                        .foregroundStyle(pill.text)
+                        .fixedSize()
+                } else if look == .drukproef {
+                    HStack(spacing: size.gap) {
+                        if size != .small {
+                            Waveform(count: 12, height: size.timeFont * 0.75, phase: Int(elapsed) % 24)
+                        }
+                        Text(time)
+                            .font(Self.timeFont(look, size: size.timeFont))
+                            .tracking(-1)
+                            .foregroundStyle(ThingsColor.today)
+                            .fixedSize()
+                    }
                 } else {
                     Text(time)
                         .font(Self.timeFont(look, size: size.timeFont))
@@ -266,17 +306,30 @@ struct MiniTimerView: View {
                 if isRunning { TimerService.pause(entry, in: context) } else { TimerService.start(entry, in: context) }
             }
             if look == .principes {
-                Button(action: stop) { ToggleKnob(height: size.buttonSize) }
-                    .buttonStyle(.plain)
-                    .help("Stop")
-                    .accessibilityLabel("Stop")
+                // Rechts het luidsprekerrooster van de affiche (stoppen zit links).
+                if size != .small {
+                    PosterGrille(rows: size == .large ? 10 : 7, color: Color(hex: 0x2A2200), columnWidth: size == .large ? 30 : 22)
+                }
             } else {
                 stopButton(action: stop)
             }
         }
         .padding(.horizontal, size.gap + 6)
+        // Sneeuwwitje: lichthouten kopse kanten zoals de SK 4.
+        .padding(.horizontal, look == .sneeuwwitje ? 10 : 0)
         .frame(width: size.width, height: size.height)
         .background(pillShape(pill).fill(pill.background).shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 3))
+        .overlay {
+            if look == .sneeuwwitje {
+                HStack(spacing: 0) {
+                    ThemeParts.elmGrain.frame(width: 12)
+                    Spacer(minLength: 0)
+                    ThemeParts.elmGrain.frame(width: 12)
+                }
+                .clipShape(pillShape(pill))
+                .allowsHitTesting(false)
+            }
+        }
         .overlay(pillShape(pill).strokeBorder(pill.border, lineWidth: 1))
     }
 
@@ -290,7 +343,7 @@ struct MiniTimerView: View {
         case .standaard: .werk(size: size, weight: .semibold, design: .rounded)
         case .drukproef: .werkNumbers(size: size * 0.85)
         case .karmijn: .werkNumbers(size: size)
-        case .wandklok, .sneeuwwitje: .werk(size: size, weight: .light)
+        case .sneeuwwitje: .werk(size: size, weight: .light)
         case .tischsuper: .werk(size: size, weight: .ultraLight)
         default: .werk(size: size, weight: .medium)
         }
@@ -299,20 +352,26 @@ struct MiniTimerView: View {
     /// Stopknop van de timerpil in de vorm van het thema.
     private func stopButton(action: @escaping () -> Void) -> some View {
         let pill = PillTheme.current
+        let look = ThemeStore.shared.look
         return Button(action: action) {
-            RoundedRectangle(cornerRadius: ThemeStore.shared.look == .drukproef ? 0 : 2, style: .continuous)
-                .fill(pill.stopIcon)
-                .frame(width: size.buttonSize * 0.3, height: size.buttonSize * 0.3)
-                .frame(width: size.buttonSize, height: size.buttonSize)
-                .background {
-                    if ThemeStore.shared.look == .rekenmachine {
-                        RoundKey(tint: ThingsColor.today)
-                    } else if ThemeStore.shared.look == .karmijn {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous).fill(pill.stopFill)
-                    } else {
-                        Circle().fill(pill.stopFill)
+            if look == .rekenmachine {
+                // De gele =-toets: de tijd wordt uitgerekend en gaat naar Tijd schrijven.
+                CalcKey(label: "=", yellow: true, size: size.buttonSize)
+            } else if look == .sneeuwwitje {
+                DialKnob(angle: 0, size: size.buttonSize)
+            } else {
+                RoundedRectangle(cornerRadius: look == .drukproef ? 0 : 2, style: .continuous)
+                    .fill(pill.stopIcon)
+                    .frame(width: size.buttonSize * 0.3, height: size.buttonSize * 0.3)
+                    .frame(width: size.buttonSize, height: size.buttonSize)
+                    .background {
+                        if look == .karmijn {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous).fill(pill.stopFill)
+                        } else {
+                            Circle().fill(pill.stopFill)
+                        }
                     }
-                }
+            }
         }
         .buttonStyle(.plain)
         .help("Stop")
@@ -448,12 +507,12 @@ private struct PillTheme {
                       stopFill: .white.opacity(0.18), stopIcon: .white)
         case .wandklok:
             PillTheme(background: ThingsColor.cardBackground, border: ThingsColor.separator, text: ThingsColor.textPrimary,
-                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
-                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.accent, stopIcon: .white)
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, showsDot: false, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThemeParts.graphite, stopIcon: ThingsColor.cardBackground)
         case .tischsuper:
             PillTheme(background: Color(hex: 0x161616), border: .white.opacity(0.08), text: Color(hex: 0xEEEEED),
-                      text2: Color(hex: 0xA8A6A2), dot: ThemeParts.orange, buttonFill: .white.opacity(0.12),
-                      buttonIcon: .white, stopFill: ThemeParts.orange, stopIcon: Color(hex: 0x1C1C1C))
+                      text2: Color(hex: 0xA8A6A2), dot: ThemeParts.orange, showsDot: false, buttonFill: Color(hex: 0xEEEEED),
+                      buttonIcon: Color(hex: 0x111111), stopFill: ThemeParts.orange, stopIcon: Color(hex: 0x1C1C1C))
         case .principes:
             PillTheme(background: Color(hex: 0xF7C001), border: .clear, text: .black, text2: .black.opacity(0.7),
                       dot: .black, showsDot: false, buttonFill: .black.opacity(0.14), buttonIcon: .black,

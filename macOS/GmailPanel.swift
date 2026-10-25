@@ -39,8 +39,16 @@ struct GmailPanel: View {
                 .animation(.easeOut(duration: 0.18), value: moveZoneOpen)
         }
         .frame(maxHeight: .infinity)
+        // Sneeuwwitje: de glans van het glazen deksel over het paneel.
+        .background { if look == .sneeuwwitje { LidSheen() } }
         .background(ThingsColor.mailBackground)
         .darkScheme(ThemeStore.shared.theme.darkMail)
+        // Tischsuper: een teakrand langs de buitenkant, zoals de platenspeler (de andere zit rechts van Tijd schrijven).
+        // Buiten het donkere mailpaneel, zodat het hout links en rechts dezelfde kleur heeft.
+        .padding(.leading, look == .tischsuper ? 9 : 0)
+        .background(alignment: .leading) {
+            if look == .tischsuper { ThemeParts.teak.frame(width: 9) }
+        }
         .background { mailboxShortcuts }
         .alert("Naam van de tab", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(renaming.map(GmailSession.shortName) ?? "", text: $renameText)
@@ -106,7 +114,9 @@ struct GmailPanel: View {
         switch look {
         case .standaard: 38
         case .tischsuper: 78
-        case .principes, .drukproef: 54
+        case .principes: 66
+        case .drukproef: 112
+        case .wandklok: 62
         case .karmijn: 72
         default: 46
         }
@@ -122,7 +132,7 @@ struct GmailPanel: View {
                     .thingsFont(.heading)
                     .foregroundStyle(ThingsColor.textPrimary)
             } else {
-                MailHeaderTitle(title: headerTitle, unread: unreadCount)
+                MailHeaderTitle(title: headerTitle, unread: unreadCount, total: gmail.messages.count, mailbox: mailboxName)
                     .lineLimit(1)
             }
             Spacer()
@@ -153,6 +163,13 @@ struct GmailPanel: View {
         }
         .padding(.horizontal, look == .standaard ? 12 : 14)
         .frame(height: headerHeight)
+    }
+
+    /// De getoonde mailbox in woorden ("Support", "alle mailboxen").
+    private var mailboxName: String {
+        if gmail.isAllCombined { return "alle mailboxen" }
+        if gmail.isCombined { return gmail.combinedAccounts.map(gmail.displayName).joined(separator: " + ") }
+        return gmail.activeAccount.map(gmail.displayName) ?? "Gmail"
     }
 
     private var headerTitle: String {
@@ -187,7 +204,8 @@ struct GmailPanel: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 10)
         } else {
-            HStack(spacing: look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0 : (look == .standaard ? 4 : (look == .karmijn ? 9 : 6)))) {
+            HStack(spacing: look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0
+                                                       : (look == .standaard ? 4 : (look == .karmijn ? 9 : (look == .tischsuper ? 2 : 6))))) {
                 if hasPartialCombination {
                     combinedPill
                     if look == .karmijn { tabSlash }
@@ -423,11 +441,36 @@ struct GmailPanel: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if gmail.messages.isEmpty {
-                Text(gmail.isLoading ? "Inbox ophalen…" : "Geen mail in je Gmail-inbox.")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if look == .spark && !gmail.isLoading {
+                    // De grote lichtgrijze envelop van het leesvlak in Spark, zonder tekst.
+                    Image(systemName: "envelope")
+                        .font(.werk(size: 64, weight: .ultraLight))
+                        .foregroundStyle(ThingsColor.separator)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Geen mail")
+                } else {
+                    Text(gmail.isLoading ? "Inbox ophalen…" : "Geen mail in je Gmail-inbox.")
+                        .thingsFont(.metadata)
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
+                if look == .spark {
+                    // Kopregel boven de lijst zoals All Accounts in Spark.
+                    HStack(spacing: 9) {
+                        Image(systemName: "envelope")
+                            .font(.werk(size: 12))
+                            .foregroundStyle(ThingsColor.accent)
+                        Text(mailboxName)
+                            .font(.werk(size: 11.5, weight: .semibold))
+                            .foregroundStyle(ThingsColor.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+                }
                 // ScrollView, geen List: een List nam het slepen van de rij over. De veegacties (twee vingers op het
                 // trackpad: links archiveert, rechts maakt een taak) staan los in `TrackpadSwipe`.
                 ScrollView {
@@ -448,7 +491,9 @@ struct GmailPanel: View {
                                                           color: ThingsColor.textSecondary) { archive(message) }
                                 )
                             if !MailLook.cardRows {
-                                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                                // Principes: een regel van 2 pt tussen de rijen, zoals de lijst met principes.
+                                Rectangle().fill(look == .principes ? ThemeParts.rowRule : ThingsColor.separator)
+                                    .frame(height: look == .principes ? 2 : 1)
                                     .padding(.horizontal, look == .standaard ? 0 : 12)
                             }
                         }
@@ -498,11 +543,16 @@ private struct GmailRow: View {
             } else if isHovering {
                 shape.fill(Color.primary.opacity(0.04))
             }
-        case .tischsuper, .principes, .drukproef:
+        case .tischsuper, .drukproef:
             if isSelected {
                 shape.fill(ThingsColor.cardBackground)
             } else if isHovering {
                 shape.fill(Color.primary.opacity(0.05))
+            }
+        case .principes:
+            // Geen vlak: de gekozen mail krijgt een kort blauw streepje onder de tekst.
+            if isHovering {
+                Rectangle().fill(Color.primary.opacity(0.04))
             }
         case .karmijn:
             // Een rood kader om de gekozen rij, recht zoals de rest van het thema.
@@ -536,6 +586,12 @@ private struct GmailRow: View {
                         Circle()
                             .fill(message.isUnread ? MailLook.unreadDot : Color.clear)
                             .frame(width: 7, height: 7)
+                    }
+                    if look == .spark {
+                        // Persoon of melding, zoals Spark de afzender aanduidt.
+                        Image(systemName: MailLook.isNotification(message.fromAddress) ? "bell" : "person")
+                            .font(.werk(size: 10))
+                            .foregroundStyle(ThingsColor.textSecondary)
                     }
                     if look == .spark, let accountColor {
                         RoundedRectangle(cornerRadius: 1.5).fill(accountColor).frame(width: 3, height: 14)
@@ -572,6 +628,11 @@ private struct GmailRow: View {
                         .foregroundStyle(ThingsColor.textSecondary)
                         .lineLimit(2)
                         .padding(.leading, 13)
+                }
+                if look == .principes && isSelected {
+                    Capsule().fill(ThingsColor.accent).frame(width: 34, height: 3)
+                        .padding(.leading, 13)
+                        .padding(.top, 4)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

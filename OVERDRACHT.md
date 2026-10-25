@@ -128,13 +128,21 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     thema (`ThemeLook`, `ThemeParts.swift`, `AgendaTheme.swift`, `MailTheme.swift`, `CardSurface`, `ColumnSurface`,
     `TimeTotalFooter`, `PillTheme`): kolomkoppen en -vlakken, kaarten en "loopt", agendakop, filters, dagkoppen,
     uurliniaal, afspraken, lijn van nu, mailkop/tabs/rijen, totaal in Tijd schrijven, timerpil, losse vlakken bij
-    Drukproef. Michroma, Anton en Playfair Display (SIL OFL, `Shared/Fonts`) worden bij het starten geregistreerd;
+    Drukproef. Michroma, Anton, Playfair Display en DSEG7 (SIL OFL, `Shared/Fonts`) worden bij het starten geregistreerd;
     Karmijn gebruikt Anton voor koppen en cijfers (`Font.werkDisplay`, `displayTight`) en Playfair voor accenten
     (`Font.werkSerif`). Standaard ziet er uit als
     voorheen. Afspraken houden de kleuren van je agenda's. Na te gaan: of het donkere mailpaneel in de lichte weergave
     goed leesbaar is, lettertypes met gewichten (Avenir Next), contrast van accentknoppen met witte tekst in donker,
     smalle kolommen met de grotere titels (Drukproef, Karmijn), meldingen en inspreken in de pil (nog donker in elk
     thema), of de meegeleverde letters op beide platformen echt laden (anders valt het terug op de systeemletter).
+    Verfijning per thema (canvas, borden 1–7 met hun lijst "Verfijningen"; onderdelen in `ThemeParts.swift` en
+    `AgendaTheme.swift`): Wandklok `ClockFace`, `DateWindow`, `DashLabel`, minutenring en gouden seconden; Tischsuper
+    `PianoKey`, `SuperscriptTitle`, `labelValue`, `counter`, `AgendaNeedle` en teak links en rechts; Principes
+    `RuledHeading`, `PosterGrille`, `MiniToggle`, regels van 2 pt; Sneeuwwitje `DialKnob`, `TuningScaleCell`, `TuningBar`,
+    `LidSheen`, houten uiteinden; Rekenmachine `LCDDigits` (DSEG7, met zwakke 8-en eronder) en `CalcKey`; Drukproef
+    `Waveform`, koppen in drie kleuren (`DutchNumber`) en grote telcijfers; Spark Week/Dag-tabjes, persoon/bel
+    (`MailLook.isNotification`), kopregel boven de lijst en de lege envelop. De rekentoetsen onder het totaal van
+    Rekenmachine zijn vorm, geen knoppen.
 20. **Logo's in de maillijst** (`MailSenderIcon` in `MailTheme.swift`, Voorkeuren › Weergave › Mail › "Logo's bij
     afzenders", standaard aan, in elk thema). Het logo komt via `SenderLogoService` van de website achter het domein
     van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.
