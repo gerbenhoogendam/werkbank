@@ -109,6 +109,24 @@ struct AgendaView: View {
         return "Week \(DutchDate.isoWeek(first)) · \(DutchDate.short(first)) – \(DutchDate.short(last))"
     }
 
+    /// In een thema: de kop in twee delen ("Week 44" en "26 okt – 30 okt").
+    private var titleParts: (main: String, detail: String) {
+        let days = days
+        guard let first = days.first, let last = days.last else { return ("", "") }
+        if isDayMode { return (DutchDate.weekdayAndDay(first), "") }
+        return ("Week \(DutchDate.isoWeek(first))", "\(DutchDate.short(first)) – \(DutchDate.short(last))")
+    }
+
+    /// Drukproef: groot "26–30 okt".
+    private var bigTitle: String {
+        let days = days
+        guard let first = days.first, let last = days.last else { return "" }
+        if isDayMode { return DutchDate.short(first) }
+        let sameMonth = calendar.component(.month, from: first) == calendar.component(.month, from: last)
+        return sameMonth ? "\(calendar.component(.day, from: first))–\(DutchDate.short(last))"
+            : "\(DutchDate.short(first)) – \(DutchDate.short(last))"
+    }
+
     // MARK: Inhoud
 
     private var agendaBody: some View {
@@ -134,6 +152,7 @@ struct AgendaView: View {
                     ScrollView {
                         HStack(alignment: .top, spacing: 0) {
                             hourGutter(hourHeight)
+                            HStack(alignment: .top, spacing: 0) {
                             ForEach(days, id: \.self) { day in
                                 DayColumn(
                                     day: day,
@@ -147,6 +166,8 @@ struct AgendaView: View {
                                     eventDrag: eventDrag
                                 )
                             }
+                            }
+                            .background(TimelineWell())
                         }
                         .padding(.top, 8)
                         .padding(.trailing, 4)
@@ -236,40 +257,95 @@ struct AgendaView: View {
 
     // MARK: Kop
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .thingsFont(.heading)
-                .foregroundStyle(ThingsColor.textPrimary)
-                .monospacedDigit()
-
-            HStack(spacing: 2) {
-                navButton("chevron.left", label: "Vorige") { offset -= 1 }
-                Button("Vandaag") { offset = 0 }
-                    .buttonStyle(.plain)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.accent)
-                    .padding(.horizontal, 4)
-                navButton("chevron.right", label: "Volgende") { offset += 1 }
-            }
-
-            Spacer(minLength: 8)
-
-            // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's. Een afspraak die je naar de kop
-            // sleept kan naar een andere agenda (EventDragLayer).
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    // Alleen agenda's die in Voorkeuren aan staan zijn hier te kiezen.
-                    ForEach(service.calendars.filter { !disabledIDs.contains($0.id) }) { calendar in
-                        calendarChip(calendar)
-                    }
+    @ViewBuilder private var header: some View {
+        let look = ThemeStore.shared.look
+        if look == .drukproef {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    Text("AGENDA").font(.werk(size: 11, weight: .medium)).foregroundStyle(ThingsColor.textPrimary)
+                    Text(isDayMode ? "DAG" : "WEEK (N°\(days.first.map { DutchDate.isoWeek($0) } ?? 0))")
+                        .font(.werk(size: 11))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                    Spacer(minLength: 8)
+                    calendarFilters
+                }
+                HStack(alignment: .center, spacing: 10) {
+                    Text(bigTitle)
+                        .font(.werk(size: 40, weight: .medium))
+                        .tracking(-2)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    Spacer(minLength: 8)
+                    AgendaNavButton(symbol: "chevron.left", label: "Vorige") { offset -= 1 }
+                    AgendaNavButton(symbol: "chevron.right", label: "Volgende") { offset += 1 }
+                    AgendaTodayButton { offset = 0 }
                 }
             }
-            .frame(maxWidth: 460)
-            .reportFrame { eventDrag.filterFrame = $0 }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+        } else {
+            HStack(spacing: 10) {
+                let buttonsFirst = look == .tischsuper || look == .rekenmachine
+                if buttonsFirst { navigation(look) }
+                if look == .standaard {
+                    Text(title)
+                        .thingsFont(.heading)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .monospacedDigit()
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(titleParts.main)
+                            .font(.werk(size: 15, weight: look == .spark ? .bold : (look == .wandklok || look == .sneeuwwitje ? .semibold : .medium)))
+                            .foregroundStyle(ThingsColor.textPrimary)
+                        if !titleParts.detail.isEmpty {
+                            Text(titleParts.detail)
+                                .font(.werk(size: 11.5))
+                                .monospacedDigit()
+                                .foregroundStyle(ThingsColor.textSecondary)
+                        }
+                    }
+                    .lineLimit(1)
+                }
+                if !buttonsFirst { navigation(look) }
+
+                Spacer(minLength: 8)
+
+                calendarFilters
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, look == .standaard ? 8 : 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+    }
+
+    private func navigation(_ look: ThemeLook) -> some View {
+        HStack(spacing: look == .standaard ? 2 : 6) {
+            AgendaNavButton(symbol: "chevron.left", label: "Vorige") { offset -= 1 }
+            if look == .tischsuper || look == .rekenmachine || look == .principes || look == .sneeuwwitje {
+                AgendaNavButton(symbol: "chevron.right", label: "Volgende") { offset += 1 }
+                AgendaTodayButton { offset = 0 }
+            } else {
+                AgendaTodayButton { offset = 0 }
+                AgendaNavButton(symbol: "chevron.right", label: "Volgende") { offset += 1 }
+            }
+        }
+    }
+
+    /// Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's. Een afspraak die je naar de kop
+    /// sleept kan naar een andere agenda (EventDragLayer).
+    private var calendarFilters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: ThemeStore.shared.look == .tischsuper || ThemeStore.shared.look == .principes ? 6 : 10) {
+                // Alleen agenda's die in Voorkeuren aan staan zijn hier te kiezen.
+                ForEach(service.calendars.filter { !disabledIDs.contains($0.id) }) { calendar in
+                    calendarChip(calendar)
+                }
+            }
+        }
+        .frame(maxWidth: 460)
+        .fixedSize(horizontal: false, vertical: true)
+        .reportFrame { eventDrag.filterFrame = $0 }
     }
 
     private func calendarChip(_ cal: AgendaCalendar) -> some View {
@@ -279,30 +355,11 @@ struct AgendaView: View {
             if hidden { ids.remove(cal.id) } else { ids.insert(cal.id) }
             headerHiddenRaw = ids.sorted().joined(separator: ",")
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: hidden ? "circle" : "checkmark.circle.fill")
-                    .foregroundStyle(cal.color)
-                Text(cal.title)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(hidden ? ThingsColor.textTertiary : ThingsColor.textSecondary)
-                    .lineLimit(1)
-            }
+            AgendaCalendarChip(title: cal.title, color: cal.color, hidden: hidden)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Agenda \(cal.title)")
         .accessibilityValue(hidden ? "verborgen" : "zichtbaar")
-    }
-
-    private func navButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.werk(size: 11, weight: .semibold))
-                .foregroundStyle(ThingsColor.textSecondary)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
     private func dayHeaderRow(_ days: [Date]) -> some View {
@@ -310,18 +367,25 @@ struct AgendaView: View {
             Color.clear.frame(width: gutterWidth, height: 1)
             ForEach(days, id: \.self) { day in
                 let isToday = calendar.isDateInToday(day)
-                HStack(spacing: 6) {
-                    Text(DutchDate.weekdayShort(day))
-                        .thingsFont(.upcomingWeekday)
-                        .foregroundStyle(isToday ? ThingsColor.accent : ThingsColor.textSecondary)
-                    Text("\(calendar.component(.day, from: day))")
-                        .font(.werk(size: 13, weight: .bold))
-                        .foregroundStyle(isToday ? Color.white : ThingsColor.textPrimary)
-                        .frame(minWidth: 22, minHeight: 22)
-                        .background(Circle().fill(isToday ? ThingsColor.accent : .clear))
+                if ThemeStore.shared.look == .standaard {
+                    HStack(spacing: 6) {
+                        Text(DutchDate.weekdayShort(day))
+                            .thingsFont(.upcomingWeekday)
+                            .foregroundStyle(isToday ? ThingsColor.accent : ThingsColor.textSecondary)
+                        Text("\(calendar.component(.day, from: day))")
+                            .font(.werk(size: 13, weight: .bold))
+                            .foregroundStyle(isToday ? Color.white : ThingsColor.textPrimary)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .background(Circle().fill(isToday ? ThingsColor.accent : .clear))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 6)
+                } else {
+                    AgendaDayHeader(weekday: DutchDate.weekdayShort(day), number: "\(calendar.component(.day, from: day))",
+                                    isToday: isToday)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 6)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 6)
             }
             Color.clear.frame(width: 4, height: 1)
         }
@@ -347,18 +411,43 @@ struct AgendaView: View {
     }
 
     private func hourGutter(_ hourHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        let look = ThemeStore.shared.look
+        let ruler = look == .wandklok || look == .tischsuper
+        return VStack(spacing: 0) {
             ForEach(startHour..<endHour, id: \.self) { hour in
-                Text(String(format: "%02d:00", hour))
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textTertiary)
+                Text(Self.hourLabel(hour, look: look))
+                    .font(Self.hourFont(look))
+                    .foregroundStyle(look == .tischsuper ? ThingsColor.textSecondary : ThingsColor.textTertiary)
                     .monospacedDigit()
-                    .frame(width: gutterWidth - 6, height: hourHeight, alignment: .topTrailing)
-                    .offset(y: -6)
+                    .frame(width: gutterWidth - (ruler ? 16 : 6), height: hourHeight,
+                           alignment: look == .drukproef ? .topLeading : .topTrailing)
+                    .padding(.leading, look == .drukproef ? 8 : 0)
+                    .frame(width: gutterWidth - (ruler ? 10 : 6), alignment: .leading)
+                    .offset(y: look == .drukproef ? 4 : -6)
                     .id("hour-\(hour)")
             }
         }
-        .frame(width: gutterWidth)
+        .frame(width: gutterWidth, alignment: .leading)
+        .overlay(alignment: .topTrailing) {
+            if ruler { HourRuler(hours: endHour - startHour, hourHeight: hourHeight) }
+        }
+    }
+
+    private static func hourLabel(_ hour: Int, look: ThemeLook) -> String {
+        switch look {
+        case .wandklok, .rekenmachine, .principes: String(format: "%02d", hour)
+        case .tischsuper: "\(hour)"
+        default: String(format: "%02d:00", hour)
+        }
+    }
+
+    private static func hourFont(_ look: ThemeLook) -> Font {
+        switch look {
+        case .wandklok: .werk(size: 11, weight: .light)
+        case .drukproef: .werk(size: 10)
+        case .standaard: .werk(size: ThingsTextStyle.metadata.size)
+        default: .werk(size: 11)
+        }
     }
 
     // MARK: Acties
@@ -839,10 +928,13 @@ struct DayColumn: View {
     private func nowLine(width: CGFloat) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             let position = y(timeline.date)
+            let line = AgendaLook.nowLine
             if position >= 0 && position <= totalHeight {
                 ZStack(alignment: .leading) {
-                    Rectangle().fill(ThingsColor.deadline).frame(height: 1.5)
-                    Circle().fill(ThingsColor.deadline).frame(width: 7, height: 7).offset(x: -3.5)
+                    Rectangle().fill(line.color).frame(height: line.thickness)
+                    if ThemeStore.shared.look != .tischsuper {
+                        Circle().fill(line.color).frame(width: 7, height: 7).offset(x: -3.5)
+                    }
                 }
                 .frame(width: width)
                 .offset(y: position - 3.5)
@@ -865,37 +957,73 @@ private struct EventBlock: View {
     var body: some View {
         // Korter dan 1 uur: alleen titel. Langer: titel + tijd.
         let isShort = event.end.timeIntervalSince(event.start) < 3600
-        let text = EventStyle.textColors(on: event.color, opacity: opacity, dark: colorScheme == .dark)
+        let look = ThemeStore.shared.look
+        let dark = colorScheme == .dark
+        let solid = AgendaLook.solidEvents
+        let text: (primary: Color, secondary: Color) = look == .standaard || solid
+            ? EventStyle.textColors(on: event.color, opacity: solid ? 1 : opacity, dark: dark)
+            : (ThingsColor.textPrimary, ThingsColor.textSecondary)
+        let shape = RoundedRectangle(cornerRadius: AgendaLook.eventRadius, style: .continuous)
         HStack(spacing: 0) {
-            Rectangle().fill(event.color).frame(width: 3)
+            if look == .standaard {
+                Rectangle().fill(event.color).frame(width: 3)
+            }
             VStack(alignment: .leading, spacing: 1) {
-                if isShort && isLifted {
-                    Text("\(DutchDate.range(event.start, event.end))  \(event.title)")
-                        .thingsFont(.tag)
-                        .foregroundStyle(text.primary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                } else {
-                    Text(event.title)
-                        .thingsFont(.tag)
-                        .foregroundStyle(text.primary)
-                        .lineLimit(isShort ? 1 : 2)
+                HStack(spacing: 5) {
+                    switch look {
+                    case .wandklok, .sneeuwwitje:
+                        Circle().fill(event.color).frame(width: 6, height: 6)
+                    case .spark:
+                        RoundedRectangle(cornerRadius: 1.5).fill(event.color).frame(width: 3, height: 11)
+                    default:
+                        EmptyView()
+                    }
+                    if isShort && isLifted {
+                        Text("\(DutchDate.range(event.start, event.end))  \(event.title)")
+                            .monospacedDigit()
+                            .lineLimit(1)
+                    } else {
+                        Text(event.title)
+                            .lineLimit(isShort ? 1 : 2)
+                    }
                 }
+                .font(look == .standaard ? .werk(size: ThingsTextStyle.tag.size, weight: .medium)
+                      : .werk(size: 11, weight: look == .tischsuper || look == .drukproef ? .medium : .semibold))
+                .foregroundStyle(text.primary)
                 if !isShort {
                     Text(DutchDate.range(event.start, event.end))
                         .font(.werk(size: 10))
                         .foregroundStyle(text.secondary)
                         .monospacedDigit()
+                        .padding(.leading, look == .spark ? 8 : 0)
                 }
             }
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.horizontal, look == .standaard ? 5 : 7)
+            .padding(.vertical, look == .standaard ? 2 : 4)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(event.color.opacity(opacity))
+        .background {
+            switch look {
+            case .standaard:
+                event.color.opacity(opacity)
+            case .wandklok:
+                shape.fill(event.color.opacity(dark ? 0.2 : 0.11))
+                    .overlay(shape.strokeBorder(event.color.opacity(0.35), lineWidth: 1))
+            case .sneeuwwitje:
+                shape.fill(ThingsColor.cardBackground)
+                    .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 1))
+                    .shadow(color: ThingsColor.cardShadow, radius: 6, y: 3)
+            case .tischsuper:
+                shape.fill(event.color.opacity(dark ? 0.3 : 0.22))
+            case .spark:
+                shape.fill(event.color.opacity(dark ? 0.2 : 0.12))
+            case .principes, .rekenmachine, .drukproef:
+                shape.fill(event.color)
+            }
+        }
         .background(isLifted ? ThingsColor.backgroundContent : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .clipShape(shape)
         .contentShape(Rectangle())
         .help("\(event.title)\n\(DutchDate.range(event.start, event.end))")
         .accessibilityLabel("\(event.title), \(DutchDate.range(event.start, event.end))")
