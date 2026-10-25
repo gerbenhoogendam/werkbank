@@ -123,10 +123,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     heeft een rol (venster, mail, kop van mail, bord, kolom, kaart, agenda, tijdlijst, tekst, accent, …) met een kleur
     voor licht en donker; per thema kun je elke rol zelf kiezen en terugzetten. Lettertype, cijferletter en
     basisgrootte (11–17) gelden overal waar `Font.werk`/`thingsFont` staat. Tischsuper tekent het mailpaneel altijd
-    donker, Spark de kop van het mailpaneel. De schetsen staan in de Claude-canvas "Werkbank thema's". Nog niet
-    gebouwd: de herkenbare details per thema (oranje kolomkop, teakrand, minuutstreepjes, lcd, Michroma-cijfers,
-    tussenruimte tussen vlakken). Na te gaan: of het donkere mailpaneel in de lichte weergave goed leesbaar is,
-    lettertypes met gewichten (Avenir Next semibold), contrast van accentknoppen met witte tekst in donker.
+    donker, Spark de kop van het mailpaneel. De schetsen staan in de Claude-canvas "Werkbank thema's". De vorm per
+    thema (`ThemeLook`, `ThemeParts.swift`, `AgendaTheme.swift`, `MailTheme.swift`, `CardSurface`, `ColumnSurface`,
+    `TimeTotalFooter`, `PillTheme`): kolomkoppen en -vlakken, kaarten en "loopt", agendakop, filters, dagkoppen,
+    uurliniaal, afspraken, lijn van nu, mailkop/tabs/rijen, totaal in Tijd schrijven, timerpil, losse vlakken bij
+    Drukproef. Michroma (SIL OFL, `Shared/Fonts`) wordt bij het starten geregistreerd. Standaard ziet er uit als
+    voorheen. Afspraken houden de kleuren van je agenda's. Na te gaan: of het donkere mailpaneel in de lichte weergave
+    goed leesbaar is, lettertypes met gewichten (Avenir Next), contrast van accentknoppen met witte tekst in donker,
+    smalle kolommen met de grotere titels (Drukproef), meldingen en inspreken in de pil (nog donker in elk thema).
 
 ## Open punten
 
