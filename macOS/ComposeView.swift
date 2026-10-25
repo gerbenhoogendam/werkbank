@@ -656,7 +656,7 @@ struct ComposeView: View {
             // Een antwoord in het gesprek van een kaart: die wacht nu op de klant.
             let waiting = isReply ? ref.source.flatMap { WaitingWatcher.shared.didReply(threadID: $0.threadID) } : nil
             let message = waiting.map { "Mail verzonden · kaart naar \($0)" } ?? "Mail verzonden"
-            // Antwoord of doorgestuurd: 2 seconden lang archiveert Enter het gesprek.
+            // Antwoord of doorgestuurd: 4 seconden lang archiveert Enter het gesprek.
             if let source = ref.source {
                 SendFollowUp.offerArchive(source, message: message, appState: appState)
             } else {

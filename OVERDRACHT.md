@@ -92,10 +92,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     afbeelding (`CGWindowListCreateImage`) niet, dan sluit een paneel met zijn eigen kanteling en een venster zonder
     vouw. Een met ⌘W gesloten hoofdvenster hergebruikt macOS bij Dock-klik of menubalk; dat wordt gevolgd
     (`watchForReappearance`) en vouwt dan ook open. Na te gaan: geen flits van het venster vóór de vouw.
-15. **Archiveren na versturen** (`macOS/SendFollowUp.swift`). Na een antwoord of doorgestuurde mail telt de pil 2 s af
+15. **Archiveren na versturen** (`macOS/SendFollowUp.swift`). Na een antwoord of doorgestuurde mail telt de pil 4 s af
     (balk naar een archiefdoosje); Enter in die tijd archiveert het gesprek en sluit het mailpaneel. Alleen met een
     testmailbox te testen. Na te gaan: vangt Enter ook als de cursor nog ergens in een tekstveld staat, en doet Enter
-    na de 2 s weer gewoon wat het moet doen.
+    na de 4 s weer gewoon wat het moet doen.
 16. **Inspreken** (`macOS/Dictation.swift`, `WerkbankCore/…/DictationParser.swift`). Voorkeuren › Overig › Inspreken
     aanzetten (uit: F17 meldt dat in de pil); de eerste keer downloadt WhisperKit het model (± 630 MB, naar Application
     Support/Whisper) en stemt Core ML het af (± 25 s, opnieuw na elke macOS-update). F17 ingedrukt houden en spreken:

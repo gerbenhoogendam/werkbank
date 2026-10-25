@@ -1,11 +1,11 @@
 import AppKit
 import SwiftUI
 
-/// Na het versturen van een antwoord of doorgestuurde mail: 2 seconden lang archiveert Enter het gesprek. De timer-pil
+/// Na het versturen van een antwoord of doorgestuurde mail: 4 seconden lang archiveert Enter het gesprek. De timer-pil
 /// telt af (`HudCountdown`, getekend door `SendFuse`).
 @MainActor
 enum SendFollowUp {
-    static let duration: TimeInterval = 2
+    static let duration: TimeInterval = 4
 
     private static var monitor: Any?
     private static var timeout: Task<Void, Never>?
