@@ -527,7 +527,7 @@ struct ComposeView: View {
             }
             if isReply {
                 let recipients = ReplyBuilder.recipients(from: mail.from, replyTo: mail.replyTo, to: mail.to, cc: mail.cc,
-                                                         replyingAs: source.account, myAddresses: gmail.accounts,
+                                                         replyingAs: fromAccount, myAddresses: gmail.accounts,
                                                          replyAll: ref.mode == .replyAll)
                 toText = recipients.to.map(\.displayString).joined(separator: ", ")
                 ccText = recipients.cc.map(\.displayString).joined(separator: ", ")
