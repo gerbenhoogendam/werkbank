@@ -19,7 +19,7 @@ controleerde of het compileerde, en de eigenaar testte het gedrag.
   oude Werkbank afsluiten, nieuwe openen).
 - Alleen bouwen, zonder pull:
   `xcodegen generate --quiet && xcodebuild -project Werkbank.xcodeproj -scheme Werkbank-macOS -configuration Debug -derivedDataPath DerivedData -quiet build`
-- Logica-tests: `cd WerkbankCore && swift test` (113 tests).
+- Logica-tests: `cd WerkbankCore && swift test` (114 tests).
 - Schermafbeelding: `screencapture -x /tmp/werkbank.png`.
 - Nieuwe bestanden staan pas in het project na `xcodegen generate` (het script doet dat).
 - `Config/Local.xcconfig` (bundle-id, team, Google-client) staat niet in git. Zonder dat bestand werkt Gmail niet.
@@ -104,6 +104,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Tijd schrijven een oranje microfoon (`TimeEntry.dictatedRaw`), die verdwijnt als je het veld zelf aanpast. Na te
     gaan: toestemmingsvraag microfoon, downloadvoortgang in Voorkeuren, snelheid na loslaten, kwaliteit van Nederlands
     en klantnamen, werkt het offline na de eerste keer, geheugengebruik met het model geladen.
+17. **Opmaak in mails** (`macOS/RichText.swift`, `macOS/ReplyTextView.swift`). Werkbalk onder het onderwerp: vet,
+    cursief, onderstreept, doorgehaald (⌘B, ⌘I, ⌘U), lettertype, grootte, tekstkleur, markeren, opsomming, nummering,
+    inspringen, link (⌘K), opmaak wissen. Standaard Helvetica 13, net als de verstuurde mail. Bij versturen wordt het
+    eenvoudige HTML (`RichHTML`, `ComposedMail.bodyHTML`); de tekstversie blijft. Het lege tekstvak is twee regels hoog,
+    de handtekening staat er direct onder. Na te gaan: hoe het eruitziet bij de ontvanger (Gmail, Outlook, Apple Mail),
+    lijsten met Return en Backspace, ⌘Z na lijst en inspringen, plakken van opgemaakte tekst uit een website, opmaak na
+    loshalen van het opstelvenster.
 
 ## Open punten
 

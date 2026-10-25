@@ -41,6 +41,16 @@ final class MailComposerTests: XCTestCase {
         XCTAssertEqual(parsed.files.first?.data.count, 5000)
     }
 
+    func testBodyHTMLReplacesPlainParagraphs() {
+        var mail = sample()
+        mail.bodyText = "Hoi,\n•\tpunt"
+        mail.bodyHTML = "<div>Hoi,</div><ul><li><b>punt</b></li></ul>"
+        let parsed = MailContentParser.parse(MailComposer.build(mail))
+        XCTAssertTrue(parsed.displayHTML.contains("<ul><li><b>punt</b></li></ul>"))
+        XCTAssertFalse(parsed.displayHTML.contains("•"))
+        XCTAssertTrue(parsed.quotableText.contains("punt"))
+    }
+
     func testSignatureImageDroppedWithoutLogo() {
         var mail = sample()
         mail.signatureHTML = "<div>Groet<img src=\"cid:ABC\"></div>"

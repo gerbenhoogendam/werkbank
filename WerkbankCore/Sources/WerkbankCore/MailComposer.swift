@@ -74,6 +74,8 @@ public struct ComposedMail {
     public var bcc: [MailAddress] = []
     public var subject: String
     public var bodyText: String
+    /// De tekst met opmaak (alinea's als div, lijsten, links); zonder: `bodyText` als gewone alinea's.
+    public var bodyHTML: String?
     /// Het oorspronkelijke bericht bij beantwoorden of doorsturen, met de aanhef ("Op … schreef …:").
     public var quote: String?
     public var quoteIntro: String?
@@ -292,7 +294,7 @@ public enum MailComposer {
 
     private static func htmlBody(_ mail: ComposedMail) -> String {
         var html = "<html><body><div style=\"font-family: Helvetica, Arial, sans-serif; font-size: 13px;\">"
-        html += paragraphs(mail.bodyText) + "</div>"
+        html += (mail.bodyHTML ?? paragraphs(mail.bodyText)) + "</div>"
         if var signature = mail.signatureHTML, !signature.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if mail.signatureImage != nil {
                 signature = signature.replacingOccurrences(of: #"cid:[^"'\s>)]+"#, with: "cid:\(signatureContentID)",

@@ -73,6 +73,8 @@ struct ComposeView: View {
     @State private var showCc = false
     @State private var reviewer = MailReviewer()
     @State private var showBcc = false
+    /// Opmaak van de tekst (werkbalk, HTML bij versturen).
+    @State private var rich = RichTextController()
 
     private static let maxAttachmentBytes = 18_000_000
 
@@ -85,6 +87,10 @@ struct ComposeView: View {
     var body: some View {
         VStack(spacing: 0) {
             fields
+            if !isLoading {
+                RichTextToolbar(controller: rich)
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            }
             if isLoading {
                 ProgressView("Mail ophalen…")
                     .frame(maxWidth: .infinity, minHeight: 120, maxHeight: embedded ? 120 : .infinity)
@@ -227,9 +233,10 @@ struct ComposeView: View {
     private var editorContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             ReplyTextView(text: bodyBinding,
+                          controller: rich,
                           suggestion: bodyText.isEmpty ? activeSuggestion : nil,
                           focusOnAppear: isReply,
-                          minHeight: embedded ? 90 : 160,
+                          minHeight: ReplyTextView.twoLines,
                           onTab: acceptSuggestion,
                           onTyped: { if activeSuggestion != nil { dismissSuggestion() } })
                 .padding(.horizontal, 15)
@@ -256,6 +263,8 @@ struct ComposeView: View {
         }
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        // Klik naast of onder de tekst: cursor achteraan in het tekstvak.
+        .background(Color.clear.contentShape(Rectangle()).onTapGesture { rich.focusEnd() })
     }
 
     @ViewBuilder private var quotePreview: some View {
@@ -373,15 +382,21 @@ struct ComposeView: View {
 
     /// Vervangt het aangewezen stuk (de eerste keer dat het voorkomt) en haalt de opmerking weg.
     private func apply(_ issue: ReviewIssue) {
-        guard let range = bodyText.range(of: issue.quote) else { return }
-        bodyBinding.wrappedValue = bodyText.replacingCharacters(in: range, with: issue.replacement)
+        if !rich.replaceFirst(issue.quote, with: issue.replacement) {
+            guard let range = bodyText.range(of: issue.quote) else { return }
+            bodyBinding.wrappedValue = bodyText.replacingCharacters(in: range, with: issue.replacement)
+        }
         reviewer.dismiss(issue)
     }
 
     private func acceptSuggestion() -> Bool {
         guard let activeSuggestion else { return false }
         let current = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        bodyBinding.wrappedValue = current.isEmpty ? activeSuggestion : bodyText + "\n\n" + activeSuggestion
+        if current.isEmpty {
+            bodyBinding.wrappedValue = activeSuggestion
+        } else if !rich.append("\n\n" + activeSuggestion) {
+            bodyBinding.wrappedValue = bodyText + "\n\n" + activeSuggestion
+        }
         suggestionDismissed = true
         onSuggestionDone?()
         return true
@@ -547,7 +562,7 @@ struct ComposeView: View {
     private func detach() {
         let draft = ComposeDraft(fromAccount: fromAccount, to: toText, cc: ccText, bcc: bccText, subject: subject,
                                  body: bodyText, attachments: attachments, useSignature: useSignature,
-                                 showCc: showCc, showBcc: showBcc, original: original)
+                                 showCc: showCc, showBcc: showBcc, original: original, bodyRich: rich.rtf())
         openWindow(value: DetachedCompose(ref: ref, draftID: ComposeDrafts.store(draft)))
         if embedded {
             bodyBinding.wrappedValue = ""
@@ -565,6 +580,7 @@ struct ComposeView: View {
         bccText = draft.bcc
         subject = draft.subject
         bodyBinding.wrappedValue = draft.body
+        if let rtf = draft.bodyRich { rich.load(rtf: rtf, text: draft.body) }
         attachments = draft.attachments
         useSignature = draft.useSignature
         showCc = draft.showCc
@@ -610,6 +626,7 @@ struct ComposeView: View {
         let to = MailAddress.parse(toText).valid, cc = MailAddress.parse(ccText).valid, bcc = MailAddress.parse(bccText).valid
         let name = MailSignatures.senderName(for: fromAccount).flatMap { $0.isEmpty ? nil : $0 }
         var mail = ComposedMail(from: MailAddress(name: name, address: fromAccount), subject: subject, bodyText: bodyText)
+        mail.bodyHTML = rich.html()
         mail.to = to
         mail.cc = cc
         mail.bcc = bcc
@@ -693,6 +710,8 @@ struct ComposeDraft {
     var showCc: Bool
     var showBcc: Bool
     var original: MailContent?
+    /// De tekst met opmaak (RTF), zodat die meegaat naar het eigen venster.
+    var bodyRich: Data? = nil
 }
 
 /// Concepten die naar een eigen venster gaan (een venster krijgt alleen een id mee).

@@ -2,10 +2,11 @@ import AppKit
 import SwiftUI
 
 /// Tekstvak voor het opstellen van een mail (NSTextView zonder eigen scrollbalk): het groeit mee met de tekst, zodat
-/// de handtekening er direct onder staat en alles samen scrolt. Een lichtgrijze suggestie van Claude staat in een
-/// leeg vak; Tab neemt hem over, zelf typen laat hem vallen.
+/// de handtekening er direct onder staat en alles samen scrolt. Met opmaak (`RichTextController`). Een lichtgrijze
+/// suggestie van Claude staat in een leeg vak; Tab neemt hem over, zelf typen laat hem vallen.
 struct ReplyTextView: NSViewRepresentable {
     @Binding var text: String
+    var controller: RichTextController?
     var suggestion: String?
     var focusOnAppear = false
     var minHeight: CGFloat = 80
@@ -14,16 +15,25 @@ struct ReplyTextView: NSViewRepresentable {
     /// De gebruiker typte zelf iets (geen overname van de suggestie).
     var onTyped: () -> Void
 
-    private static let font = NSFont.systemFont(ofSize: 13)
     private static let inset = NSSize(width: 0, height: 4)
+
+    /// Twee lege regels: daaronder staat meteen de handtekening.
+    static var twoLines: CGFloat {
+        let line = NSLayoutManager().defaultLineHeight(for: RichTextController.defaultFont)
+        return ceil(line * 2 + inset.height * 2 + 6)
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSTextView {
-        let textView = NSTextView(frame: .zero)
+        let textView = RichNSTextView(frame: .zero)
+        textView.controller = controller
         textView.delegate = context.coordinator
-        textView.font = Self.font
-        textView.isRichText = false
+        textView.isRichText = true
+        textView.importsGraphics = false
+        textView.font = RichTextController.defaultFont
+        textView.textColor = .textColor
+        textView.typingAttributes = RichTextController.defaultAttributes
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.isVerticallyResizable = false
@@ -31,9 +41,11 @@ struct ReplyTextView: NSViewRepresentable {
         textView.textContainerInset = Self.inset
         textView.textContainer?.widthTracksTextView = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = true
         textView.string = text
         context.coordinator.textView = textView
         context.coordinator.updatePlaceholder()
+        controller?.attach(textView)
         if focusOnAppear {
             DispatchQueue.main.async { textView.window?.makeFirstResponder(textView) }
         }
@@ -43,10 +55,13 @@ struct ReplyTextView: NSViewRepresentable {
     func updateNSView(_ textView: NSTextView, context: Context) {
         context.coordinator.parent = self
         if textView.string != text {
+            // Van buiten gezet (suggestie, concept, leeg na versturen): standaardopmaak.
             context.coordinator.isUpdating = true
+            textView.typingAttributes = RichTextController.defaultAttributes
             textView.string = text
             textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
             context.coordinator.isUpdating = false
+            controller?.refreshState()
         }
         context.coordinator.updatePlaceholder()
     }
@@ -62,7 +77,8 @@ struct ReplyTextView: NSViewRepresentable {
             let padding = container.lineFragmentPadding * 2
             let rect = (suggestion as NSString).boundingRect(
                 with: NSSize(width: max(1, width - padding), height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: Self.font])
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: RichTextController.defaultFont])
             height = max(height, rect.height)
         }
         return CGSize(width: width, height: max(minHeight, ceil(height + Self.inset.height * 2 + 6)))
@@ -80,12 +96,25 @@ struct ReplyTextView: NSViewRepresentable {
             guard !isUpdating, let textView else { return }
             parent.text = textView.string
             parent.onTyped()
+            parent.controller?.textDidChange()
             updatePlaceholder()
         }
 
+        func textViewDidChangeSelection(_ notification: Notification) {
+            parent.controller?.refreshState()
+        }
+
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-            if selector == #selector(NSResponder.insertTab(_:)) { return parent.onTab() }
-            return false
+            switch selector {
+            case #selector(NSResponder.insertTab(_:)):
+                return parent.onTab()
+            case #selector(NSResponder.insertNewline(_:)):
+                return parent.controller?.handleNewline() ?? false
+            case #selector(NSResponder.deleteBackward(_:)):
+                return parent.controller?.handleDeleteBackward() ?? false
+            default:
+                return false
+            }
         }
 
         /// De suggestie als grijze tekst in een leeg vak.
@@ -96,7 +125,7 @@ struct ReplyTextView: NSViewRepresentable {
                 let label = placeholder ?? {
                     let field = NSTextField(wrappingLabelWithString: "")
                     field.textColor = .tertiaryLabelColor
-                    field.font = ReplyTextView.font
+                    field.font = RichTextController.defaultFont
                     field.isSelectable = false
                     field.translatesAutoresizingMaskIntoConstraints = false
                     textView.addSubview(field)
