@@ -78,14 +78,14 @@ struct TimeListView: View {
                             RunningTimerRow(entry: entry)
                                 .padding(.bottom, 6)
                         }
-                        ForEach(toWrite) { entry in
-                            TimeEntryRow(entry: entry)
+                        ForEach(Array(toWrite.enumerated()), id: \.element.id) { offset, entry in
+                            TimeEntryRow(entry: entry, index: offset + 1)
                         }
                         if !written.isEmpty {
                             writtenHeader(count: written.count)
                             if showWritten {
-                                ForEach(written) { entry in
-                                    TimeEntryRow(entry: entry)
+                                ForEach(Array(written.enumerated()), id: \.element.id) { offset, entry in
+                                    TimeEntryRow(entry: entry, index: offset + 1)
                                 }
                             }
                         }
@@ -124,11 +124,16 @@ struct TimeListView: View {
                 Image(systemName: "chevron.right")
                     .font(.werk(size: 10, weight: .semibold))
                     .rotationEffect(.degrees(showWritten ? 90 : 0))
-                Text("Al geschreven")
-                    .thingsFont(.heading)
-                Text("\(count)")
-                    .thingsFont(.metadata)
-                    .monospacedDigit()
+                if ThemeStore.shared.look == .karmijn {
+                    KarmijnLabel(text: "Al geschreven")
+                    Text("\(count)").font(.werkSerif(size: 15, italic: true))
+                } else {
+                    Text("Al geschreven")
+                        .thingsFont(.heading)
+                    Text("\(count)")
+                        .thingsFont(.metadata)
+                        .monospacedDigit()
+                }
                 Spacer()
             }
             .foregroundStyle(ThingsColor.textSecondary)
@@ -270,31 +275,54 @@ struct RunningTimerRow: View {
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
 
+    private var karmijn: Bool { ThemeStore.shared.look == .karmijn }
+
     var body: some View {
         HStack(spacing: 10) {
-            Circle()
-                .fill(ThingsColor.running)
-                .frame(width: 9, height: 9)
-                .accessibilityHidden(true)
+            Group {
+                if karmijn {
+                    KarmijnStar().fill(ThingsColor.running).frame(width: 10, height: 10)
+                } else {
+                    Circle().fill(ThingsColor.running).frame(width: 9, height: 9)
+                }
+            }
+            .accessibilityHidden(true)
             ClientLogo(name: entry.client, size: 18)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(entry.title)
-                    .thingsFont(.todoTitleOpen)
-                    .foregroundStyle(ThingsColor.textPrimary)
-                    .lineLimit(1)
-                Text(entry.client)
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .lineLimit(1)
+                if karmijn {
+                    Text(entry.title.uppercased())
+                        .font(.werk(size: 10.5, weight: .bold))
+                        .tracking(0.6)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    Text(entry.client)
+                        .font(.werk(size: 11))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(1)
+                } else {
+                    Text(entry.title)
+                        .thingsFont(.todoTitleOpen)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    Text(entry.client)
+                        .thingsFont(.metadata)
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
 
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                Text(Billing.formatHMS(entry.elapsed(at: timeline.date)))
-                    .thingsFont(.todoTitleOpen)
-                    .monospacedDigit()
-                    .foregroundStyle(ThingsColor.textPrimary)
+                let time = Billing.formatHMS(entry.elapsed(at: timeline.date))
+                if karmijn {
+                    Text(time).font(.werkNumbers(size: 20)).foregroundStyle(ThingsColor.today)
+                } else {
+                    Text(time)
+                        .thingsFont(.todoTitleOpen)
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.textPrimary)
+                }
             }
 
             SmallIconButton(symbol: "pause.fill", label: "Pauze") {
@@ -306,10 +334,15 @@ struct RunningTimerRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
-                .fill(ThingsColor.running.opacity(0.10))
-        )
+        .background {
+            // Karmijn: wat loopt staat in een rood kader, net als de lopende kaart.
+            if karmijn {
+                Rectangle().strokeBorder(ThemeParts.karmijn, lineWidth: 1)
+            } else {
+                RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
+                    .fill(ThingsColor.running.opacity(0.10))
+            }
+        }
     }
 }
 
@@ -339,12 +372,15 @@ struct SmallIconButton: View {
 
 struct TimeEntryRow: View {
     let entry: TimeEntry
+    /// Volgnummer in de lijst ("01."), alleen getoond in Karmijn.
+    var index: Int? = nil
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
     /// Opengeklapt: klant, case en uitgevoerd, elk met een kopieerknop (voor het boekhoudpakket).
     @State private var expanded = false
     /// Veld dat bewerkt wordt (dubbelklik).
     @State private var editingField: BookingField?
+    @State private var isHovering = false
 
     private var writtenBinding: Binding<TodoStatus> {
         Binding(
@@ -366,6 +402,28 @@ struct TimeEntryRow: View {
     }
 
     private var summaryRow: some View {
+        Group {
+            if ThemeStore.shared.look == .karmijn { karmijnSummary } else { plainSummary }
+        }
+        .frame(minHeight: 44)
+        .help(entry.status == .finished
+              ? entry.workDescription + (entry.correctionSeconds > 0
+                  ? "\nGemeten \(Billing.formatHM(entry.accumulated)) u, correctie −\(Int((entry.correctionSeconds / 60).rounded())) min"
+                  : "")
+              : "")
+        .contextMenu {
+            if entry.status == .finished {
+                Button(entry.isWritten ? "Markeer als niet geschreven" : "Markeer als geschreven") {
+                    TimerService.setWritten(entry, !entry.isWritten, in: context)
+                }
+            }
+            Button("Verwijderen", role: .destructive) {
+                TimerService.discard(entry, in: context)   // via discard: ⌘Z zet hem terug
+            }
+        }
+    }
+
+    private var plainSummary: some View {
         HStack(spacing: 8) {
             TodoCheckbox(status: writtenBinding, title: entry.title)
                 .disabled(entry.status != .finished)
@@ -387,62 +445,110 @@ struct TimeEntryRow: View {
                     .lineLimit(1)
             }
             .contentShape(Rectangle())
-            // Dubbelklik: openklappen en meteen de case aanpassen.
-            .onTapGesture(count: 2) {
-                guard entry.status == .finished else { return }
-                withAnimation(.easeOut(duration: 0.15)) { expanded = true }
-                editingField = .caseTitle
-            }
-            .onTapGesture {
-                guard entry.status == .finished else { return }
-                withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
-            }
+            .modifier(OpenGestures(entry: entry, expanded: $expanded, editingField: $editingField))
             Spacer(minLength: 4)
 
-            if entry.status == .finished {
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.werk(size: 10, weight: .semibold))
-                        .rotationEffect(.degrees(expanded ? 180 : 0))
-                        .foregroundStyle(ThingsColor.textTertiary)
-                        .frame(width: 18, height: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(expanded ? "Inklappen" : "Klant, case en uitgevoerd tonen om te kopiëren")
-            }
+            if entry.status == .finished { expandButton }
 
             Text(trailingTime)
                 .thingsFont(.todoTitle)
                 .monospacedDigit()
                 .foregroundStyle(ThingsColor.textSecondary)
 
-            if entry.status == .finished {
-                // Case en uitgevoerd in één keer, voor het documentatiepakket.
-                CopyButton(text: BookingDetails.documentationText(entry), symbol: "doc.on.clipboard",
-                           help: "Case en uitgevoerd kopiëren")
-            }
+            if entry.status == .finished { copyButton }
 
             controls
         }
-        .frame(minHeight: 44)
-        .help(entry.status == .finished
-              ? entry.workDescription + (entry.correctionSeconds > 0
-                  ? "\nGemeten \(Billing.formatHM(entry.accumulated)) u, correctie −\(Int((entry.correctionSeconds / 60).rounded())) min"
-                  : "")
-              : "")
-        .contextMenu {
+    }
+
+    /// Karmijn: rood volgnummer (ook het vinkje voor geschreven), titel in kapitalen, duur in schreef en een haarlijn
+    /// erboven; uitklappen en kopiëren verschijnen bij aanwijzen.
+    private var karmijnSummary: some View {
+        HStack(alignment: .top, spacing: 12) {
+            writtenIndex
+            ClientLogo(name: entry.client, size: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(entry.title.uppercased())
+                        .font(.werk(size: 10.5, weight: .bold))
+                        .tracking(0.6)
+                        .strikethrough(entry.isWritten)
+                        .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    if !entry.dictatedFields.isEmpty { DictatedMark() }
+                }
+                Text(subtitle)
+                    .font(.werk(size: 11))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
+            .modifier(OpenGestures(entry: entry, expanded: $expanded, editingField: $editingField))
+            Spacer(minLength: 4)
+
             if entry.status == .finished {
-                Button(entry.isWritten ? "Markeer als niet geschreven" : "Markeer als geschreven") {
-                    TimerService.setWritten(entry, !entry.isWritten, in: context)
+                expandButton.opacity(isHovering || expanded ? 1 : 0)
+                copyButton.opacity(isHovering ? 1 : 0)
+            }
+
+            Text(trailingTime)
+                .font(.werkSerif(size: 17))
+                .foregroundStyle(ThingsColor.textPrimary)
+
+            controls
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+        .onHover { isHovering = $0 }
+    }
+
+    /// Karmijn: het volgnummer is de knop voor "geschreven"; bij aanwijzen een leeg vakje, daarna een vinkje.
+    private var writtenIndex: some View {
+        let canMark = entry.status == .finished
+        return Button {
+            TimerService.setWritten(entry, !entry.isWritten, in: context)
+        } label: {
+            Group {
+                if entry.isWritten {
+                    Image(systemName: "checkmark").font(.werk(size: 10, weight: .bold))
+                } else if isHovering && canMark {
+                    Rectangle().strokeBorder(ThingsColor.running, lineWidth: 1).frame(width: 11, height: 11)
+                } else {
+                    Text(index.map { String(format: "%02d.", $0) } ?? "")
+                        .font(.werk(size: 11, weight: .bold))
+                        .monospacedDigit()
                 }
             }
-            Button("Verwijderen", role: .destructive) {
-                TimerService.discard(entry, in: context)   // via discard: ⌘Z zet hem terug
-            }
+            .foregroundStyle(ThingsColor.running)
+            .frame(width: 22, height: 15, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(!canMark)
+        .help(canMark ? "Geschreven in het facturatiesysteem" : "Stop eerst de timer")
+        .accessibilityLabel(entry.isWritten ? "Geschreven" : "Markeer als geschreven")
+    }
+
+    private var expandButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.werk(size: 10, weight: .semibold))
+                .rotationEffect(.degrees(expanded ? 180 : 0))
+                .foregroundStyle(ThingsColor.textTertiary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(expanded ? "Inklappen" : "Klant, case en uitgevoerd tonen om te kopiëren")
+    }
+
+    /// Case en uitgevoerd in één keer, voor het documentatiepakket.
+    private var copyButton: some View {
+        CopyButton(text: BookingDetails.documentationText(entry), symbol: "doc.on.clipboard",
+                   help: "Case en uitgevoerd kopiëren")
     }
 
     private var subtitle: String {
@@ -476,6 +582,27 @@ struct TimeEntryRow: View {
         case .running, .finished:
             EmptyView()
         }
+    }
+}
+
+/// Klik klapt een afgeronde regel open; dubbelklik klapt open en zet de case meteen in bewerkmodus.
+private struct OpenGestures: ViewModifier {
+    let entry: TimeEntry
+    @Binding var expanded: Bool
+    @Binding var editingField: BookingField?
+
+    func body(content: Content) -> some View {
+        content
+            // Eerst dubbelklik, dan enkele klik: anders wint de enkele klik altijd.
+            .onTapGesture(count: 2) {
+                guard entry.status == .finished else { return }
+                withAnimation(.easeOut(duration: 0.15)) { expanded = true }
+                editingField = .caseTitle
+            }
+            .onTapGesture {
+                guard entry.status == .finished else { return }
+                withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+            }
     }
 }
 
