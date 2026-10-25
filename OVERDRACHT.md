@@ -118,6 +118,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     afspraken vragen "alleen deze / ook volgende"; losse afspraken kunnen terug met ⌘Z. Niet in de maandagenda en
     niet voor afspraken van een hele dag. Alleen testen in een testagenda. Na te gaan: optillen en schaduw, scrollen
     bij de rand, grepen bij korte afspraken, uitnodigingen van anderen (EventKit kan weigeren), Exchange/Google-sync.
+19. **Thema's** (`Shared/Design/Theme.swift`, `Shared/Views/ThemePreferences.swift`). Voorkeuren › Thema: Standaard
+    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef en Spark. Elk onderdeel
+    heeft een rol (venster, mail, kop van mail, bord, kolom, kaart, agenda, tijdlijst, tekst, accent, …) met een kleur
+    voor licht en donker; per thema kun je elke rol zelf kiezen en terugzetten. Lettertype, cijferletter en
+    basisgrootte (11–17) gelden overal waar `Font.werk`/`thingsFont` staat. Tischsuper tekent het mailpaneel altijd
+    donker, Spark de kop van het mailpaneel. De schetsen staan in de Claude-canvas "Werkbank thema's". Nog niet
+    gebouwd: de herkenbare details per thema (oranje kolomkop, teakrand, minuutstreepjes, lcd, Michroma-cijfers,
+    tussenruimte tussen vlakken). Na te gaan: of het donkere mailpaneel in de lichte weergave goed leesbaar is,
+    lettertypes met gewichten (Avenir Next semibold), contrast van accentknoppen met witte tekst in donker.
 
 ## Open punten
 
@@ -158,6 +167,9 @@ onbekend); plan mijn dag.
 ## Valkuilen
 
 - Swift 5-modus; nieuwe UI-code is `@MainActor`.
+- `ThemeStore` is bewust niet `@MainActor`: `ThingsColor` en `Font.werk` worden ook buiten views gelezen. Het is
+  `@Observable`, dus views die een kleur lezen tekenen opnieuw bij een themawissel; AppKit-delen (opstelveld,
+  vouwanimatie) niet.
 - Een `PreferenceKey` met `reduce { value = nextValue() }` krijgt van views zonder eigen waarde `.zero` (de
   standaardwaarde) en verliest zo het echte frame. Frames meten met `reportFrame(in:)` (direct doorgeven) of met een
   woordenboek dat samenvoegt (`DayFrameKey`).
