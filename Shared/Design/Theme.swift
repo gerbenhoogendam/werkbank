@@ -124,9 +124,9 @@ struct WerkbankTheme: Identifiable, Equatable {
     var darkMail = false
     /// Alleen de kop van het mailpaneel (mailboxen) donker.
     var darkMailHeader = false
-    /// De agenda in de omgekeerde weergave: crème in donker, zwart in licht (Karmijn). De agendakleuren gelden dan
-    /// voor die omgekeerde weergave.
-    var invertedAgenda = false
+    /// De agenda altijd donker getekend (Karmijn: zwart tussen de crème panelen); de agendakleur zelf volgt wel licht
+    /// of donker.
+    var darkAgenda = false
 
     func color(_ role: ThemeRole) -> ThemeColor { colors[role] ?? Self.standaard.colors[role] ?? ThemeColor(0, 0) }
 
@@ -271,7 +271,7 @@ extension WerkbankTheme {
         .window: ThemeColor(0xF1E8D8, 0x0D0504), .mail: ThemeColor(0xF1E8D8, 0x0D0504),
         .mailHeader: ThemeColor(0xF1E8D8, 0x0D0504), .board: ThemeColor(0xF1E8D8, 0x0D0504),
         .column: ThemeColor(0xF1E8D8, 0x0D0504), .card: ThemeColor(0xF7F1E6, 0x160A08),
-        .agenda: ThemeColor(0xF1E8D8, 0x0D0504), .timeList: ThemeColor(0xF1E8D8, 0x0D0504),
+        .agenda: ThemeColor(0x0D0504, 0x1C100D), .timeList: ThemeColor(0xF1E8D8, 0x0D0504),
         .surface: ThemeColor(0xF1E8D8, 0x0D0504), .surfaceAlt: ThemeColor(0xE8E0D0, 0x1A0D0B),
         .text: ThemeColor(0x0D0504, 0xF1E8D8), .textSecondary: ThemeColor(0x5E534A, 0xB3A79A),
         .textTertiary: ThemeColor(0x6B5F55, 0x8F8378), .fieldLabel: ThemeColor(0x85051F, 0xE64A62),
@@ -280,7 +280,7 @@ extension WerkbankTheme {
         .running: ThemeColor(0x85051F, 0xE64A62), .today: ThemeColor(0x85051F, 0xC8102E),
         .deadline: ThemeColor(0x85051F, 0xE64A62), .tag: ThemeColor(0xE8DFCF, 0x241210),
         .tagText: ThemeColor(0x5E534A, 0xB3A79A), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0, darkOpacity: 0),
-    ], fontFamily: "Helvetica Neue", numberFamily: "Anton", cardRadius: 0, invertedAgenda: true)
+    ], fontFamily: "Helvetica Neue", numberFamily: "Anton", cardRadius: 0, darkAgenda: true)
 }
 
 // MARK: - Opslag en de kleuren die de app gebruikt
@@ -505,15 +505,6 @@ private struct ForcedDarkScheme: ViewModifier {
     }
 }
 
-private struct InvertedScheme: ViewModifier {
-    let isOn: Bool
-    @Environment(\.colorScheme) private var scheme
-
-    func body(content: Content) -> some View {
-        content.environment(\.colorScheme, isOn ? (scheme == .dark ? .light : .dark) : scheme)
-    }
-}
-
 private struct ForcedLightScheme: ViewModifier {
     let isOn: Bool
     @Environment(\.colorScheme) private var scheme
@@ -527,11 +518,6 @@ extension View {
     /// Dit deel altijd donker tekenen (bijvoorbeeld het mailpaneel van Tischsuper), ook in de lichte weergave.
     func darkScheme(_ isOn: Bool) -> some View {
         modifier(ForcedDarkScheme(isOn: isOn))
-    }
-
-    /// Dit deel in de omgekeerde weergave tekenen (de crème agenda van Karmijn in de donkere weergave).
-    func invertedScheme(_ isOn: Bool) -> some View {
-        modifier(InvertedScheme(isOn: isOn))
     }
 
     /// Dit deel altijd licht tekenen (een geel vlak met zwarte tekst), ook in de donkere weergave.

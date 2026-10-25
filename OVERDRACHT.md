@@ -123,8 +123,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     heeft een rol (venster, mail, kop van mail, bord, kolom, kaart, agenda, tijdlijst, tekst, accent, …) met een kleur
     voor licht en donker; per thema kun je elke rol zelf kiezen en terugzetten. Lettertype, cijferletter en
     basisgrootte (11–17) gelden overal waar `Font.werk`/`thingsFont` staat. Tischsuper tekent het mailpaneel altijd
-    donker, Spark de kop van het mailpaneel; Karmijn tekent de agenda omgekeerd (`invertedAgenda`: crème in donker,
-    zwart in licht; in Voorkeuren staan de agendakleuren daarom per weergave omgedraaid). De schetsen staan in de Claude-canvas "Werkbank thema's". De vorm per
+    donker, Spark de kop van het mailpaneel; Karmijn tekent de agenda altijd donker (`darkAgenda`: zwart in licht,
+    warm donkerbruin in donker; de achtergrond volgt de rol Agenda, tekst en lijnen de donkere weergave). De schetsen staan in de Claude-canvas "Werkbank thema's". De vorm per
     thema (`ThemeLook`, `ThemeParts.swift`, `AgendaTheme.swift`, `MailTheme.swift`, `CardSurface`, `ColumnSurface`,
     `TimeTotalFooter`, `PillTheme`): kolomkoppen en -vlakken, kaarten en "loopt", agendakop, filters, dagkoppen,
     uurliniaal, afspraken, lijn van nu, mailkop/tabs/rijen, totaal in Tijd schrijven, timerpil, losse vlakken bij

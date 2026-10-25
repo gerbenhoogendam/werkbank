@@ -248,11 +248,11 @@ private func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double {
 
 extension MainView {
     /// Kleur van de strook tussen twee panelen: in Standaard wit, in een thema die van het paneel ernaast, en bij
-    /// losse vlakken (Drukproef) de vensterkleur.
+    /// losse vlakken (Drukproef) en een afwijkende agenda (Karmijn) de vensterkleur.
     fileprivate func dividerFill(_ neighbour: Color) -> Color {
         switch ThemeStore.shared.look {
         case .standaard: ThingsColor.backgroundContent
-        case .drukproef: ThingsColor.window
+        case .drukproef, .karmijn: ThingsColor.window
         default: neighbour
         }
     }

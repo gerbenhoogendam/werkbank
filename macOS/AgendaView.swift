@@ -74,6 +74,8 @@ struct AgendaView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Karmijn: tekst en lijnen altijd voor een donker vlak; de achtergrond eronder volgt wel licht of donker.
+        .darkScheme(ThemeStore.shared.theme.darkAgenda)
         .background(ThingsColor.agendaBackground)
         .background(
             GeometryReader { geo in
@@ -84,8 +86,6 @@ struct AgendaView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             service.refreshStatus()
         }
-        // Karmijn: de agenda is het omgekeerde vlak, crème in de donkere weergave en zwart in de lichte.
-        .invertedScheme(ThemeStore.shared.theme.invertedAgenda)
     }
 
     // MARK: Dagen
