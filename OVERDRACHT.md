@@ -113,8 +113,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     loshalen van het opstelvenster.
 18. **Afspraken verslepen** (`macOS/EventDrag.swift`, `WerkbankCore/…/EventDragMath.swift`, `DayColumn`). In de week-
     en dagagenda: het blok optillen en naar een andere tijd of dag slepen (per kwartier, de duur blijft gelijk), de
-    boven- of onderrand voor begin of eind, of naar de agendafilters rechtsboven; daar klapt "Verplaatsen naar" open
-    met de schrijfbare agenda's die in Voorkeuren aan staan. Loslaten buiten de tijdlijn laat alles staan. Herhalende
+    boven- of onderrand voor begin of eind, of naar de kop (agendafilters en de rij met de dagen); daar klapt
+    "Verplaatsen naar" open met de schrijfbare agenda's die in Voorkeuren aan staan. Loslaten buiten de tijdlijn laat alles staan. Herhalende
     afspraken vragen "alleen deze / ook volgende"; losse afspraken kunnen terug met ⌘Z. Niet in de maandagenda en
     niet voor afspraken van een hele dag. Alleen testen in een testagenda. Na te gaan: optillen en schaduw, scrollen
     bij de rand, grepen bij korte afspraken, uitnodigingen van anderen (EventKit kan weigeren), Exchange/Google-sync.
@@ -158,6 +158,9 @@ onbekend); plan mijn dag.
 ## Valkuilen
 
 - Swift 5-modus; nieuwe UI-code is `@MainActor`.
+- Een `PreferenceKey` met `reduce { value = nextValue() }` krijgt van views zonder eigen waarde `.zero` (de
+  standaardwaarde) en verliest zo het echte frame. Frames meten met `reportMainFrame` (direct doorgeven) of met een
+  woordenboek dat samenvoegt (`DayFrameKey`).
 - Geen `try` of `await` rechts van `? :`; dat compileert niet.
 - Een `DropDelegate` kan tijdens één sleepactie verouderde waarden vasthouden. Gebruik `onDrop(isTargeted:)` per
   vlak of een referentiemodel. Geneste dropzones: de binnenste wint.

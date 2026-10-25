@@ -192,7 +192,6 @@ struct AgendaView: View {
             ScheduleConfirmLayer(draftFrame: draftFrame, agendaSize: agendaSize, onSchedule: schedule)
         }
         .overlay { EventDragLayer(drag: eventDrag) }
-        .onPreferenceChange(CalendarFilterFrameKey.self) { eventDrag.filterFrame = $0 }
         .onChange(of: disabledRaw, initial: true) { _, _ in eventDrag.disabledCalendarIDs = disabledIDs }
         .confirmationDialog(
             "Herhalende afspraak",
@@ -263,7 +262,7 @@ struct AgendaView: View {
 
             Spacer(minLength: 8)
 
-            // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's. Een afspraak die je hierheen
+            // Zichtbare agenda's aan/uit; dezelfde keuze staat in Voorkeuren › Agenda's. Een afspraak die je naar de kop
             // sleept kan naar een andere agenda (EventDragLayer).
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -274,11 +273,7 @@ struct AgendaView: View {
                 }
             }
             .frame(maxWidth: 460)
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: CalendarFilterFrameKey.self, value: geo.frame(in: .main))
-                }
-            )
+            .reportMainFrame { eventDrag.filterFrame = $0 }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

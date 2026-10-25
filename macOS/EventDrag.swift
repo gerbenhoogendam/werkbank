@@ -222,9 +222,13 @@ final class EventDrag {
         return { $0.id != event.calendarID && !disabled.contains($0.id) }
     }
 
+    /// De kop boven de tijdlijn (agendafilters en de rij met de dagen), en de kaart zolang die openstaat.
     private func isNearCalendars(_ point: CGPoint) -> Bool {
-        guard mode == .move, !targets.isEmpty, filterFrame.width > 1 else { return false }
-        if filterFrame.insetBy(dx: -48, dy: -22).contains(point) { return true }
+        guard mode == .move, !targets.isEmpty, filterFrame.width > 1, let geometry else { return false }
+        let viewport = geometry.scrollViewport
+        let top = filterFrame.minY - 16
+        let header = CGRect(x: viewport.minX, y: top, width: viewport.width, height: max(0, viewport.minY - top))
+        if header.contains(point) || filterFrame.insetBy(dx: -48, dy: -22).contains(point) { return true }
         return overCalendars && cardFrame.insetBy(dx: -16, dy: -16).contains(point)
     }
 
@@ -255,9 +259,19 @@ extension AgendaEvent {
 
 // MARK: - Zwevende laag
 
-struct CalendarFilterFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+extension View {
+    /// Geeft het frame in "main"-coördinaten direct door, bij het verschijnen en bij elke verandering. Niet via een
+    /// PreferenceKey met `value = nextValue()`: views zonder eigen waarde leveren daar `.zero` aan, en dat overschreef
+    /// het echte frame (zo kwam het frame van de agendafilters nooit aan).
+    func reportMainFrame(_ report: @escaping (CGRect) -> Void) -> some View {
+        background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { report(geo.frame(in: .main)) }
+                    .onChange(of: geo.frame(in: .main)) { _, frame in report(frame) }
+            }
+        )
+    }
 }
 
 private struct MoveTileFramesKey: PreferenceKey {
@@ -265,11 +279,6 @@ private struct MoveTileFramesKey: PreferenceKey {
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
         value.merge(nextValue()) { $1 }
     }
-}
-
-private struct MoveCardFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 /// Boven de agenda tijdens het slepen van een afspraak: de kaart "Verplaatsen naar" onder de agendafilters, en het
@@ -301,7 +310,6 @@ struct EventDragLayer: View {
         }
         .allowsHitTesting(false)
         .onPreferenceChange(MoveTileFramesKey.self) { drag.tileFrames = $0 }
-        .onPreferenceChange(MoveCardFrameKey.self) { drag.cardFrame = $0 }
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: drag.overCalendars)
         .animation(.spring(response: 0.22, dampingFraction: 0.7), value: drag.hoveredCalendar)
     }
@@ -331,7 +339,7 @@ struct EventDragLayer: View {
                 .fill(ThingsColor.backgroundContent)
                 .shadow(color: ThingsColor.cardShadow, radius: 18, x: 0, y: 6)
         )
-        .background(GeometryReader { g in Color.clear.preference(key: MoveCardFrameKey.self, value: g.frame(in: .main)) })
+        .reportMainFrame { drag.cardFrame = $0 }
     }
 
     private func tile(_ target: AgendaCalendar) -> some View {
