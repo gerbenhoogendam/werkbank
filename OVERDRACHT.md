@@ -135,6 +135,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     goed leesbaar is, lettertypes met gewichten (Avenir Next), contrast van accentknoppen met witte tekst in donker,
     smalle kolommen met de grotere titels (Drukproef, Karmijn), meldingen en inspreken in de pil (nog donker in elk
     thema), of de meegeleverde letters op beide platformen echt laden (anders valt het terug op de systeemletter).
+20. **Logo's in de maillijst** (`MailSenderIcon` in `MailTheme.swift`, Voorkeuren › Weergave › Mail › "Logo's bij
+    afzenders", standaard aan, in elk thema). Het logo komt via `SenderLogoService` van de website achter het domein
+    van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.
 
 ## Open punten
 

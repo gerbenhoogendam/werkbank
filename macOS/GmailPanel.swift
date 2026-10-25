@@ -473,6 +473,8 @@ private struct GmailRow: View {
     let onDragStarted: () -> Void
 
     @State private var isHovering = false
+    /// Voorkeuren › Weergave › Logo's bij afzenders.
+    @AppStorage(SettingsKey.mailLogos) private var showLogos = true
 
     var body: some View {
         header
@@ -520,15 +522,9 @@ private struct GmailRow: View {
 
     private var header: some View {
         let look = ThemeStore.shared.look
-        return HStack(alignment: .top, spacing: MailLook.avatars ? 10 : 4) {
-            if MailLook.avatars {
-                Text(MailLook.initials(message.senderDisplay))
-                    .font(.werk(size: 11, weight: .semibold))
-                    .foregroundStyle(ThingsColor.textPrimary)
-                    .frame(width: 30, height: 30)
-                    .background {
-                        if look == .rekenmachine { RoundKey() } else { Circle().fill(ThingsColor.tagBackground) }
-                    }
+        return HStack(alignment: .top, spacing: showLogos ? 10 : 4) {
+            if showLogos {
+                MailSenderIcon(name: message.senderDisplay, address: message.fromAddress ?? "")
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

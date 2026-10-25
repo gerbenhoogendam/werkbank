@@ -138,6 +138,7 @@ private struct DisplayPreferences: View {
     @AppStorage(SettingsKey.workDays) private var workDays = "1,2,3,4,5"
     @AppStorage(SettingsKey.startHour) private var startHour = 8
     @AppStorage(SettingsKey.endHour) private var endHour = 18
+    @AppStorage(SettingsKey.mailLogos) private var mailLogos = true
 
     private static let dayNames = ["ma", "di", "wo", "do", "vr", "za", "zo"]
 
@@ -168,6 +169,10 @@ private struct DisplayPreferences: View {
                 ForEach(FoldSpeed.allCases) { part in
                     FoldSpeedRow(part: part)
                 }
+            }
+
+            Section("Mail") {
+                Toggle("Logo's bij afzenders", isOn: $mailLogos)
             }
             #endif
 

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // Het mailpaneel zoals elk thema het tekent: kop, mailboxtabs en mailrijen.
@@ -172,6 +173,49 @@ struct MailboxTab: View {
     }
 }
 
+/// Vooraan een rij in de maillijst: het logo van de website achter het domein van de afzender, anders de initialen
+/// in de vorm van het thema (freemail-adressen en sites zonder bruikbaar icoon houden de initialen).
+struct MailSenderIcon: View {
+    let name: String
+    let address: String
+    var size: CGFloat = 30
+
+    @State private var logo: NSImage?
+
+    var body: some View {
+        let look = ThemeStore.shared.look
+        // Karmijn: recht, zoals de rest van dat thema; elders rond.
+        let shape = RoundedRectangle(cornerRadius: look == .karmijn ? 0 : size / 2, style: .continuous)
+        Group {
+            if let logo {
+                shape.fill(look == .karmijn ? ThemeParts.creme : Color.white)
+                    .overlay(Image(nsImage: logo).resizable().interpolation(.high).scaledToFit().padding(size * 0.14))
+                    .clipShape(shape)
+                    .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 1))
+            } else {
+                Text(MailLook.initials(name))
+                    .font(.werk(size: 11, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .frame(width: size, height: size)
+                    .background {
+                        switch look {
+                        case .rekenmachine: RoundKey()
+                        case .karmijn: shape.strokeBorder(ThingsColor.separator, lineWidth: 1)
+                        default: shape.fill(ThingsColor.tagBackground)
+                        }
+                    }
+            }
+        }
+        .frame(width: size, height: size)
+        .task(id: address) {
+            logo = nil
+            guard !address.isEmpty, let data = await SenderLogoService.shared.logo(forAddress: address) else { return }
+            logo = NSImage(data: data)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 enum MailLook {
     /// Rijen als losse kaartjes (gekozen rij als witte kaart) in plaats van rijen met haarlijnen.
     static var cardRows: Bool {
@@ -180,9 +224,6 @@ enum MailLook {
         default: false
         }
     }
-
-    /// Initialen van de afzender in een rondje.
-    static var avatars: Bool { cardRows }
 
     static var unreadDot: Color {
         switch ThemeStore.shared.look {

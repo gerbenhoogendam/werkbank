@@ -22,6 +22,8 @@ enum SettingsKey {
     static let homeAddress      = "travelHomeAddress"
     /// Dekking van de kleur van een afspraak in de agenda (0,1 … 1).
     static let eventOpacity     = "agendaEventOpacity"
+    /// Logo van de website van de afzender (of de initialen) vooraan in de maillijst.
+    static let mailLogos        = "mailSenderLogos"
 }
 
 enum AppSettings {
