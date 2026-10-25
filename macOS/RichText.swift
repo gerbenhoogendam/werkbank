@@ -31,11 +31,11 @@ final class RichTextController {
     nonisolated static let indentStep: CGFloat = 30
     nonisolated static let markerWidth: CGFloat = 20
 
-    static var defaultFont: NSFont {
+    nonisolated static var defaultFont: NSFont {
         NSFont(name: defaultFamily, size: defaultSize) ?? .systemFont(ofSize: defaultSize)
     }
 
-    static var defaultAttributes: [NSAttributedString.Key: Any] {
+    nonisolated static var defaultAttributes: [NSAttributedString.Key: Any] {
         [.font: defaultFont, .foregroundColor: NSColor.textColor]
     }
 
