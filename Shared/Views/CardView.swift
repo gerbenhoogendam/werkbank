@@ -524,87 +524,90 @@ private struct RunningStrip: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            let elapsed = entry.elapsed(at: context.date)
-            let time = Self.format(elapsed)
-            switch ThemeStore.shared.look {
-            case .drukproef:
-                // De rode geluidsgolf van de poster naast de tijd.
-                HStack(alignment: .center, spacing: 10) {
-                    Text(time)
-                        .font(.werkNumbers(size: 28))
-                        .tracking(-0.8)
-                        .foregroundStyle(ThingsColor.today)
-                    Waveform(count: 22, height: 22, phase: Int(elapsed) % 24)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .clipped()
-                }
-            case .rekenmachine:
-                LCDPanel(radius: 8) {
-                    HStack {
-                        Text("LOOPT").font(.werk(size: 9)).tracking(0.8).foregroundStyle(ThemeParts.lcdLabel)
-                        Spacer()
-                        LCDDigits(text: time, size: 13)
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                }
-            case .tischsuper:
-                HStack(spacing: 8) {
-                    Circle().fill(ThingsColor.running).frame(width: 7, height: 7)
-                    Text("Loopt:").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textPrimary)
-                    Spacer()
-                    Text(time).font(.werk(size: 15, weight: .ultraLight)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.tagBackground))
-            case .sneeuwwitje:
-                // Hoe ver het lopende uur is, op een afstemschaal met het houten schuifje.
-                HStack(spacing: 8) {
-                    Text("Loopt").font(.werk(size: 10.5, weight: .semibold)).foregroundStyle(ThingsColor.fieldLabel)
-                    TuningBar(fraction: elapsed.truncatingRemainder(dividingBy: 3600) / 3600, sections: 2, height: 12)
-                    Text(time).font(.werk(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
-                }
-            case .spark:
-                HStack(spacing: 6) {
-                    Circle().fill(ThingsColor.running).frame(width: 7, height: 7)
-                    Text(time).font(.werk(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(ThingsColor.accent)
-                }
-            case .principes:
-                HStack(spacing: 10) {
-                    ToggleKnob(height: 22)
-                    Text(time).font(.werk(size: 15, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
-                    Spacer()
-                }
-            case .karmijn:
-                HStack(alignment: .firstTextBaseline) {
-                    KarmijnLabel(text: "Loopt", color: ThingsColor.running, size: 9.5)
-                    Spacer()
-                    Text(time).font(.werkNumbers(size: 24)).foregroundStyle(ThingsColor.textPrimary)
-                }
-                .padding(.top, 7)
-                .overlay(alignment: .top) { Rectangle().fill(ThemeParts.karmijn).frame(height: 1) }
-            case .wandklok:
-                // De middenas van de klok, en de seconden in goud zoals de gele wijzer.
-                HStack(spacing: 7) {
-                    Circle().fill(ThingsColor.running).frame(width: 8, height: 8)
-                    Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
-                    Spacer()
-                    ThemeParts.secondsTinted(Self.formatHMS(elapsed))
-                        .font(.werk(size: 15, weight: .bold))
-                        .kerning(-0.3)
-                        .monospacedDigit()
-                        .foregroundStyle(ThingsColor.textPrimary)
-                }
-            case .standaard:
-                HStack {
-                    Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
-                    Spacer()
-                    Text(time).font(.werk(size: 11.5, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
-                }
-            }
+            strip(elapsed: entry.elapsed(at: context.date))
         }
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func strip(elapsed: TimeInterval) -> some View {
+        let time = Self.format(elapsed)
+        switch ThemeStore.shared.look {
+        case .drukproef:
+            // De rode geluidsgolf van de poster naast de tijd.
+            HStack(alignment: .center, spacing: 10) {
+                Text(time)
+                    .font(.werkNumbers(size: 28))
+                    .tracking(-0.8)
+                    .foregroundStyle(ThingsColor.today)
+                Waveform(count: 22, height: 22, phase: Int(elapsed) % 24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .clipped()
+            }
+        case .rekenmachine:
+            LCDPanel(radius: 8) {
+                HStack {
+                    Text("LOOPT").font(.werk(size: 9)).tracking(0.8).foregroundStyle(ThemeParts.lcdLabel)
+                    Spacer()
+                    LCDDigits(text: time, size: 13)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+            }
+        case .tischsuper:
+            HStack(spacing: 8) {
+                Circle().fill(ThingsColor.running).frame(width: 7, height: 7)
+                Text("Loopt:").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textPrimary)
+                Spacer()
+                Text(time).font(.werk(size: 15, weight: .ultraLight)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.tagBackground))
+        case .sneeuwwitje:
+            // Hoe ver het lopende uur is, op een afstemschaal met het houten schuifje.
+            HStack(spacing: 8) {
+                Text("Loopt").font(.werk(size: 10.5, weight: .semibold)).foregroundStyle(Color.fieldLabel)
+                TuningBar(fraction: elapsed.truncatingRemainder(dividingBy: 3600) / 3600, sections: 2, height: 12)
+                Text(time).font(.werk(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+            }
+        case .spark:
+            HStack(spacing: 6) {
+                Circle().fill(ThingsColor.running).frame(width: 7, height: 7)
+                Text(time).font(.werk(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(ThingsColor.accent)
+            }
+        case .principes:
+            HStack(spacing: 10) {
+                ToggleKnob(height: 22)
+                Text(time).font(.werk(size: 15, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+                Spacer()
+            }
+        case .karmijn:
+            HStack(alignment: .firstTextBaseline) {
+                KarmijnLabel(text: "Loopt", color: ThingsColor.running, size: 9.5)
+                Spacer()
+                Text(time).font(.werkNumbers(size: 24)).foregroundStyle(ThingsColor.textPrimary)
+            }
+            .padding(.top, 7)
+            .overlay(alignment: .top) { Rectangle().fill(ThemeParts.karmijn).frame(height: 1) }
+        case .wandklok:
+            // De middenas van de klok, en de seconden in goud zoals de gele wijzer.
+            HStack(spacing: 7) {
+                Circle().fill(ThingsColor.running).frame(width: 8, height: 8)
+                Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
+                Spacer()
+                ThemeParts.secondsTinted(Self.formatHMS(elapsed))
+                    .font(.werk(size: 15, weight: .bold))
+                    .kerning(-0.3)
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textPrimary)
+            }
+        case .standaard:
+            HStack {
+                Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
+                Spacer()
+                Text(time).font(.werk(size: 11.5, weight: .medium)).monospacedDigit().foregroundStyle(ThingsColor.textPrimary)
+            }
+        }
     }
 
     static func format(_ seconds: TimeInterval) -> String {
