@@ -36,7 +36,7 @@ final class DuoWindowFold {
         guard windows[key] == nil else { return }
         windows[key] = isMain
         window.animationBehavior = .none
-        if isMain { Self.allowFullScreen(window) }
+        if isMain { FullScreenSupport.shared.adopt(window) }
         observers[key] = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
                                                                 queue: .main) { note in
             MainActor.assumeIsolated {
@@ -56,15 +56,6 @@ final class DuoWindowFold {
             }
         }
         unfold(window, settle: reused ? .milliseconds(60) : .milliseconds(300))
-    }
-
-    /// Het hoofdvenster mag naar volledig scherm (groene knop, ⌃⌘F, fn‑F). Een `Window`-scène van SwiftUI krijgt dat
-    /// niet altijd vanzelf mee; zonder deze vlag deed de groene knop niets.
-    private static func allowFullScreen(_ window: NSWindow) {
-        window.styleMask.insert(.resizable)
-        window.collectionBehavior.remove([.fullScreenNone, .fullScreenAuxiliary])
-        window.collectionBehavior.insert(.fullScreenPrimary)
-        if window.level == .floating { window.level = .normal }
     }
 
     /// Vlak voordat macOS een gesloten venster weer toont (Dock, menubalk): alvast achter de bureaubladachtergrond,

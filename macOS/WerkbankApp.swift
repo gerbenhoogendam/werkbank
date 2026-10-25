@@ -3,6 +3,11 @@ import KeyboardShortcuts
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Volledig scherm staat als eigen item in het menu Venster (⌃⌘F); niet nog eens automatisch van macOS.
+        UserDefaults.standard.set(false, forKey: "NSFullScreenMenuItemEverywhere")
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppearanceSetting.applyStored()
         ScrollBarHider.start()
@@ -55,6 +60,12 @@ struct WerkbankApp: App {
                 .frame(minWidth: 1100, minHeight: 720)
         }
         .defaultSize(width: 1440, height: 900)
+        .commands {
+            CommandGroup(after: .windowSize) {
+                Button("Volledig scherm") { FullScreenSupport.shared.toggle() }
+                    .keyboardShortcut("f", modifiers: [.control, .command])
+            }
+        }
 
         MenuBarExtra {
             MenuBarPanel()
