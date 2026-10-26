@@ -155,6 +155,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     `SupportEntryView` ingevuld. Model: hetzelfde als op de Mac als het toestel het aankan (A16+), anders small/base
     (`PhoneDictation.variant`). Het model laadt bij gebruik en gaat bij de achtergrond uit het geheugen. Gedeeld met de
     Mac: `Shared/Services/Speech.swift` (`WhisperModel`, `SpeechRecorder`). Nieuwe kaart: plus in de kolomkop.
+22. **Bewegende GIF's één keer** (`WerkbankCore/…/GIFLoop.swift`, `macOS/MailImageLoader.swift`). In de weergave
+    van mails (ook de eigen handtekening) verdwijnt de herhaalinstructie (NETSCAPE2.0) uit elke GIF; WebKit speelt hem
+    dan één keer en blijft op het laatste beeld staan. Ingesloten GIF's (data-URL's) worden in `MailWebView.document`
+    aangepast; afbeeldingen van het web lopen via het schema `werkbank-img:` en `URLSession`. Niet aangepast: GIF's in
+    `srcset` of als CSS-achtergrond.
 
 ## Open punten
 

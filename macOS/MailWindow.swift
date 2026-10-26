@@ -686,6 +686,7 @@ struct AutoHeightMailWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> PassthroughWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.setURLSchemeHandler(MailImageLoader(), forURLScheme: MailImageLoader.scheme)
         let view = PassthroughWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         view.postsFrameChangedNotifications = true
@@ -766,7 +767,8 @@ final class PassthroughWebView: WKWebView {
 // MARK: - Weergave van de HTML
 
 /// WKWebView zonder JavaScript en met een beveiligingsregel die alles van het internet blokkeert (tot je "Laden" kiest):
-/// geen tracking-pixels, geen scripts. Links openen in de browser.
+/// geen tracking-pixels, geen scripts. Links openen in de browser. Bewegende GIF's spelen één keer af (`GIFLoop`; die
+/// van het web via `MailImageLoader`).
 struct MailWebView: NSViewRepresentable {
     let html: String
     let allowRemote: Bool
@@ -776,6 +778,7 @@ struct MailWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.setURLSchemeHandler(MailImageLoader(), forURLScheme: MailImageLoader.scheme)
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         return view
@@ -789,7 +792,8 @@ struct MailWebView: NSViewRepresentable {
     }
 
     static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
-        let images = allowRemote ? "img-src data: https: http:" : "img-src data:"
+        let images = allowRemote ? "img-src data: https: http: \(MailImageLoader.scheme):" : "img-src data:"
+        let body = GIFLoop.playOnce(inHTML: allowRemote ? MailImageLoader.route(inner) : inner)
         return """
         <!doctype html><html><head><meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; \(images); style-src 'unsafe-inline'; font-src data:">
@@ -803,7 +807,7 @@ struct MailWebView: NSViewRepresentable {
         blockquote { margin: 8px 0 8px 4px; padding-left: 12px; border-left: 3px solid #d0d0d5; color: #55555a; }
         table { max-width: 100%; }
         \(fitsContent ? "html, body { overflow: hidden; }" : "")
-        </style></head><body>\(inner)</body></html>
+        </style></head><body>\(body)</body></html>
         """
     }
 
