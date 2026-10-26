@@ -512,7 +512,8 @@ struct AgendaView: View {
     }
 
     private func dayHeaderRow(_ days: [Date]) -> some View {
-        HStack(spacing: 0) {
+        // Tischsuper: "UUR" onderaan de rij (geen oneindige hoogte, anders neemt de rij de helft van de agenda in).
+        HStack(alignment: ThemeStore.shared.look == .tischsuper ? .bottom : .center, spacing: 0) {
             if ThemeStore.shared.look == .tischsuper {
                 // Zoals MW en kHz boven de schaal van de platenspeler.
                 Text("UUR")
@@ -521,7 +522,7 @@ struct AgendaView: View {
                     .foregroundStyle(ThingsColor.textSecondary)
                     .frame(width: gutterWidth - 10, alignment: .trailing)
                     .frame(width: gutterWidth, alignment: .leading)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 6)
             } else {
                 Color.clear.frame(width: gutterWidth, height: 1)
             }
