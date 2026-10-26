@@ -7,6 +7,8 @@ enum PanelKind: Hashable, Identifiable {
     case claude
     case event(AgendaEvent)
     case compose(ComposeRef)
+    /// Afzender van een mail in Contacten zetten (`ContactCaptureView`).
+    case contact(MailRef)
 
     var isEvent: Bool {
         if case .event = self { return true }
@@ -17,7 +19,7 @@ enum PanelKind: Hashable, Identifiable {
     var foldsLikeDuo: Bool {
         switch self {
         case .mail, .compose: true
-        case .claude, .event: false
+        case .claude, .event, .contact: false
         }
     }
 
@@ -27,6 +29,7 @@ enum PanelKind: Hashable, Identifiable {
         case .event(let event): "event-\(event.id)"
         case .mail(let ref): "mail-\(ref.messageID)"
         case .claude: "claude"
+        case .contact(let ref): "contact-\(ref.messageID)"
         }
     }
 }
@@ -181,6 +184,8 @@ private struct PanelChrome: View {
                     }
             case .event(let event):
                 EventDetailView(target: .existing(event)) { PanelStore.shared.close(panel) }
+            case .contact(let ref):
+                ContactCaptureView(ref: ref) { PanelStore.shared.close(panel) }
             }
         }
         .background(PanelProbe(panelID: panel.id))

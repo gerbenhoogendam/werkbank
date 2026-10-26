@@ -27,8 +27,40 @@ struct ClaudeSpark: View {
     }
 }
 
-/// Ronde sleepdoel onderaan de maillijst: een mail erop loslaten start de analyse.
+/// Rond sleepdoel onderaan de maillijst: een mail erop loslaten start de analyse.
 struct ClaudeDropTarget: View {
+    var body: some View {
+        MailDropTarget(label: "Mail analyseren met Claude", accent: Color(red: 0.85, green: 0.47, blue: 0.34)) { ref in
+            var ref = ref
+            ref.analyze = true
+            PanelStore.shared.open(.mail(ref))
+        } icon: {
+            ClaudeSpark().padding(15)
+        }
+        .help("Laat een mail hier los om hem door Claude te laten analyseren")
+    }
+}
+
+/// Rond sleepdoel naast dat van Claude: de afzender met de gegevens uit de handtekening in Contacten zetten.
+struct ContactDropTarget: View {
+    var body: some View {
+        MailDropTarget(label: "Afzender in Contacten zetten", accent: ThingsColor.accent) { ref in
+            PanelStore.shared.open(.contact(ref))
+        } icon: {
+            Image(systemName: "person.crop.circle.badge.plus")
+                .font(.werk(size: 26))
+                .foregroundStyle(ThingsColor.accent)
+        }
+        .help("Laat een mail hier los om de afzender in Contacten te zetten")
+    }
+}
+
+/// Een rond sleepdoel voor een Gmail-mail.
+struct MailDropTarget<Icon: View>: View {
+    let label: String
+    let accent: Color
+    let action: (MailRef) -> Void
+    @ViewBuilder let icon: () -> Icon
     @State private var isTargeted = false
 
     var body: some View {
@@ -37,25 +69,22 @@ struct ClaudeDropTarget: View {
                 .fill(ThingsColor.backgroundContent)
                 .shadow(color: ThingsColor.cardShadow, radius: isTargeted ? 14 : 8, x: 0, y: 3)
             Circle()
-                .strokeBorder(isTargeted ? Color(red: 0.85, green: 0.47, blue: 0.34) : ThingsColor.separator,
+                .strokeBorder(isTargeted ? accent : ThingsColor.separator,
                               style: StrokeStyle(lineWidth: isTargeted ? 3 : 1.5, dash: isTargeted ? [] : [5, 4]))
-            ClaudeSpark()
-                .padding(15)
+            icon()
         }
         .frame(width: 64, height: 64)
         .scaleEffect(isTargeted ? 1.18 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isTargeted)
-        .help("Laat een mail hier los om hem door Claude te laten analyseren")
-        .accessibilityLabel("Mail analyseren met Claude")
+        .accessibilityLabel(label)
         .onDrop(of: [.gmailMessage], isTargeted: $isTargeted) { providers in
             for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) {
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
                     guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
                     Task { @MainActor in
-                        let ref = MailRef(messageID: payload.messageID, threadID: payload.threadID,
-                                          subject: payload.subject ?? "",
-                                          account: GmailSession.shared.account(for: payload.messageID), analyze: true)
-                        PanelStore.shared.open(.mail(ref))
+                        action(MailRef(messageID: payload.messageID, threadID: payload.threadID,
+                                       subject: payload.subject ?? "",
+                                       account: GmailSession.shared.account(for: payload.messageID)))
                     }
                 }
                 return true

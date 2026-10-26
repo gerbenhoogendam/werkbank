@@ -160,6 +160,12 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     dan één keer en blijft op het laatste beeld staan. Ingesloten GIF's (data-URL's) worden in `MailWebView.document`
     aangepast; afbeeldingen van het web lopen via het schema `werkbank-img:` en `URLSession`. Niet aangepast: GIF's in
     `srcset` of als CSS-achtergrond.
+23. **Afzender naar Contacten** (`macOS/ContactCapture.swift`, `WerkbankCore/…/ContactCard.swift`). Naast de
+    Claude-cirkel onder de maillijst staat tijdens het slepen een tweede (`ContactDropTarget`). Loslaten opent het
+    paneel `.contact`: naam en adres uit het van-veld, de rest haalt Claude (gekozen model, lage inspanning, vast
+    JSON-formaat) uit de eigen tekst van de mail zonder citaat; velden met een vonkje komen uit de handtekening.
+    Bewaren maakt een contact, of vult een bestaand contact met hetzelfde e-mailadres aan (alleen lege velden en nieuwe
+    nummers, website en adres). Recht `personal-information.addressbook` en `NSContactsUsageDescription`.
 
 ## Open punten
 

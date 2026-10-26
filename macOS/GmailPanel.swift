@@ -69,9 +69,12 @@ struct GmailPanel: View {
         .onChange(of: dragState.isDragging) { _, dragging in if !dragging { moveZoneOpen = false } }
         .overlay(alignment: .bottom) {
             if dragState.isDragging {
-                ClaudeDropTarget()
-                    .padding(.bottom, 64)
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                HStack(spacing: 28) {
+                    ClaudeDropTarget()
+                    ContactDropTarget()
+                }
+                .padding(.bottom, 64)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: dragState.isDragging)

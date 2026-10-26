@@ -80,6 +80,7 @@ targets:
         NSCalendarsUsageDescription: Werkbank toont je agenda naast het board en plant to-do's in als afspraak.
         GoogleClientID: $(GOOGLE_CLIENT_ID)
         NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt (F17) om naar een tijdregel, op deze Mac.
+        NSContactsUsageDescription: Werkbank zet de afzender van een mail, met de gegevens uit de handtekening, in Contacten.
         # De map Werkbank in iCloud Drive (voorkeuren voor andere Macs, Claude-geheugen, klantenlijst).
         NSUbiquitousContainers:
           iCloud.$(PRODUCT_BUNDLE_IDENTIFIER):
@@ -100,6 +101,8 @@ targets:
         com.apple.security.network.client: true
         # Inspreken (F17).
         com.apple.security.device.audio-input: true
+        # Afzender van een mail in Contacten zetten.
+        com.apple.security.personal-information.addressbook: true
         com.apple.security.files.user-selected.read-write: true
         # Het aangewezen klantenbestand na herstarten weer kunnen lezen.
         com.apple.security.files.bookmarks.app-scope: true
