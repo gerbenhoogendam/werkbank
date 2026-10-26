@@ -44,7 +44,8 @@ final class GIFLoopTests: XCTestCase {
     }
 
     #if canImport(ImageIO)
-    /// ImageIO (waar WebKit op de Mac GIF's mee leest) ziet daarna geen herhaling meer en nog steeds twee beelden.
+    /// ImageIO (waar WebKit op de Mac GIF's mee leest): eerst 0 (eindeloos), daarna 1 (één keer afspelen), nog
+    /// steeds twee beelden.
     func testImageIOSeesNoLoopCount() throws {
         func properties(_ data: Data) throws -> (frames: Int, loop: Any?) {
             let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
@@ -57,7 +58,7 @@ final class GIFLoopTests: XCTestCase {
         XCTAssertEqual(before.frames, 2)
         XCTAssertEqual(before.loop as? Int, 0)
         XCTAssertEqual(after.frames, 2)
-        XCTAssertNil(after.loop)
+        XCTAssertEqual(after.loop as? Int, 1)
     }
     #endif
 }
