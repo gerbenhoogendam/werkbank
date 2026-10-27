@@ -139,13 +139,19 @@ final class PhoneDictation {
         }
         do {
             try recorder.start { value in
-                Task { @MainActor in PhoneDictation.shared.level = value }
+                Task { @MainActor in PhoneDictation.shared.follow(level: value) }
             }
             isRecording = true
             return nil
         } catch {
             return "Opnemen mislukt: \(error.localizedDescription)"
         }
+    }
+
+    /// Het niveau voor de golfvorm: snel omhoog, rustig omlaag, zodat hij niet schokt tussen twee stukjes opname.
+    private func follow(level value: Double) {
+        guard isRecording else { return }
+        level += (value - level) * (value > level ? 0.6 : 0.2)
     }
 
     /// Wat er voor dit veld is ingesproken; de opname loopt door voor het volgende.

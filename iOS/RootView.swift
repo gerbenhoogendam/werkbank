@@ -46,7 +46,7 @@ struct RootView: View {
         .scrollIndicators(.never)
         .sheet(item: $state.timeEntry) { start in
             TimeEntrySheet(start: start) { appState.timeEntry = nil }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
         }
         .sheet(isPresented: $showArchive) {
             NavigationStack {

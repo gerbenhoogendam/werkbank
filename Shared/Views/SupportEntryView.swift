@@ -45,9 +45,10 @@ struct SupportEntryView: View {
             VStack(alignment: .leading, spacing: 4) {
                 label("Case")
                 TextField("", text: $caseTitle)
-                    .textFieldStyle(.roundedBorder)
+                    .entryField()
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6).strokeBorder(caseError ? ThingsColor.error : .clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: EntryField.radius, style: .continuous)
+                            .strokeBorder(caseError ? ThingsColor.error : .clear, lineWidth: 1.5)
                     )
                 if caseError {
                     Text("Vul een case in.")
@@ -59,10 +60,11 @@ struct SupportEntryView: View {
             VStack(alignment: .leading, spacing: 4) {
                 label("Uitgevoerd")
                 TextField("", text: $performed, axis: .vertical)
-                    .lineLimit(2...6)
-                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(EntryField.performedLines)
+                    .entryField()
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6).strokeBorder(performedError ? ThingsColor.error : .clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: EntryField.radius, style: .continuous)
+                            .strokeBorder(performedError ? ThingsColor.error : .clear, lineWidth: 1.5)
                     )
                 if performedError {
                     Text("Vul in wat er is uitgevoerd (minimaal 3 tekens).")
@@ -211,6 +213,32 @@ extension SupportEntryView {
         if !dictation.caseTitle.isEmpty, caseTitle == trimmed(dictation.caseTitle) { fields.insert(.caseTitle) }
         if !dictation.performed.isEmpty, performed == trimmed(dictation.performed) { fields.insert(.performed) }
         return spokenFields.map { fields.intersection($0) } ?? fields
+    }
+}
+
+/// Invoervelden van de snelle invoer: op de Mac het gewone kader, op iOS ruim en groot (duim, één hand).
+enum EntryField {
+    #if os(iOS)
+    static let radius: CGFloat = 12
+    static let performedLines = 3...8
+    #else
+    static let radius: CGFloat = 6
+    static let performedLines = 2...6
+    #endif
+}
+
+extension View {
+    func entryField() -> some View {
+        #if os(iOS)
+        self.textFieldStyle(.plain)
+            .font(.werk(size: 17))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(RoundedRectangle(cornerRadius: EntryField.radius, style: .continuous)
+                .fill(ThingsColor.backgroundSidebar))
+        #else
+        self.textFieldStyle(.roundedBorder)
+        #endif
     }
 }
 

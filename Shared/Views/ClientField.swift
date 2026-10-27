@@ -67,7 +67,7 @@ struct ClientField: View {
 
     private func textField(_ matches: [ClientRecord]) -> some View {
         TextField("", text: $text)
-            .textFieldStyle(.roundedBorder)
+            .entryField()
             .focused($focused)
             .onKeyPress(.downArrow) {
                 guard !matches.isEmpty else { return .ignored }
@@ -115,10 +115,17 @@ struct ClientField: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.werk(size: 13))
             .lineLimit(1)
+            // iOS: groter, om met de duim te kiezen.
+            #if os(iOS)
+            .font(.werk(size: 16))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            #else
+            .font(.werk(size: 13))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
+            #endif
             .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(isOn ? ThingsColor.accent : Color.clear))
             .contentShape(Rectangle())
         }

@@ -120,13 +120,13 @@ struct TimeEntrySheet: View {
 
     private var voiceSteps: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                row(.client)
-                row(.caseTitle)
-                row(.performed)
+            VStack(spacing: 12) {
+                fieldCard(.client)
+                fieldCard(.caseTitle)
+                fieldCard(.performed)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
 
             if let message = error ?? failure {
                 Text(message)
@@ -139,15 +139,11 @@ struct TimeEntrySheet: View {
 
             Spacer(minLength: 16)
 
-            Group {
-                if waiting {
-                    download
-                } else {
-                    LevelBars(level: dictation.isRecording ? dictation.level : 0)
-                }
+            if waiting {
+                download
+                    .frame(height: 44)
+                    .padding(.bottom, 16)
             }
-            .frame(height: 44)
-            .padding(.bottom, 16)
 
             HStack(spacing: 12) {
                 Button(action: typeInstead) {
@@ -208,40 +204,56 @@ struct TimeEntrySheet: View {
         return nil
     }
 
-    private func row(_ field: Step) -> some View {
+    /// Een veld als ruim vlak. Waarin je nu inspreekt: de golfvorm in het veld en een gloeiende rand eromheen.
+    private func fieldCard(_ field: Step) -> some View {
         let active = field == step
+        let listening = active && dictation.isRecording
         let value = values[field] ?? ""
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(field.title)
-                .font(.werk(size: 12, weight: .semibold))
-                .foregroundStyle(active ? Color.fieldLabel : ThingsColor.textSecondary)
-                .frame(width: 84, alignment: .leading)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if pending.contains(field) {
-                    ProgressView().controlSize(.small)
-                } else if active && dictation.isRecording {
-                    Circle()
-                        .fill(ThingsColor.running)
-                        .frame(width: 8, height: 8)
-                        .accessibilityLabel("Luistert")
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let bodyHeight: CGFloat = field == .performed ? 76 : 32
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(field.title)
+                    .font(.werk(size: 13, weight: .semibold))
+                    .foregroundStyle(active ? Color.fieldLabel : ThingsColor.textSecondary)
+                if !value.isEmpty, let dictated = field.dictated, spoken.contains(dictated) { DictatedMark() }
+                Spacer(minLength: 0)
+            }
+            Group {
+                if listening {
+                    VoiceWave(level: dictation.level)
+                        .frame(height: max(bodyHeight, 48))
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                } else if pending.contains(field) {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    if field == .client, !value.isEmpty { ClientLogo(name: value, size: 16) }
-                    Text(value)
-                        .font(.werk(size: 16))
-                        .foregroundStyle(ThingsColor.textPrimary)
-                        .lineLimit(field == .performed ? 4 : 2)
-                    if !value.isEmpty, let dictated = field.dictated, spoken.contains(dictated) { DictatedMark() }
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if field == .client, !value.isEmpty { ClientLogo(name: value, size: 20) }
+                        Text(value)
+                            .font(.werk(size: 20, weight: .medium))
+                            .foregroundStyle(ThingsColor.textPrimary)
+                            .lineLimit(field == .performed ? 6 : 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: bodyHeight, alignment: .topLeading)
         }
-        .padding(.vertical, 13)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(active ? ThingsColor.accent : ThingsColor.separator)
-                .frame(height: active ? 2 : 1)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(shape.fill(ThingsColor.backgroundSidebar))
+        .overlay {
+            if listening {
+                VoiceGlow(level: dictation.level, shape: shape)
+                    .transition(.opacity)
+            } else {
+                shape.strokeBorder(active ? ThingsColor.accent.opacity(0.6) : ThingsColor.separator,
+                                   lineWidth: active ? 1.5 : 1)
+            }
         }
-        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.3), value: listening)
+        .contentShape(shape)
         // Op een veld tikken: zelf typen.
         .onTapGesture(perform: typeInstead)
     }
@@ -346,23 +358,5 @@ struct TimeEntrySheet: View {
             return
         }
         if let dictated = field.dictated { spoken.insert(dictated) }
-    }
-}
-
-/// Geluidsniveau tijdens het inspreken: balkjes, in het midden het hoogst.
-private struct LevelBars: View {
-    let level: Double
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 4) {
-            ForEach(0..<15, id: \.self) { index in
-                let shape = 1 - abs(Double(index) - 7) / 8
-                Capsule()
-                    .fill(ThingsColor.accent)
-                    .frame(width: 4, height: max(4, 44 * (0.08 + 0.92 * level * shape)))
-            }
-        }
-        .animation(.easeOut(duration: 0.12), value: level)
-        .accessibilityHidden(true)
     }
 }
