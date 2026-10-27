@@ -248,6 +248,47 @@ enum ThingsMotion {
     static func expandTransition(reduceMotion: Bool) -> AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
     }
+
+    // Waarden uit de animatieskills (.claude/skills/animate): een sterke ease-out, UI onder de 300 ms, een Apple-veer
+    // voor wat leeft.
+
+    /// Binnenkomen en weggaan: cubic-bezier(0.23, 1, 0.32, 1), 250 ms.
+    static let enter: Animation = .timingCurve(0.23, 1, 0.32, 1, duration: 0.25)
+    /// Tekst die verschijnt waar eerst iets anders stond: dezelfde curve, 200 ms.
+    static let reveal: Animation = .timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
+    /// Een knop indrukken: dezelfde curve, 160 ms.
+    static let press: Animation = .timingCurve(0.23, 1, 0.32, 1, duration: 0.16)
+    /// Waarden die leven en elk moment kunnen omdraaien (het stemniveau): veer van 0,5 s, bounce 0,2.
+    static let alive = Spring(duration: 0.5, bounce: 0.2)
+
+    /// Tekst die verschijnt: uit een lichte waas, iets kleiner en doorzichtig (nooit vanuit niets). Verminderde
+    /// beweging: alleen doorzichtigheid.
+    static func materialize(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .modifier(active: Materialize(amount: 1), identity: Materialize(amount: 0))
+    }
+}
+
+private struct Materialize: ViewModifier {
+    let amount: Double
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(1 - amount)
+            .scaleEffect(1 - 0.03 * amount, anchor: .leading)
+            .blur(radius: 3 * amount)
+    }
+}
+
+/// Knop die meegeeft als je hem indrukt: naar 0,97 in 160 ms. Verminderde beweging: even iets doorzichtiger.
+struct PressScaleButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.8 : 1)
+            .animation(ThingsMotion.press, value: configuration.isPressed)
+    }
 }
 
 // MARK: - Kaartstijl (geopende to-do, "wit vel papier")

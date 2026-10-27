@@ -148,10 +148,11 @@ final class PhoneDictation {
         }
     }
 
-    /// Het niveau voor de golfvorm: snel omhoog, rustig omlaag, zodat hij niet schokt tussen twee stukjes opname.
+    /// Het ruwe niveau per stukje opname (± 12 keer per seconde); de veer in `VoiceMotion` maakt er een vloeiende
+    /// beweging van.
     private func follow(level value: Double) {
         guard isRecording else { return }
-        level += (value - level) * (value > level ? 0.6 : 0.2)
+        level = value
     }
 
     /// Wat er voor dit veld is ingesproken; de opname loopt door voor het volgende.

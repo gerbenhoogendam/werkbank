@@ -43,6 +43,9 @@ struct TimeEntrySheet: View {
     @State private var pending: Set<Step> = []
     @State private var error: String?
     @State private var names: [String] = []
+    /// Veer en stroming van de inspreekanimatie; loopt door van veld naar veld.
+    @State private var voiceMotion = VoiceMotion()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var dictation: PhoneDictation { PhoneDictation.shared }
 
     init(start: TimeEntryStart, onClose: @escaping () -> Void) {
@@ -113,7 +116,7 @@ struct TimeEntrySheet: View {
             )
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle())
     }
 
     // MARK: Inspreken
@@ -153,7 +156,7 @@ struct TimeEntrySheet: View {
                         .frame(width: 56, height: 56)
                         .background(Circle().fill(ThingsColor.tagBackground))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScaleButtonStyle())
                 .disabled(step == .review)
                 .accessibilityLabel("Typen")
 
@@ -174,7 +177,7 @@ struct TimeEntrySheet: View {
                     .background(Capsule().fill(ThingsColor.accent))
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScaleButtonStyle())
                 .disabled(step == .review || waiting)
                 .opacity(waiting ? 0.4 : 1)
             }
@@ -221,12 +224,13 @@ struct TimeEntrySheet: View {
             }
             Group {
                 if listening {
-                    VoiceWave(level: dictation.level)
+                    VoiceWave(level: dictation.level, motion: voiceMotion)
                         .frame(height: max(bodyHeight, 48))
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
                 } else if pending.contains(field) {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.opacity)
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         if field == .client, !value.isEmpty { ClientLogo(name: value, size: 20) }
@@ -236,6 +240,7 @@ struct TimeEntrySheet: View {
                             .lineLimit(field == .performed ? 6 : 2)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .transition(ThingsMotion.materialize(reduceMotion: reduceMotion))
                 }
             }
             .frame(minHeight: bodyHeight, alignment: .topLeading)
@@ -245,14 +250,14 @@ struct TimeEntrySheet: View {
         .background(shape.fill(ThingsColor.backgroundSidebar))
         .overlay {
             if listening {
-                VoiceGlow(level: dictation.level, shape: shape)
+                VoiceGlow(level: dictation.level, motion: voiceMotion, shape: shape)
                     .transition(.opacity)
             } else {
                 shape.strokeBorder(active ? ThingsColor.accent.opacity(0.6) : ThingsColor.separator,
                                    lineWidth: active ? 1.5 : 1)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: listening)
+        .animation(ThingsMotion.enter, value: listening)
         .contentShape(shape)
         // Op een veld tikken: zelf typen.
         .onTapGesture(perform: typeInstead)
@@ -338,8 +343,12 @@ struct TimeEntrySheet: View {
         // Klantnamen als hint, zodat Whisper ze goed schrijft.
         let hint = field == .client && !names.isEmpty ? names.prefix(25).joined(separator: ", ") + "." : nil
         Task {
-            if let text = await dictation.transcribe(samples, hint: hint) { apply(text, to: field) }
-            pending.remove(field)
+            let text = await dictation.transcribe(samples, hint: hint)
+            // De tekst komt uit een lichte waas in plaats van de draaier ineens te vervangen.
+            withAnimation(ThingsMotion.reveal) {
+                if let text { apply(text, to: field) }
+                pending.remove(field)
+            }
         }
     }
 

@@ -157,7 +157,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Mac: `Shared/Services/Speech.swift` (`WhisperModel`, `SpeechRecorder`). Nieuwe kaart: plus in de kolomkop.
     Later: kolommen onder elkaar in één `List` (secties, inklappen per apparaat in `board.collapsedColumns`); ruime
     velden (`entryField()`); tijdens inspreken staat in het actieve veld een golfvorm (`VoiceWave`) met een gloeiende
-    Siri-rand (`VoiceGlow`, `iOS/VoiceVisuals.swift`).
+    Siri-rand (`VoiceGlow`, `iOS/VoiceVisuals.swift`). Opnieuw gedaan met de skills in `.claude/skills`
+    (find-animation-opportunities, animate): het stemniveau loopt via een veer (`VoiceMotion`, `ThingsMotion.alive`),
+    stroming en gloed volgen je stem, tekst verschijnt uit een lichte waas (`ThingsMotion.materialize`), knoppen geven
+    mee (`PressScaleButtonStyle`); alle waarden staan in `ThingsMotion`, met verminderde beweging.
 22. **Bewegende GIF's één keer** (`WerkbankCore/…/GIFLoop.swift`, `macOS/MailImageLoader.swift`). In de weergave
     van mails (ook de eigen handtekening) verdwijnt de herhaalinstructie (NETSCAPE2.0) uit elke GIF; WebKit speelt hem
     dan één keer en blijft op het laatste beeld staan. Ingesloten GIF's (data-URL's) worden in `MailWebView.document`
