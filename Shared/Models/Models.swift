@@ -243,6 +243,41 @@ final class ClientMapping {
     }
 }
 
+// MARK: - Klanten
+
+/// Een klant uit de klantenlijst van Werkbank: ingelezen uit een .csv en daarna in de app aangevuld. Gaat via iCloud
+/// naar je andere Macs en je iPhone, voor de suggesties bij het klantveld, het logo en het herkennen van mail.
+@Model
+final class Client {
+    var id: UUID = UUID()
+    var name: String = ""
+    /// Eigen domeinen, met komma's ("bedrijf.nl,bedrijf-bv.nl"); nooit freemail.
+    var domainsRaw: String = ""
+    /// Overige gegevens uit de .csv (bijv. debiteurnummer, plaats), om op te zoeken.
+    var detailsRaw: String = ""
+    /// Failliet, geen klant meer of niet gebruiken: staat nergens meer, ook niet uit oude tijdregels.
+    var isRemoved: Bool = false
+    var createdAt: Date = Date()
+
+    init(name: String, domains: [String] = [], details: [String] = [], isRemoved: Bool = false) {
+        self.id = UUID()
+        self.name = name
+        self.domainsRaw = domains.joined(separator: ",")
+        self.detailsRaw = details.joined(separator: "\u{1F}")
+        self.isRemoved = isRemoved
+        self.createdAt = .now
+    }
+
+    var domains: [String] {
+        get { domainsRaw.split(separator: ",").map(String.init) }
+        set { domainsRaw = newValue.joined(separator: ",") }
+    }
+
+    var details: [String] {
+        detailsRaw.split(separator: "\u{1F}").map(String.init)
+    }
+}
+
 // MARK: - Opslag
 
 enum Persistence {
@@ -287,7 +322,8 @@ enum Persistence {
     }
 
     static let container: ModelContainer = {
-        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self, Subtask.self])
+        let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self, Subtask.self,
+                             Client.self])
 
         #if ICLOUD
         if isSyncing {

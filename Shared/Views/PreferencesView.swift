@@ -309,7 +309,7 @@ private struct OtherPreferences: View {
     @Query private var allEntries: [TimeEntry]
     @State private var newDomain = ""
     @State private var newClient = ""
-    @State private var choosingClientFile = false
+    @State private var managingClients = false
 
     var body: some View {
         Form {
@@ -338,27 +338,36 @@ private struct OtherPreferences: View {
 
             if Persistence.isCloudBuild { Section("Synchronisatie-details") { syncDetails } }
 
-            #if os(macOS)
-            Section("Klantenlijst") {
-                let directory = ClientDirectory.shared
-                LabeledContent("Bestand") {
-                    HStack {
-                        Text(directory.chosenFileName ?? "—").foregroundStyle(.secondary)
-                        Button("Kies…") { choosingClientFile = true }
-                        if directory.chosenFileName != nil {
-                            Button("Loskoppelen") { Task { await directory.forgetChosenFile() } }
-                        }
-                    }
-                }
+            Section("Klanten") {
                 LabeledContent("Klanten") {
-                    Text("\(directory.records.count)").monospacedDigit().foregroundStyle(.secondary)
+                    Text("\(ClientDirectory.shared.records.count)").monospacedDigit().foregroundStyle(.secondary)
                 }
-            }
-            .fileImporter(isPresented: $choosingClientFile, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
-                if case .success(let url) = result { Task { await ClientDirectory.shared.choose(url) } }
+                #if os(macOS)
+                Button("Klanten beheren…") { managingClients = true }
+                #else
+                NavigationLink("Klanten beheren") {
+                    ClientsEditor().navigationTitle("Klanten")
+                }
+                #endif
             }
             .task { await ClientDirectory.shared.refresh() }
+            #if os(macOS)
+            .sheet(isPresented: $managingClients) {
+                VStack(spacing: 0) {
+                    ClientsEditor()
+                    Divider()
+                    HStack {
+                        Spacer()
+                        Button("Klaar") { managingClients = false }
+                            .keyboardShortcut(.defaultAction)
+                    }
+                    .padding(12)
+                }
+                .frame(width: 640, height: 600)
+            }
+            #endif
 
+            #if os(macOS)
             Section("iCloud Drive") {
                 let sync = PreferencesSync.shared
                 LabeledContent("Map Werkbank") {

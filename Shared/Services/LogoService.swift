@@ -59,6 +59,49 @@ actor LogoService {
         return result
     }
 
+    /// Alvast ophalen wat nog niet bewaard is, een paar tegelijk (klantenlijst). Zonder de zoekdienst (die heeft een
+    /// dagquotum): van de website zelf, anders het favicon. Niets gevonden: een week niet opnieuw proberen; bij gebruik
+    /// gaat het dan alsnog de gewone weg.
+    func prefetch(_ domains: [String]) async {
+        let pending = domains.map { $0.lowercased() }.filter { domain in
+            memory[domain] == nil && !failed.contains(domain) && !isCached(domain) && !recentlyMissed(domain)
+        }
+        await withTaskGroup(of: Void.self) { group in
+            var queue = pending.makeIterator()
+            for _ in 0..<4 {
+                guard let domain = queue.next() else { break }
+                group.addTask { await self.prefetchOne(domain) }
+            }
+            while await group.next() != nil {
+                guard let domain = queue.next() else { continue }
+                group.addTask { await self.prefetchOne(domain) }
+            }
+        }
+    }
+
+    private func prefetchOne(_ domain: String) async {
+        guard inflight[domain] == nil, !isCached(domain) else { return }
+        if let data = await SiteIconFinder.find(domain: domain) {
+            try? data.write(to: cacheURL(domain), options: .atomic)
+        } else {
+            try? Data().write(to: missURL(domain), options: .atomic)
+        }
+    }
+
+    private func isCached(_ domain: String) -> Bool {
+        FileManager.default.fileExists(atPath: cacheURL(domain).path)
+    }
+
+    private func recentlyMissed(_ domain: String) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: missURL(domain).path),
+              let date = attributes[.modificationDate] as? Date else { return false }
+        return Date().timeIntervalSince(date) < 7 * 24 * 3600
+    }
+
+    private func missURL(_ domain: String) -> URL {
+        cacheDirectory.appendingPathComponent("\(domain.replacingOccurrences(of: "/", with: "_")).none")
+    }
+
     // MARK: - Ophalen
 
     private func fetch(domain: String) async -> Data? {

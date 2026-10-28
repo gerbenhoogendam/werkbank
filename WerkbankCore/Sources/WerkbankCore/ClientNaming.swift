@@ -16,6 +16,10 @@ public enum ClientNaming {
         "googlemail.com", "outlook.nl", "hotmail.nl", "live.com", "msn.com", "mac.com", "yahoo.nl",
         "proton.me", "protonmail.com", "gmx.net", "gmx.com", "web.de", "mail.com", "upcmail.nl",
         "home.nl", "casema.nl", "chello.nl", "quicknet.nl", "telfort.nl", "caiway.nl", "zeelandnet.nl",
+        "solcon.nl", "kpnplanet.nl", "wxs.nl", "xmsnet.nl", "zonnet.nl", "online.nl", "tele2.nl", "versatel.nl",
+        "hccnet.nl", "onsbrabantnet.nl", "12move.nl", "freeler.nl", "kabelfoon.nl", "tiscali.nl", "worldonline.nl",
+        "telenet.be", "skynet.be", "live.be", "hotmail.be", "outlook.be", "ymail.com", "aol.com", "hotmail.co.uk",
+        "yahoo.co.uk",
     ]
 
     /// Tweeledige extensies waarbij het registreerbare domein drie labels lang is (`bedrijf.co.uk`).

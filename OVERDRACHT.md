@@ -80,6 +80,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 12. **Logo's per klant** (`ClientDirectory.logoDomains`, `ClientLogo`): naast het klantveld, in de suggesties en in
     Tijd schrijven; bron is de klantenlijst (kolom Domeinnaam), dan de koppeltabel, dan kaarten.
 13. **Klantenlijst**: klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN worden overal weggelaten.
+    Sinds de klantenlijst in de app: de lijst staat in de database (`Client`, via iCloud ook op de iPhone) en wordt
+    beheerd in Voorkeuren › Overig › Klanten (`ClientsEditor`): zoeken, toevoegen, naam en domein aanpassen,
+    verwijderen, een .csv importeren. Bij het inlezen (`ClientList.parseCSV`) blijft van e-mailadressen alleen het
+    eigen domein over (kolom "E mail" e.d., anders de kolom met de meeste @), freemail en providers vallen weg,
+    dubbele namen worden één klant, en failliet/falliet staat ook midden of achteraan de naam. Bestaande .csv's in
+    iCloud Drive/Werkbank en het vroeger aangewezen bestand worden één keer overgenomen. De Mac haalt van alle
+    klanten vooraf het logo op (`LogoService.prefetch`, website of favicon, niet de zoekdienst met dagquotum).
+    `*.csv` staat in `.gitignore`. Voor TestFlight moet het CloudKit-schema (nieuw type `Client`) naar Production.
 14. **Duo-vouw** (`macOS/DuoFold.swift`, `macOS/DuoWindowFold.swift`). Eén vlak kantelt om de onderrand naar
     achteren weg, achter matglas: hoe verder naar achteren, hoe waziger (geen donkerte). Openen gaat van plat naar
     rechtop. Geldt voor het hoofdvenster en losse opstelvensters (openen, ⌘W, sluitknop, ⌘Q), mail- en opstelpanelen

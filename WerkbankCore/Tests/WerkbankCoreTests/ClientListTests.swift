@@ -84,6 +84,39 @@ final class ClientListTests: XCTestCase {
         XCTAssertEqual(ClientList.search("romex", in: records).map(\.name), ["Romex Nieuw", "Romex Benelux"])
     }
 
+    func testEmailColumnGivesCustomDomainsAndMergesDuplicates() {
+        let csv = "Bedrijf;E mail;;;\r\n"
+            + "Hoveniersbedrijf de Zonnebloem;info@zonnebloem-tuinen.nl;;;\r\n"
+            + "Jan Particulier;jan.particulier@gmail.com;;;\r\n"
+            + "FAILLIET Romex Benelux;info@romexbenelux.nl;;;\r\n"
+            + "Dubbel BV;a@dubbel.nl;;;\r\n"
+            + "Dubbel BV;b@mail.dubbel-bv.nl;;;\r\n"
+            + "Twee Adressen;\"x@twee.nl;y@solcon.nl\";;;\r\n"
+            + "Bakkerij Jansen (falliet);bakker@jansen.nl;;;\r\n"
+            + "Zonder Adres;;;;\r\n"
+        let records = ClientList.parseCSV(csv)
+        XCTAssertEqual(records.map(\.name), ["Hoveniersbedrijf de Zonnebloem", "Jan Particulier", "Romex Benelux",
+                                             "Dubbel BV", "Twee Adressen", "Bakkerij Jansen", "Zonder Adres"])
+        XCTAssertEqual(records[0].domains, ["zonnebloem-tuinen.nl"])
+        // Het e-mailadres zelf gaat er niet in.
+        XCTAssertEqual(records[0].details, [])
+        XCTAssertEqual(records[1].domains, [])
+        XCTAssertEqual(records[2].status, "failliet")
+        XCTAssertEqual(records[3].domains, ["dubbel.nl", "dubbel-bv.nl"])
+        XCTAssertEqual(records[4].domains, ["twee.nl"])
+        XCTAssertEqual(records[5].status, "falliet")
+        XCTAssertEqual(records[6].domains, [])
+    }
+
+    func testWordInsideNameIsFound() {
+        let records = [ClientRecord(name: "Hoveniersbedrijf de Zonnebloem"), ClientRecord(name: "Zonnebloem Hoveniers"),
+                       ClientRecord(name: "Bloemist Zon")]
+        XCTAssertEqual(ClientList.search("zonnebloem", in: records).map(\.name),
+                       ["Zonnebloem Hoveniers", "Hoveniersbedrijf de Zonnebloem"])
+        XCTAssertEqual(ClientList.search("Zonnebl", in: records).map(\.name),
+                       ["Zonnebloem Hoveniers", "Hoveniersbedrijf de Zonnebloem"])
+    }
+
     func testDomainMapSkipsFreemailAndShared() {
         let records = [
             ClientRecord(name: "Alpha", domains: ["alpha.nl"]),

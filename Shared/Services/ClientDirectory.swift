@@ -3,86 +3,149 @@ import Observation
 import SwiftData
 import WerkbankCore
 
-/// De klantenlijst: het bestand dat in Voorkeuren is aangewezen, plus alle .csv-bestanden in iCloud Drive/Werkbank.
-/// Wordt opnieuw gelezen als een bestand is gewijzigd (bijvoorbeeld aangevuld op een andere Mac).
+/// De klantenlijst van Werkbank (`Client` in de database, via iCloud op al je apparaten): ingelezen uit een .csv en in
+/// de app aangevuld. Voor de suggesties bij het klantveld, de logo's en het herkennen van de klant bij een mail.
 @MainActor
 @Observable
 final class ClientDirectory {
     static let shared = ClientDirectory()
-    /// Bladwijzer naar het aangewezen bestand (per Mac: een bladwijzer werkt alleen op de Mac die hem maakte).
+    /// Bladwijzer naar het .csv-bestand dat vroeger in Voorkeuren was aangewezen (alleen nog voor het overnemen).
     static let bookmarkKey = "clients.fileBookmark"
+    /// De .csv-bestanden die de app vroeger las, zijn één keer overgenomen.
+    private static let migratedKey = "clients.filesImported"
 
     private(set) var records: [ClientRecord] = []
-    /// Domein → klantnaam uit de kolom Domeinnaam (zie `ClientList.domainMap`).
+    /// Domein → klantnaam (zie `ClientList.domainMap`).
     private(set) var domainMap: [String: String] = [:]
-    /// Naam van het aangewezen bestand, voor Voorkeuren.
-    private(set) var chosenFileName: String?
     /// Klantnaam (kleine letters) → domein voor het logo: klantenlijst, dan koppeltabel, dan kaarten.
     private(set) var logoDomains: [String: String] = [:]
     /// Klanten met FAILLIET, GEEN KLANT MEER of NIET GEBRUIKEN: komen nergens meer voor, ook niet als ze nog in oude
     /// tijdregels staan.
     @ObservationIgnored private var removedNames: Set<String> = []
-    @ObservationIgnored private var stamps: [String: Date] = [:]
-    @ObservationIgnored private var isRefreshing = false
+    /// Domeinen waarvan het logo al is opgehaald of wordt opgehaald (in deze sessie).
+    @ObservationIgnored private var prefetched: Set<String> = []
 
-    init() {
-        chosenFileName = Self.resolveChosenFile()?.lastPathComponent
+    struct ImportResult {
+        var added = 0
+        var updated = 0
+        var removed = 0
     }
 
-    func refresh(force: Bool = false) async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-        await WerkbankFolder.prepare()
-        let folder = WerkbankFolder.url
-        let chosen = Self.resolveChosenFile()
-        chosenFileName = chosen?.lastPathComponent
-        defer { rebuildLogoDomains() }   // ook als de lijst niet veranderde: koppeltabel en kaarten wel
-        let known = force ? [:] : stamps
-        let result = await Task.detached(priority: .utility) { () -> (records: [ClientRecord], stamps: [String: Date])? in
-            let fm = FileManager.default
-            var csvs: [URL] = []
-            if let files = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey]) {
-                for file in files {
-                    let name = file.lastPathComponent
-                    if file.pathExtension.lowercased() == "csv" {
-                        csvs.append(file)
-                    } else if name.hasPrefix("."), name.lowercased().hasSuffix(".csv.icloud") {
-                        // Staat nog alleen in iCloud: ophalen, de volgende keer is hij er.
-                        let real = folder.appendingPathComponent(String(name.dropFirst().dropLast(".icloud".count)))
-                        try? fm.startDownloadingUbiquitousItem(at: real)
-                    }
-                }
-            }
-            csvs.sort { $0.lastPathComponent < $1.lastPathComponent }
-            if let chosen, !csvs.contains(chosen) { csvs.insert(chosen, at: 0) }
-
-            var stamps: [String: Date] = [:]
-            for file in csvs {
-                let access = file == chosen && file.startAccessingSecurityScopedResource()
-                stamps[file.path] = CloudFile.modificationDate(file) ?? .distantPast
-                if access { file.stopAccessingSecurityScopedResource() }
-            }
-            guard stamps != known else { return nil }   // niets veranderd
-
-            var seen = Set<String>()
-            var records: [ClientRecord] = []
-            for file in csvs {
-                let access = file == chosen && file.startAccessingSecurityScopedResource()
-                defer { if access { file.stopAccessingSecurityScopedResource() } }
-                guard let data = CloudFile.read(file), let text = CloudFile.text(data) else { continue }
-                for record in ClientList.parseCSV(text) where seen.insert(record.name.lowercased()).inserted {
-                    records.append(record)
-                }
-            }
-            return (records, stamps)
-        }.value
-        guard let result else { return }
-        records = result.records.filter { !$0.isInactive }
-        removedNames = Set(result.records.filter(\.isInactive).map { $0.name.lowercased() })
+    /// Leest de lijst uit de database (snel genoeg om bij elke weergave van het klantveld te doen) en voegt dubbelen
+    /// samen, bijvoorbeeld als twee Macs dezelfde lijst tegelijk inlazen.
+    func refresh() async {
+        let context = Persistence.container.mainContext
+        await importOldFilesIfNeeded()
+        let all = (try? context.fetch(FetchDescriptor<Client>())) ?? []
+        let clients = Self.merged(all, in: context)
+        records = clients.filter { !$0.isRemoved }
+            .map { ClientRecord(name: $0.name, details: $0.details, domains: $0.domains) }
+        removedNames = Set(clients.filter(\.isRemoved).map { $0.name.lowercased() })
         domainMap = ClientList.domainMap(records)
-        stamps = result.stamps
+        rebuildLogoDomains()
+        prefetchLogos()
     }
+
+    // MARK: Inlezen en aanpassen
+
+    /// Leest een .csv in. Nieuwe klanten komen erbij; een klant die er al is (zelfde naam) krijgt de nieuwe domeinen
+    /// erbij. Failliet, geen klant meer en niet gebruiken: verborgen. Van e-mailadressen blijft alleen het eigen
+    /// domein over.
+    @discardableResult
+    func importCSV(_ text: String) async -> ImportResult {
+        let result = await merge(text)
+        await refresh()
+        return result
+    }
+
+    private func merge(_ text: String) async -> ImportResult {
+        let parsed = await Task.detached(priority: .userInitiated) { ClientList.parseCSV(text) }.value
+        let context = Persistence.container.mainContext
+        let existing = (try? context.fetch(FetchDescriptor<Client>())) ?? []
+        var byKey = Dictionary(existing.map { (ClientList.key($0.name), $0) }, uniquingKeysWith: { first, _ in first })
+        var result = ImportResult()
+        for record in parsed {
+            let key = ClientList.key(record.name)
+            if let client = byKey[key] {
+                let extra = record.domains.filter { !client.domains.contains($0) }
+                if !extra.isEmpty {
+                    client.domains += extra
+                    result.updated += 1
+                }
+                if record.isInactive, !client.isRemoved {
+                    client.isRemoved = true
+                    result.removed += 1
+                }
+            } else {
+                let client = Client(name: record.name, domains: record.domains, details: record.details,
+                                    isRemoved: record.isInactive)
+                context.insert(client)
+                byKey[key] = client
+                if record.isInactive { result.removed += 1 } else { result.added += 1 }
+            }
+        }
+        try? context.save()
+        return result
+    }
+
+    /// Een klant zelf toevoegen; `domain` mag ook een website of e-mailadres zijn (freemail telt niet). Geeft false
+    /// als de klant er al is.
+    @discardableResult
+    func add(name: String, domain: String) async -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let context = Persistence.container.mainContext
+        let key = ClientList.key(trimmed)
+        let existing = (try? context.fetch(FetchDescriptor<Client>())) ?? []
+        if let match = existing.first(where: { ClientList.key($0.name) == key }) {
+            guard match.isRemoved else { return false }
+            // Was weggehaald: weer terug.
+            match.isRemoved = false
+            match.domains = ClientList.customDomains(in: domain)
+        } else {
+            context.insert(Client(name: trimmed, domains: ClientList.customDomains(in: domain)))
+        }
+        try? context.save()
+        await refresh()
+        return true
+    }
+
+    /// Naam of domeinen van een klant aangepast (Voorkeuren › Klanten).
+    func update(_ client: Client, name: String, domains: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { client.name = trimmed }
+        client.domains = ClientList.customDomains(in: domains)
+        try? Persistence.container.mainContext.save()
+        await refresh()
+    }
+
+    func delete(_ client: Client) async {
+        let context = Persistence.container.mainContext
+        context.delete(client)
+        try? context.save()
+        await refresh()
+    }
+
+    /// Dezelfde klant meer dan eens: samenvoegen tot de oudste, met alle domeinen.
+    private static func merged(_ clients: [Client], in context: ModelContext) -> [Client] {
+        var kept: [String: Client] = [:]
+        var changed = false
+        for client in clients.sorted(by: { $0.createdAt < $1.createdAt }) {
+            let key = ClientList.key(client.name)
+            if let first = kept[key] {
+                first.domains += client.domains.filter { !first.domains.contains($0) }
+                if client.isRemoved { first.isRemoved = true }
+                context.delete(client)
+                changed = true
+            } else {
+                kept[key] = client
+            }
+        }
+        if changed { try? context.save() }
+        return Array(kept.values)
+    }
+
+    // MARK: Logo's
 
     /// Domein voor het logo van een klant, als dat bekend is.
     func logoDomain(for name: String) -> String? {
@@ -108,6 +171,21 @@ final class ClientDirectory {
         if map != logoDomains { logoDomains = map }
     }
 
+    /// De logo's van alle klanten alvast ophalen (van de website, anders het favicon), zodat de suggesties bij het
+    /// typen meteen een logo hebben. Alleen op de Mac; op de iPhone komt een logo pas als het in beeld is.
+    private func prefetchLogos() {
+        #if os(macOS)
+        let domains = Set(records.compactMap(\.domains.first)).subtracting(prefetched)
+        guard !domains.isEmpty else { return }
+        prefetched.formUnion(domains)
+        Task.detached(priority: .background) {
+            await LogoService.shared.prefetch(Array(domains))
+        }
+        #endif
+    }
+
+    // MARK: Suggesties
+
     /// Treffers uit de lijst, aangevuld met klantnamen die al in Werkbank voorkomen.
     func suggestions(for query: String, known: [String], limit: Int = 6) -> [ClientRecord] {
         var all = records
@@ -118,41 +196,35 @@ final class ClientDirectory {
         return ClientList.search(query, in: all, limit: limit)
     }
 
-    // MARK: Aangewezen bestand
+    // MARK: Overnemen van vroeger
 
-    /// Bewaart het gekozen bestand (uit een bestandskiezer) als bladwijzer en leest het in.
-    func choose(_ url: URL) async {
-        #if os(macOS)
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        if let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil,
-                                                relativeTo: nil) {
-            UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey)
-        }
-        #endif
-        await refresh(force: true)
-    }
-
-    func forgetChosenFile() async {
-        UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
-        await refresh(force: true)
+    /// Eén keer: de .csv-bestanden die de app vroeger las (iCloud Drive/Werkbank en het in Voorkeuren aangewezen
+    /// bestand) komen in de lijst. Daarna is de lijst in de app de bron.
+    private func importOldFilesIfNeeded() async {
+        guard !UserDefaults.standard.bool(forKey: Self.migratedKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.migratedKey)
+        await WerkbankFolder.prepare()
+        let folder = WerkbankFolder.url
+        let chosen = Self.resolveChosenFile()
+        let texts = await Task.detached(priority: .utility) { () -> [String] in
+            var files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil))?
+                .filter { $0.pathExtension.lowercased() == "csv" } ?? []
+            if let chosen, !files.contains(chosen) { files.insert(chosen, at: 0) }
+            return files.compactMap { file in
+                let access = file == chosen && file.startAccessingSecurityScopedResource()
+                defer { if access { file.stopAccessingSecurityScopedResource() } }
+                return CloudFile.read(file).flatMap(CloudFile.text)
+            }
+        }.value
+        for text in texts { _ = await merge(text) }
     }
 
     private static func resolveChosenFile() -> URL? {
         #if os(macOS)
         guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return nil }
         var stale = false
-        guard let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil,
-                                 bookmarkDataIsStale: &stale) else { return nil }
-        if stale, url.startAccessingSecurityScopedResource() {
-            // Verplaatst of hernoemd: de bladwijzer vernieuwen.
-            if let fresh = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil,
-                                                 relativeTo: nil) {
-                UserDefaults.standard.set(fresh, forKey: bookmarkKey)
-            }
-            url.stopAccessingSecurityScopedResource()
-        }
-        return url
+        return try? URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil,
+                        bookmarkDataIsStale: &stale)
         #else
         return nil
         #endif

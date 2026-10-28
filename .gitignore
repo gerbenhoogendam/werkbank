@@ -9,3 +9,6 @@ DerivedData/
 Config/Local.xcconfig
 xcodegen/
 xcodegen.zip
+
+# Klantenlijsten en andere exports: klantgegevens horen niet in deze openbare repo.
+*.csv

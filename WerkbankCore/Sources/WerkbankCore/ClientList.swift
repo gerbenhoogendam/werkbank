@@ -1,10 +1,11 @@
 import Foundation
 
-/// Een klant uit de klantenlijst (.csv): de naam en de overige kolommen (bijv. debiteurnummer, plaats, domein).
+/// Een klant uit de klantenlijst: de naam, de overige kolommen (bijv. debiteurnummer, plaats) en de eigen domeinen.
 public struct ClientRecord: Equatable, Hashable {
     public var name: String
     public var details: [String]
-    /// Domeinen uit een kolom als "Domeinnaam", voor het herkennen van de klant bij een mail.
+    /// Eigen domeinen (uit een kolom Domein of Website, of uit de e-mailadressen; freemail telt niet), voor het logo en
+    /// het herkennen van de klant bij een mail.
     public var domains: [String]
     /// "failliet", "geen klant meer" of "niet gebruiken" als dat in de naam stond (dan staat het er niet meer in).
     public var status: String?
@@ -26,13 +27,14 @@ public enum ClientList {
         "naam", "klant", "klantnaam", "bedrijf", "bedrijfsnaam", "organisatie", "relatie", "relatienaam",
         "name", "company", "client", "customer",
     ]
-    /// Kolomkoppen met een domein of website.
+    /// Kolomkoppen met een domein, website of e-mailadres (van een adres telt alleen het domein).
     private static let domainHeaders: Set<String> = [
         "domein", "domeinnaam", "domain", "website", "web", "url", "maildomein", "e-maildomein",
+        "e-mail", "e mail", "email", "e-mailadres", "e mailadres", "emailadres", "mail", "mailadres", "e-mail adres",
     ]
-    /// Markeringen in de naam voor klanten die niet meer actief zijn.
-    private static let statusPrefixes = ["geen klant meer", "failliet"]
-    private static let statusPhrases = ["niet gebruiken"]
+    /// Markeringen in de naam voor klanten die niet meer actief zijn (ook de spelling "falliet").
+    private static let statusPrefixes = ["geen klant meer", "failliet", "falliet"]
+    private static let statusPhrases = ["niet gebruiken", "failliet", "falliet", "faillissement"]
 
     /// Scheidingsteken (`;`, `,` of tab) wordt uit de eerste regel afgeleid. Heeft de eerste regel een kolomkop als
     /// "Naam" of "Klant", dan is dat de kop en die kolom de naam; anders is de eerste kolom de naam.
@@ -46,29 +48,71 @@ public enum ClientList {
         guard !table.isEmpty else { return [] }
 
         var nameColumn = 0
-        var domainColumn: Int?
+        var domainColumns: [Int] = []
         let header = table[0].map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
         if let index = header.firstIndex(where: nameHeaders.contains) {
             nameColumn = index
-            domainColumn = header.firstIndex(where: domainHeaders.contains)
+            domainColumns = header.indices.filter { domainHeaders.contains(header[$0]) }
             table.removeFirst()
         }
+        // Zonder herkenbare kop: de kolommen waarin de meeste cellen een e-mailadres zijn.
+        if domainColumns.isEmpty {
+            let width = table.map(\.count).max() ?? 0
+            domainColumns = (0..<width).filter { column in
+                column != nameColumn && {
+                    let filled = table.compactMap { column < $0.count ? $0[column] : nil }.filter { !$0.isEmpty }
+                    return !filled.isEmpty && filled.filter { $0.contains("@") }.count * 2 > filled.count
+                }()
+            }
+        }
 
-        var seen = Set<String>()
+        // Dezelfde klant op meer regels (bijv. twee adressen): één klant met alle domeinen.
+        var index: [String: Int] = [:]
         var records: [ClientRecord] = []
         for row in table {
             let cells = row.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             guard nameColumn < cells.count else { continue }
             let (name, status) = splitStatus(cells[nameColumn])
-            guard !name.isEmpty, seen.insert(fold(name)).inserted else { continue }
-            let details = cells.enumerated().filter { $0.offset != nameColumn && !$0.element.isEmpty }.map(\.element)
-            let domains = domainColumn.flatMap { $0 < cells.count ? normalizedDomain(cells[$0]) : nil }.map { [$0] } ?? []
-            records.append(ClientRecord(name: name, details: details, domains: domains, status: status))
+            guard !name.isEmpty else { continue }
+            // E-mailadressen gaan er niet in: daarvan blijft alleen het eigen domein over.
+            let details = cells.enumerated()
+                .filter { $0.offset != nameColumn && !domainColumns.contains($0.offset) && !$0.element.isEmpty }
+                .map(\.element)
+            let domains = domainColumns.flatMap { $0 < cells.count ? customDomains(in: cells[$0]) : [] }
+            let key = fold(name)
+            if let existing = index[key] {
+                for domain in domains where !records[existing].domains.contains(domain) {
+                    records[existing].domains.append(domain)
+                }
+                if status != nil { records[existing].status = status }
+            } else {
+                index[key] = records.count
+                records.append(ClientRecord(name: name, details: details, domains: unique(domains), status: status))
+            }
         }
         return records
     }
 
-    /// "FAILLIET Romex Benelux" → ("Romex Benelux", "failliet").
+    /// Eigen domeinen in een cel met één of meer adressen of websites ("a@bedrijf.nl; b@mail.bedrijf.nl") →
+    /// ["bedrijf.nl"]. Freemail (gmail.com, hotmail.com, providers) valt weg.
+    public static func customDomains(in cell: String) -> [String] {
+        let parts = cell.split(whereSeparator: { $0 == ";" || $0 == "," || $0.isWhitespace })
+        var domains: [String] = []
+        for part in parts {
+            guard let domain = normalizedDomain(String(part)).map(ClientNaming.registrableDomain(of:)),
+                  !ClientNaming.freemailDomains.contains(domain), !domains.contains(domain) else { continue }
+            domains.append(domain)
+        }
+        return domains
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
+    }
+
+    /// "FAILLIET Romex Benelux" → ("Romex Benelux", "failliet"); "Bakkerij Jansen (falliet)" → ("Bakkerij Jansen",
+    /// "falliet").
     static func splitStatus(_ raw: String) -> (name: String, status: String?) {
         var name = raw
         var status: String?
@@ -77,12 +121,16 @@ public enum ClientList {
             status = prefix
         }
         for phrase in statusPhrases {
-            if let range = name.range(of: phrase, options: .caseInsensitive) {
+            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: phrase) + "\\b"
+            if let range = name.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
                 name.removeSubrange(range)
                 status = phrase
             }
         }
-        let cleaned = name.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        let edges = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "()[]-–,:"))
+        let cleaned = name.replacingOccurrences(of: "()", with: "")
+            .split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+            .trimmingCharacters(in: edges)
         return (cleaned, status)
     }
 
@@ -130,7 +178,8 @@ public enum ClientList {
         var scored: [(score: Int, record: ClientRecord)] = []
         for record in records {
             let name = fold(record.name)
-            let all = ([record.name] + record.details).map { fold($0, keepingDots: true) }.joined(separator: " ")
+            let all = ([record.name] + record.details + record.domains).map { fold($0, keepingDots: true) }
+                .joined(separator: " ")
             // Tikfouten per woord, zodat een spatie niet als letter meetelt.
             let nameWords = words(name)
             let allWords = words(all)
@@ -163,6 +212,11 @@ public enum ClientList {
             .sorted { $0.score != $1.score ? $0.score < $1.score : $0.record.name.localizedCaseInsensitiveCompare($1.record.name) == .orderedAscending }
             .prefix(limit)
             .map(\.record)
+    }
+
+    /// Sleutel om dezelfde klant te herkennen: zonder hoofdletters, accenten, apostrofs en punten.
+    public static func key(_ name: String) -> String {
+        fold(name.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private static func words(_ text: String) -> [String] {

@@ -10,8 +10,6 @@ actor SenderLogoService {
 
     private var memory: [String: Data] = [:]
     private var inflight: [String: Task<Data?, Never>] = [:]
-    /// Kleiner dan dit (in pixels) is een favicon te vaag voor een avatar.
-    private static let minPixels = 48
     /// Niets gevonden: een week niet opnieuw proberen.
     private static let retryAfter: TimeInterval = 7 * 24 * 3600
 
@@ -20,13 +18,6 @@ actor SenderLogoService {
         let dir = base.appendingPathComponent("SenderLogos", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
-    }()
-
-    private let session: URLSession = {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 6
-        configuration.timeoutIntervalForResource = 12
-        return URLSession(configuration: configuration)
     }()
 
     func logo(forAddress address: String) async -> Data? {
@@ -59,35 +50,7 @@ actor SenderLogoService {
     // MARK: Zoeken
 
     private func find(domain: String) async -> Data? {
-        for home in ["https://\(domain)/", "https://www.\(domain)/"] {
-            guard let url = URL(string: home), let (data, response) = try? await session.data(from: url),
-                  let http = response as? HTTPURLResponse, http.statusCode == 200,
-                  let html = String(data: data.prefix(1_500_000), encoding: .utf8)
-                    ?? String(data: data.prefix(1_500_000), encoding: .isoLatin1) else { continue }
-            let base = http.url ?? url
-            var candidates = SiteIcons.candidates(html: html, baseURL: base)
-            if let touch = URL(string: "/apple-touch-icon.png", relativeTo: base)?.absoluteURL { candidates.append(touch) }
-            for candidate in candidates.prefix(5) {
-                if let icon = await usableImage(at: candidate) { return icon }
-            }
-            break   // de homepage laadde: niet ook nog www. proberen
-        }
-        // Laatste kans: de favicondienst van Google (404 = niets bekend).
-        if let url = URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=128") {
-            return await usableImage(at: url)
-        }
-        return nil
-    }
-
-    /// Alleen een echte afbeelding van minstens 48 px, die niet via een omleiding op een standaardicoon uitkomt.
-    private func usableImage(at url: URL) async -> Data? {
-        guard let (data, response) = try? await session.data(from: url),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
-              data.count < 1_000_000,
-              !SiteIcons.isGeneric(http.url ?? url),
-              let image = NSImage(data: data) else { return nil }
-        let pixels = image.representations.map { max($0.pixelsWide, $0.pixelsHigh) }.max() ?? 0
-        return pixels >= Self.minPixels ? data : nil
+        await SiteIconFinder.find(domain: domain)
     }
 }
 
