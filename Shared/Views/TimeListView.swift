@@ -441,8 +441,8 @@ struct TimeEntryRow: View {
         }
         .frame(minHeight: 44)
         .help(entry.status == .finished
-              ? entry.workDescription + (entry.correctionSeconds > 0
-                  ? "\nGemeten \(Billing.formatHM(entry.accumulated)) u, correctie −\(Int((entry.correctionSeconds / 60).rounded())) min"
+              ? entry.workDescription + (entry.correctionSeconds != 0
+                  ? "\nGemeten \(Billing.formatHM(entry.accumulated)) u, te factureren \(Billing.formatHours(TimerService.billedHours(entry))) u"
                   : "")
               : "")
         .contextMenu {
@@ -622,8 +622,9 @@ struct TimeEntryRow: View {
                    help: "Case en uitgevoerd kopiëren")
     }
 
+    /// Alleen de klant: een regel uit een kaarttimer ziet er na het stoppen hetzelfde uit als een snelle invoer.
     private var subtitle: String {
-        var text = "\(entry.client) · \(entry.source.title)"
+        var text = entry.client
         if entry.status == .paused {
             text += entry.interruptions > 0 ? " · Pauze · \(entry.interruptions)× onderbroken" : " · Pauze"
         }

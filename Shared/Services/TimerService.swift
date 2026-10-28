@@ -80,7 +80,8 @@ enum TimerService {
     /// - Parameters:
     ///   - subtracted: eindtijdcorrectie (tijd die er aan het eind af gaat).
     ///   - startAdjust: begintijdcorrectie (positief = eerder begonnen, negatief = later); `newFirstStart` wordt dan de begintijd.
-    ///   - correction: aftrek op de te factureren tijd; de gemeten tijd blijft staan.
+    ///   - correction: gewerkt min te factureren (negatief als er meer gefactureerd wordt); de gemeten tijd blijft
+    ///     staan.
     static func finish(_ entry: TimeEntry, description: String, end: Date, subtracted: TimeInterval,
                        startAdjust: TimeInterval = 0, newFirstStart: Date? = nil, correction: TimeInterval = 0,
                        caseTitle: String? = nil, client: String? = nil,
@@ -92,7 +93,7 @@ enum TimerService {
         if let client { entry.client = normalized(client) }
         entry.accumulated = max(0, entry.accumulated - subtracted + startAdjust)
         if let newFirstStart { entry.firstStart = newFirstStart }
-        entry.correctionSeconds = max(0, correction)
+        entry.correctionSeconds = correction
         entry.workDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
         entry.runningSince = nil
         entry.pausedAt = nil

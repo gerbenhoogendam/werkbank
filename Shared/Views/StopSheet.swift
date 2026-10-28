@@ -12,7 +12,10 @@ struct StopSheet: View {
 
     @State private var startText = ""
     @State private var endText = ""
-    @State private var correctionText = ""
+    /// Zelf gekozen te factureren tijd ("0,75"); zolang `billedChosen` uit staat volgt hij de gewerkte tijd.
+    @State private var billedText = ""
+    @State private var billedChosen = false
+    @FocusState private var billedFocused: Bool
     @State private var confirmDelete = false
     @State private var workDescription = ""
     @State private var caseTitle = ""
@@ -61,11 +64,22 @@ struct StopSheet: View {
     private var worked: TimeInterval {
         max(0, entry.accumulated - evaluation.subtractedSeconds + startEvaluation.adjustmentSeconds)
     }
-    /// Aftrek op de te factureren tijd (bijv. een kwartier dat niet telt); nooit meer dan gewerkt.
-    private var correction: TimeInterval { min(Double(Int(correctionText) ?? 0) * 60, worked) }
-    private var billed: Double {
-        Billing.billedHours(seconds: max(0, worked - correction), unitMinutes: AppSettings.roundingMinutes)
+    /// Eén stap in de te factureren tijd: de afrondingseenheid (bijv. 0,25 u).
+    private var unitHours: Double { Double(max(1, AppSettings.roundingMinutes)) / 60 }
+    /// Automatisch: de gewerkte tijd, naar boven afgerond op de eenheid.
+    private var autoBilled: Double {
+        Billing.billedHours(seconds: worked, unitMinutes: AppSettings.roundingMinutes)
     }
+    /// "0,75", "1", "1.5" → uren.
+    private var typedBilled: Double? {
+        Double(billedText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")).map { max(0, $0) }
+    }
+    private var billed: Double {
+        guard billedChosen, let typed = typedBilled else { return autoBilled }
+        return Billing.billedHours(seconds: typed * 3600, unitMinutes: AppSettings.roundingMinutes)
+    }
+    /// Verschil tussen gewerkt en te factureren; negatief als er meer gefactureerd wordt dan er gemeten is.
+    private var correction: TimeInterval { billedChosen ? worked - billed * 3600 : 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -78,7 +92,7 @@ struct StopSheet: View {
             bookingFields
 
             endTimeSection
-            correctionSection
+            billingSection
             descriptionSection
 
             Text(summaryText)
@@ -99,7 +113,9 @@ struct StopSheet: View {
         }
         .padding(20)
         #if os(macOS)
-        .frame(minWidth: 440)
+        // Vaste breedte: anders groeit het blad met de langste regel van Uitgevoerd mee en springt de tekst bij elk
+        // woord naar een andere plek.
+        .frame(width: 480)
         #endif
         .background(ThingsColor.backgroundContent)
         .onAppear {
@@ -212,48 +228,76 @@ struct StopSheet: View {
         }
     }
 
-    // MARK: Correctie
+    // MARK: Te factureren
 
-    /// Tijd die wel gewerkt is maar niet gefactureerd wordt (bijv. een kwartier afgeleid): de gewerkte tijd
-    /// blijft in de regel staan, alleen de te factureren tijd gaat omlaag.
-    private var correctionSection: some View {
+    /// De tijd die je schrijft, in stappen van de afrondingseenheid; standaard de gewerkte tijd naar boven afgerond.
+    /// De gewerkte tijd blijft in de regel staan.
+    private var billingSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Correctie")
+            Text("Te factureren")
                 .thingsFont(.heading)
                 .foregroundStyle(ThingsColor.accent)
 
             HStack(spacing: 8) {
-                Text("Niet factureren")
-                    .thingsFont(.metadata)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                TextField("", text: $correctionText, prompt: Text("0"))
+                SmallIconButton(symbol: "minus", label: "Minder") { step(-1) }
+                    .disabled(billed <= 0)
+                TextField("", text: billedBinding)
                     .textFieldStyle(.plain)
                     .monospacedDigit()
                     .multilineTextAlignment(.center)
-                    .frame(width: 48)
+                    .frame(width: 56)
                     .padding(.vertical, 5)
                     .background(
                         RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
-                            .strokeBorder(ThingsColor.separator, lineWidth: 1.5)
+                            .strokeBorder(billedChosen && typedBilled == nil ? ThingsColor.error : ThingsColor.separator,
+                                          lineWidth: 1.5)
                     )
+                    .focused($billedFocused)
+                    .onSubmit(snapBilled)
                     #if os(iOS)
-                    .keyboardType(.numberPad)
+                    .keyboardType(.decimalPad)
                     #endif
-                    .onChange(of: correctionText) { _, new in
-                        let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
-                        if digits != new { correctionText = digits }
-                    }
-                Text("min")
+                    .accessibilityLabel("Te factureren uren")
+                SmallIconButton(symbol: "plus", label: "Meer") { step(1) }
+                Text("u")
                     .thingsFont(.metadata)
                     .foregroundStyle(ThingsColor.textSecondary)
+
+                if billedChosen && billed != autoBilled {
+                    Button {
+                        billedChosen = false
+                    } label: {
+                        Label("Terug naar \(Billing.formatHours(autoBilled))", systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.borderless)
+                    .thingsFont(.metadata)
+                }
             }
         }
+        .onChange(of: billedFocused) { _, focused in if !focused { snapBilled() } }
+    }
+
+    /// Het veld toont de automatische tijd tot je zelf iets kiest.
+    private var billedBinding: Binding<String> {
+        Binding(get: { billedChosen ? billedText : Billing.formatHours(autoBilled) },
+                set: { billedText = $0; billedChosen = true })
+    }
+
+    /// Eén eenheid erbij of eraf.
+    private func step(_ direction: Double) {
+        let next = max(0, ((billed / unitHours).rounded() + direction) * unitHours)
+        billedText = Billing.formatHours(next)
+        billedChosen = true
+    }
+
+    /// Wat je typte, afgerond op de eenheid terug in het veld ("0,6" → "0,75").
+    private func snapBilled() {
+        guard billedChosen else { return }
+        billedText = Billing.formatHours(billed)
     }
 
     private var summaryText: String {
-        var text = "Gewerkt \(Billing.formatHMS(worked))"
-        if correction >= 60 { text += " · correctie −\(Int(correction / 60)) min" }
-        return text + " · te factureren \(Billing.formatHours(billed)) u"
+        "Gewerkt \(Billing.formatHMS(worked)) · te factureren \(Billing.formatHours(billed)) u"
     }
 
     private var infoText: String {
@@ -298,8 +342,10 @@ struct StopSheet: View {
             TextEditor(text: $workDescription)
                 .thingsFont(.notes)
                 .scrollContentBackground(.hidden)
+                // Geen schuifbalk die bij het typen verschijnt en verdwijnt (dan loopt de tekst steeds anders af).
+                .scrollIndicators(.never)
                 .focused($descriptionFocused)
-                .frame(minHeight: 84)
+                .frame(minHeight: 110)
                 .padding(6)
                 .background(
                     RoundedRectangle(cornerRadius: ThingsMetrics.selectionRadius, style: .continuous)
