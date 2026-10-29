@@ -310,6 +310,8 @@ struct RunningTimerRow: View {
     @Environment(AppState.self) private var appState
 
     private var karmijn: Bool { ThemeStore.shared.look == .karmijn }
+    @ScaledMetric(relativeTo: .body) private var clientSize = ThingsTextStyle.todoTitleOpen.size - 1
+    @ScaledMetric(relativeTo: .footnote) private var caseSize = ThingsTextStyle.metadata.size + 1
 
     var body: some View {
         HStack(spacing: 10) {
@@ -324,23 +326,24 @@ struct RunningTimerRow: View {
             ClientLogo(name: entry.client, size: 18)
 
             VStack(alignment: .leading, spacing: 1) {
+                // Zelfde volgorde als de tijdregels eronder: klant boven, case eronder.
                 if karmijn {
-                    Text(entry.title.uppercased())
-                        .font(.werk(size: 10.5, weight: .bold))
+                    Text(entry.client.uppercased())
+                        .font(.werk(size: 10, weight: .bold))
                         .tracking(0.6)
                         .foregroundStyle(ThingsColor.textPrimary)
                         .lineLimit(1)
-                    Text(entry.client)
-                        .font(.werk(size: 11))
+                    Text(entry.title)
+                        .font(.werk(size: 11.5))
                         .foregroundStyle(ThingsColor.textSecondary)
                         .lineLimit(1)
                 } else {
-                    Text(entry.title)
-                        .thingsFont(.todoTitleOpen)
+                    Text(entry.client)
+                        .font(.werk(size: clientSize, weight: .medium))
                         .foregroundStyle(ThingsColor.textPrimary)
                         .lineLimit(1)
-                    Text(entry.client)
-                        .thingsFont(.metadata)
+                    Text(entry.title)
+                        .font(.werk(size: caseSize))
                         .foregroundStyle(ThingsColor.textSecondary)
                         .lineLimit(1)
                 }
@@ -415,6 +418,10 @@ struct TimeEntryRow: View {
     /// Veld dat bewerkt wordt (dubbelklik).
     @State private var editingField: BookingField?
     @State private var isHovering = false
+    /// Klant iets kleiner dan een kaarttitel, de case iets groter dan de gewone tweede regel (met Dynamic Type).
+    @ScaledMetric(relativeTo: .body) private var clientSize = ThingsTextStyle.todoTitle.size - 1
+    @ScaledMetric(relativeTo: .footnote) private var caseSize = ThingsTextStyle.metadata.size + 1
+    @ScaledMetric(relativeTo: .footnote) private var dateSize = ThingsTextStyle.metadata.size - 0.5
 
     private var writtenBinding: Binding<TodoStatus> {
         Binding(
@@ -464,21 +471,28 @@ struct TimeEntryRow: View {
                 .help(entry.status == .finished ? "Geschreven in het facturatiesysteem" : "Stop eerst de timer")
             ClientLogo(name: entry.client, size: 16)
 
+            // Bovenaan de klant, met wanneer de regel is ingevoerd; daaronder de case.
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 5) {
-                    Text(entry.title)
-                        .thingsFont(.todoTitle)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(clientLine)
+                        .font(.werk(size: clientSize))
                         .strikethrough(entry.isWritten)
                         .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
                         .lineLimit(1)
                     if !entry.dictatedFields.isEmpty { DictatedMark() }
+                    Text(entryDate)
+                        .font(.werk(size: dateSize))
+                        .foregroundStyle(ThingsColor.textTertiary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .layoutPriority(-1)
                 }
                 Group {
                     if ThemeStore.shared.look == .tischsuper {
-                        ThemeParts.labelValue("Klant", subtitle)
+                        ThemeParts.labelValue("Case", caseLine, size: caseSize)
                     } else {
-                        Text(subtitle)
-                            .thingsFont(.metadata)
+                        Text(caseLine)
+                            .font(.werk(size: caseSize))
                             .foregroundStyle(ThingsColor.textSecondary)
                     }
                 }
@@ -540,17 +554,23 @@ struct TimeEntryRow: View {
             ClientLogo(name: entry.client, size: 16)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
-                    Text(entry.title.uppercased())
-                        .font(.werk(size: 10.5, weight: .bold))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(clientLine.uppercased())
+                        .font(.werk(size: 10, weight: .bold))
                         .tracking(0.6)
                         .strikethrough(entry.isWritten)
                         .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
                         .lineLimit(1)
                     if !entry.dictatedFields.isEmpty { DictatedMark() }
+                    Text(entryDate)
+                        .font(.werk(size: 10))
+                        .foregroundStyle(ThingsColor.textTertiary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .layoutPriority(-1)
                 }
-                Text(subtitle)
-                    .font(.werk(size: 11))
+                Text(caseLine)
+                    .font(.werk(size: 11.5))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(1)
             }
@@ -622,13 +642,25 @@ struct TimeEntryRow: View {
                    help: "Case en uitgevoerd kopiëren")
     }
 
-    /// Alleen de klant: een regel uit een kaarttimer ziet er na het stoppen hetzelfde uit als een snelle invoer.
-    private var subtitle: String {
-        var text = entry.client
+    /// Onder de klant: de case, bij een gepauzeerde timer met de pauze erbij. Geen bron (To-do/Support): een regel uit
+    /// een kaarttimer ziet er na het stoppen hetzelfde uit als een snelle invoer.
+    private var caseLine: String {
+        var text = entry.title
         if entry.status == .paused {
             text += entry.interruptions > 0 ? " · Pauze · \(entry.interruptions)× onderbroken" : " · Pauze"
         }
         return text
+    }
+
+    /// Zonder klant een streepje, zodat de case op zijn eigen regel blijft.
+    private var clientLine: String {
+        let client = entry.client.trimmingCharacters(in: .whitespacesAndNewlines)
+        return client.isEmpty ? "—" : client
+    }
+
+    /// Wanneer de regel is ingevoerd: "do 29 okt 14:05".
+    private var entryDate: String {
+        "\(DutchDate.weekdayAndDay(entry.createdAt)) \(DutchDate.time(entry.createdAt))"
     }
 
     private var trailingTime: String {
@@ -723,8 +755,22 @@ private struct BookingDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             row(.client, copy: value(.client))
-            row(.caseTitle, copy: entry.title.isEmpty ? "" : "Case: \(entry.title)")
-            row(.performed, copy: entry.workDescription.isEmpty ? "" : "Uitgevoerd: \(entry.workDescription)")
+            VStack(alignment: .leading, spacing: 6) {
+                row(.caseTitle, copy: entry.title.isEmpty ? "" : "Case: \(entry.title)")
+                row(.performed, copy: entry.workDescription.isEmpty ? "" : "Uitgevoerd: \(entry.workDescription)")
+            }
+            // Case en uitgevoerd in één keer, met een streepje langs beide regels.
+            .overlay(alignment: .leading) {
+                HStack(spacing: 2) {
+                    CopyButton(text: entry.title.isEmpty && entry.workDescription.isEmpty ? ""
+                                   : Self.documentationText(entry),
+                               symbol: "doc.on.clipboard", help: "Case en uitgevoerd kopiëren")
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(ThingsColor.separator)
+                        .frame(width: 2)
+                }
+                .offset(x: -30)
+            }
             row(.hours, copy: value(.hours))
         }
         .thingsFont(.notes)
