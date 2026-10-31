@@ -57,7 +57,7 @@ struct ComposeView: View {
     @Environment(\.openWindow) private var openWindow
     private let gmail = GmailSession.shared
 
-    private enum Field { case to, body }
+    private enum Field { case to, cc, bcc, body }
     @FocusState private var focus: Field?
 
     @State private var fromAccount = ""
@@ -80,6 +80,8 @@ struct ComposeView: View {
     @State private var showCc = false
     @State private var reviewer = MailReviewer()
     @State private var showBcc = false
+    /// Terug in de inbox als er na zoveel dagen geen antwoord is (nil: niet opvolgen).
+    @State private var followUpDays: Int?
     /// Opmaak van de tekst (werkbalk, HTML bij versturen).
     @State private var rich = RichTextController()
 
@@ -156,13 +158,13 @@ struct ComposeView: View {
                     .padding(.bottom, 4)
             }
             row("Aan") {
-                TextField("", text: $toText).focused($focus, equals: .to)
+                AddressField(text: $toText, focus: $focus, field: .to)
             } trailing: {
                 if !showCc && ccText.isEmpty { fieldToggle("Cc") { showCc = true } }
                 if !showBcc && bccText.isEmpty { fieldToggle("Bcc") { showBcc = true } }
             }
-            if showCc || !ccText.isEmpty { row("Cc") { TextField("", text: $ccText) } }
-            if showBcc || !bccText.isEmpty { row("Bcc") { TextField("", text: $bccText) } }
+            if showCc || !ccText.isEmpty { row("Cc") { AddressField(text: $ccText, focus: $focus, field: .cc) } }
+            if showBcc || !bccText.isEmpty { row("Bcc") { AddressField(text: $bccText, focus: $focus, field: .bcc) } }
             row("Van") { fromField }
             row("Onderwerp") { TextField("", text: $subject) }
         }
@@ -171,7 +173,7 @@ struct ComposeView: View {
     /// Eén regel zoals in een mailprogramma: label en veld, met een dunne lijn die niet tot de randen loopt.
     private func row<Content: View, Trailing: View>(_ label: String, @ViewBuilder content: () -> Content,
                                                     @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(label + ":")
                 .foregroundStyle(ThingsColor.textTertiary)
             content()
@@ -475,6 +477,18 @@ struct ComposeView: View {
                     .help("Concept verwijderen")
                 }
                 Spacer()
+                Menu {
+                    Button("Niet opvolgen") { followUpDays = nil }
+                    ForEach([2, 3, 7, 14], id: \.self) { days in
+                        Button(Self.followUpTitle(days)) { followUpDays = days }
+                    }
+                } label: {
+                    Label(followUpDays.map { "Opvolgen · \(Self.followUpTitle($0))" } ?? "Opvolgen",
+                          systemImage: "arrow.uturn.backward.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .foregroundStyle(followUpDays == nil ? ThingsColor.textSecondary : ThingsColor.accent)
                 if isSending { ProgressView().controlSize(.small) }
                 Button("Verstuur") { sendDirectly() }
                     .buttonStyle(.borderedProminent)
@@ -610,6 +624,14 @@ struct ComposeView: View {
 
     // MARK: Versturen
 
+    private static func followUpTitle(_ days: Int) -> String {
+        switch days {
+        case 7: "1 week"
+        case 14: "2 weken"
+        default: "\(days) dagen"
+        }
+    }
+
     private func sendDirectly() {
         guard !isSending, !isLoading, validate() else { return }
         Task { await send() }
@@ -659,11 +681,17 @@ struct ComposeView: View {
         isSending = true
         defer { isSending = false }
         do {
-            try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
+            let sentThread = try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
             SendSound.play()
             // Een antwoord in het gesprek van een kaart: die wacht nu op de klant.
             let waiting = isReply ? ref.source.flatMap { WaitingWatcher.shared.didReply(threadID: $0.threadID) } : nil
-            let message = waiting.map { "Mail verzonden · kaart naar \($0)" } ?? "Mail verzonden"
+            var message = waiting.map { "Mail verzonden · kaart naar \($0)" } ?? "Mail verzonden"
+            if let days = followUpDays, let sentThread {
+                let due = Date().addingTimeInterval(Double(days) * 86_400)
+                FollowUpStore.shared.add(threadID: sentThread, account: fromAccount, subject: subject, kind: .noReply, due: due)
+                message += " · opvolgen \(DutchDate.weekdayAndDay(due))"
+                followUpDays = nil
+            }
             // Antwoord of doorgestuurd: 4 seconden lang archiveert Enter het gesprek.
             if ref.source != nil, archivesOnSend {
                 appState.announce(message + " · gearchiveerd")

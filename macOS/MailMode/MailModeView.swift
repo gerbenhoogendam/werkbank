@@ -29,8 +29,8 @@ struct MailModeView: View {
         }
         .background(ThingsColor.backgroundSidebar)
         .overlay {
-            if let sheet = store.sheet, let item = store.selected {
-                MailModeSheetHost(sheet: sheet, item: item)
+            if let sheet = store.sheet, !sheet.needsMail || store.selected != nil {
+                MailModeSheetHost(sheet: sheet, item: store.selected)
                     .transition(.opacity)
             }
         }
@@ -293,7 +293,17 @@ private struct MailModeList: View {
     /// Nieuwsbrieven en meldingen samen in één rij; openklappen zet ze in de lijst.
     private var bundleRow: some View {
         let bundle = store.bundle
-        return Button {
+        return HStack(spacing: 6) {
+            bundleToggle(bundle)
+            Button("Archiveren…") { store.openSheet(.bulk) }
+                .buttonStyle(MailModeButtonStyle())
+        }
+        .padding(.horizontal, MailLook.cardRows ? 0 : 8)
+        .padding(.vertical, 6)
+    }
+
+    private func bundleToggle(_ bundle: [GmailMailItem]) -> some View {
+        Button {
             withAnimation(.easeOut(duration: 0.15)) { store.bundleOpen.toggle() }
         } label: {
             HStack(spacing: 10) {
@@ -321,8 +331,6 @@ private struct MailModeList: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, MailLook.cardRows ? 0 : 8)
-        .padding(.vertical, 6)
     }
 }
 

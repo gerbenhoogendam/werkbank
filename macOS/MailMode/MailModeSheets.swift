@@ -7,11 +7,15 @@ import WerkbankCore
 /// Elk blad eindigt in archiveren en opent de volgende mail.
 enum MailModeSheet: Equatable {
     case task, time, plan, follow, concept
+    /// Nieuwsbrieven en meldingen in één keer archiveren.
+    case bulk
+
+    var needsMail: Bool { self != .bulk }
 }
 
 struct MailModeSheetHost: View {
     let sheet: MailModeSheet
-    let item: GmailMailItem
+    let item: GmailMailItem?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -19,12 +23,16 @@ struct MailModeSheetHost: View {
                 .contentShape(Rectangle())
                 .onTapGesture { MailModeStore.shared.closeSheet() }
             Group {
-                switch sheet {
-                case .task: MailTaskSheet(item: item)
-                case .time: MailTimeSheet(item: item)
-                case .plan: MailPlanSheet(item: item)
-                case .follow: MailFollowSheet(item: item)
-                case .concept: MailConceptSheet(item: item)
+                if sheet == .bulk {
+                    MailBulkSheet()
+                } else if let item {
+                    switch sheet {
+                    case .task: MailTaskSheet(item: item)
+                    case .time: MailTimeSheet(item: item)
+                    case .plan: MailPlanSheet(item: item)
+                    case .follow: MailFollowSheet(item: item)
+                    case .concept, .bulk: MailConceptSheet(item: item)
+                    }
                 }
             }
             .padding(.top, 60)
@@ -738,5 +746,131 @@ private struct MailConceptSheet: View {
     private func restart(_ length: MailConcept.Length) {
         edited = nil
         concept.start(item: item, client: store.clientName(for: item), length: length, modelContext: context)
+    }
+}
+
+// MARK: - Nieuwsbrieven en meldingen in één keer
+
+private struct MailBulkSheet: View {
+    @Environment(AppState.self) private var appState
+    /// Afzenders die deze keer niet meegaan.
+    @State private var skipped: Set<String> = []
+    private let store = MailModeStore.shared
+
+    private struct SenderGroup: Identifiable {
+        let items: [GmailMailItem]
+        var first: GmailMailItem { items[0] }
+        var id: String { first.fromAddress?.lowercased() ?? first.senderDisplay }
+    }
+
+    var body: some View {
+        let groups = MailBulk.groups(store.bundle).map(SenderGroup.init)
+        let chosen = groups.filter { !skipped.contains($0.id) }.flatMap(\.items)
+        SheetFrame(title: "Nieuwsbrieven en meldingen archiveren", systemImage: "tray.full", width: 620) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(groups) { group in row(group) }
+                }
+            }
+            .frame(maxHeight: 380)
+            .fixedSize(horizontal: false, vertical: groups.count < 7)
+            if !store.bulkRules.isEmpty {
+                SheetField(label: "Nooit in één keer") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(store.bulkRules) { rule in
+                            HStack {
+                                Text(rule.title)
+                                    .font(.werk(size: 12.5))
+                                    .foregroundStyle(ThingsColor.textPrimary)
+                                Spacer(minLength: 8)
+                                Button("Weer meenemen") { store.removeBulkRule(rule) }
+                                    .buttonStyle(MailModeButtonStyle())
+                            }
+                        }
+                    }
+                }
+            }
+        } buttons: {
+            Spacer(minLength: 0)
+            Button("Annuleren") { store.closeSheet() }
+                .buttonStyle(MailModeButtonStyle())
+            Button(chosen.count == 1 ? "1 mail archiveren" : "\(chosen.count) mails archiveren") {
+                store.closeSheet()
+                store.archiveBulk(chosen, appState: appState)
+            }
+            .buttonStyle(MailModeButtonStyle(prominent: true))
+            .keyboardShortcut(.defaultAction)
+            .disabled(chosen.isEmpty)
+        }
+    }
+
+    private func toggle(_ id: String) {
+        if skipped.contains(id) { skipped.remove(id) } else { skipped.insert(id) }
+    }
+
+    private func row(_ group: SenderGroup) -> some View {
+        let isOn = !skipped.contains(group.id)
+        let kind = store.kind(of: group.first)
+        return HStack(alignment: .top, spacing: 10) {
+            Toggle("", isOn: Binding(get: { isOn }, set: { _ in toggle(group.id) }))
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(group.first.senderDisplay)
+                        .font(.werk(size: 13, weight: .semibold))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    if group.items.count > 1 {
+                        Text("\(group.items.count)")
+                            .font(.werk(size: 11, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(ThingsColor.textSecondary)
+                    }
+                    Text(kind.title)
+                        .font(.werk(size: 10.5, weight: .medium))
+                        .foregroundStyle(ThingsColor.tagText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(ThingsColor.tagBackground))
+                }
+                Text(group.items.prefix(2).map(\.subject).joined(separator: " · "))
+                    .font(.werk(size: 12))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            Menu { menu(group, kind: kind) } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.werk(size: 13))
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Meer")
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .opacity(isOn ? 1 : 0.55)
+        .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
+            .fill(isOn ? Color.clear : ThingsColor.backgroundSidebar))
+        .contentShape(Rectangle())
+        .onTapGesture { toggle(group.id) }
+        .contextMenu { menu(group, kind: kind) }
+    }
+
+    @ViewBuilder private func menu(_ group: SenderGroup, kind: MailKind) -> some View {
+        Button(skipped.contains(group.id) ? "Deze keer wel" : "Deze keer niet") { toggle(group.id) }
+        Divider()
+        if let address = group.first.fromAddress?.lowercased() {
+            Button("\(address) nooit in één keer") { store.addBulkRule(.sender(address)) }
+            if let host = ClientNaming.domain(ofAddress: address) {
+                let domain = ClientNaming.registrableDomain(of: host)
+                Button("Alles van \(domain) nooit in één keer") { store.addBulkRule(.domain(domain)) }
+            }
+        }
+        Button(kind == .newsletter ? "Nieuwsbrieven nooit in één keer" : "Meldingen nooit in één keer") {
+            store.addBulkRule(.kind(kind))
+        }
     }
 }

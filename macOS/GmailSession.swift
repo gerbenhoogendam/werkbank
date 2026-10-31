@@ -742,11 +742,17 @@ final class GmailSession {
     }
 
     /// Verstuurt een kant-en-klare mail (RFC 822) vanuit `account`; `threadID` houdt een antwoord in hetzelfde gesprek.
-    func send(raw: Data, threadID: String?, account: String) async throws {
+    /// Verstuurt een mail; geeft het gesprek terug waarin hij terechtkwam (voor opvolgen).
+    @discardableResult
+    func send(raw: Data, threadID: String?, account: String) async throws -> String? {
         var json: [String: Any] = ["raw": Base64URL.encode(raw)]
         if let threadID { json["threadId"] = threadID }
         let body = try JSONSerialization.data(withJSONObject: json)
-        _ = try await api("messages/send", method: "POST", body: body, account: account)
+        let response = try await api("messages/send", method: "POST", body: body, account: account)
+        let sent = (try? JSONSerialization.jsonObject(with: response)) as? [String: Any]
+        let thread = sent?["threadId"] as? String ?? threadID
+        if let thread { note(account: account, forMessageID: thread) }
+        return thread
     }
 
     /// De mails van een gesprek (oudste eerst, zonder concepten): koppen en snippet, nog zonder inhoud.
@@ -803,6 +809,48 @@ final class GmailSession {
         } catch {
             AppState.shared.announce("Terugzetten in de inbox mislukt")
         }
+    }
+
+    /// Archiveert een reeks gesprekken in één keer (nieuwsbrieven en meldingen in de mailmodus), acht tegelijk.
+    /// Eén keer ⌘Z zet ze allemaal terug. Geeft de gesprekken terug waarbij het lukte.
+    func archiveBulk(threadIDs: [String]) async -> [String] {
+        let done = await archiveEach(threadIDs)
+        guard !done.isEmpty else { return done }
+        UndoCenter.shared.record(done.count == 1 ? "Mail archiveren" : "\(done.count) mails archiveren", undo: { [weak self] in
+            Task { await self?.restoreBulk(threadIDs: done) }
+        }, redo: { [weak self] in
+            Task { _ = await self?.archiveEach(done) }
+        })
+        return done
+    }
+
+    private func archiveEach(_ threadIDs: [String]) async -> [String] {
+        var done: [String] = []
+        var start = 0
+        while start < threadIDs.count {
+            let chunk = Array(threadIDs[start..<min(start + 8, threadIDs.count)])
+            done += await withTaskGroup(of: String?.self) { group -> [String] in
+                for id in chunk {
+                    group.addTask { (try? await self.archive(threadID: id)) != nil ? id : nil }
+                }
+                var list: [String] = []
+                for await id in group { if let id { list.append(id) } }
+                return list
+            }
+            start += 8
+        }
+        for id in done { removeThreadFromLists(id) }
+        return done
+    }
+
+    private func restoreBulk(threadIDs: [String]) async {
+        var failed = 0
+        for id in threadIDs {
+            do { try await moveToInbox(threadID: id, account: nil) } catch { failed += 1 }
+        }
+        await reload()
+        if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
+        if failed > 0 { AppState.shared.announce("Terugzetten in de inbox mislukt bij \(failed) mails") }
     }
 
     private func recordArchive(threadID: String) {

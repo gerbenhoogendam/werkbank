@@ -54,6 +54,16 @@ struct SignaturePreferences: View {
 
             MailModeKeysSection()
 
+            if !MailModeStore.shared.bulkRules.isEmpty {
+                Section("Nooit in één keer archiveren") {
+                    ForEach(MailModeStore.shared.bulkRules) { rule in
+                        LabeledContent(rule.title) {
+                            Button("Weer meenemen") { MailModeStore.shared.removeBulkRule(rule) }
+                        }
+                    }
+                }
+            }
+
             Section {
                 Picker("Handtekening voor", selection: $key) {
                     Text("Alle mailboxen (standaard)").tag(MailSignatures.defaultKey)

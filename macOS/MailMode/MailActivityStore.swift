@@ -11,9 +11,12 @@ final class MailActivityStore {
     private struct Stored: Codable {
         var records: [MailActivityRecord]
         var lastSync: [String: Date]
+        var names: [String: String]?
     }
 
     private(set) var records: [MailActivityRecord] = []
+    /// De naam bij een adres, zoals die in de mail stond (voor het aanvullen).
+    private(set) var names: [String: String] = [:]
     private var lastSync: [String: Date] = [:]
     private var ids = Set<String>()
     private var loaded = false
@@ -30,7 +33,7 @@ final class MailActivityStore {
         return folder.appendingPathComponent("MailActivity.json")
     }
 
-    private func loadIfNeeded() {
+    func loadIfNeeded() {
         guard !loaded else { return }
         loaded = true
         guard let file = Self.file, let data = try? Data(contentsOf: file) else { return }
@@ -39,6 +42,7 @@ final class MailActivityStore {
         guard let stored = try? decoder.decode(Stored.self, from: data) else { return }
         records = stored.records
         lastSync = stored.lastSync
+        names = stored.names ?? [:]
         ids = Set(records.map(\.id))
     }
 
@@ -46,7 +50,7 @@ final class MailActivityStore {
         guard let file = Self.file else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        if let data = try? encoder.encode(Stored(records: records, lastSync: lastSync)) {
+        if let data = try? encoder.encode(Stored(records: records, lastSync: lastSync, names: names)) {
             try? data.write(to: file, options: .atomic)
         }
     }
@@ -57,6 +61,11 @@ final class MailActivityStore {
         loadIfNeeded()
         var changed = false
         for item in items where !ids.contains(item.id) {
+            if let address = item.fromAddress?.lowercased(),
+               let name = item.fromName?.trimmingCharacters(in: .whitespaces), !name.isEmpty, name.lowercased() != address,
+               names[address] != name {
+                names[address] = name
+            }
             guard let record = MailActivityRecord(item) else { continue }
             records.append(record)
             ids.insert(record.id)

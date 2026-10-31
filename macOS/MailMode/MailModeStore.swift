@@ -58,6 +58,9 @@ final class MailModeStore {
     private(set) var sheet: MailModeSheet?
     /// Datums en tijden in een mail (zonder het geciteerde deel), per mail.
     private(set) var proposalsByID: [String: [DateProposal]] = [:]
+    /// Afzenders, domeinen en soorten mail die nooit mee gaan bij archiveren in één keer (gaat mee naar je andere Macs).
+    private(set) var bulkRules: [BulkRule] = MailBulk.decode(UserDefaults.standard.data(forKey: MailModeStore.bulkRulesKey))
+    static let bulkRulesKey = "mailMode.bulkRules"
 
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var loadToken = 0
@@ -245,15 +248,60 @@ final class MailModeStore {
         filters.contains(.noTask) ? items.filter { !hasTask($0) } : items
     }
 
-    /// Nieuwsbrieven en meldingen; alleen als er niet gezocht of gefilterd wordt.
+    /// Nieuwsbrieven en meldingen; alleen als er niet gezocht of gefilterd wordt. Wat je uitsloot van archiveren in
+    /// één keer wil je lezen: dat staat gewoon in de lijst.
     var bundle: [GmailMailItem] {
-        isFiltering ? [] : filtered.filter { kind(of: $0) != .person }
+        isFiltering ? [] : filtered.filter(isBundled)
     }
 
     /// De mails in de lijst, in volgorde: zonder zoeken en filters staat de bundel apart (tenzij opengeklapt).
     var listed: [GmailMailItem] {
         if isFiltering || bundleOpen { return filtered }
-        return filtered.filter { kind(of: $0) == .person }
+        return filtered.filter { !isBundled($0) }
+    }
+
+    private func isBundled(_ item: GmailMailItem) -> Bool {
+        let kind = kind(of: item)
+        return kind != .person && !MailBulk.isExcluded(item, kind: kind, rules: bulkRules)
+    }
+
+    // MARK: Archiveren in één keer
+
+    func addBulkRule(_ rule: BulkRule) {
+        guard !bulkRules.contains(rule) else { return }
+        bulkRules.append(rule)
+        saveBulkRules()
+    }
+
+    func removeBulkRule(_ rule: BulkRule) {
+        bulkRules.removeAll { $0 == rule }
+        saveBulkRules()
+    }
+
+    func reloadBulkRules() {
+        bulkRules = MailBulk.decode(UserDefaults.standard.data(forKey: Self.bulkRulesKey))
+    }
+
+    private func saveBulkRules() {
+        UserDefaults.standard.set(MailBulk.encode(bulkRules), forKey: Self.bulkRulesKey)
+    }
+
+    /// Archiveert de gekozen nieuwsbrieven en meldingen; één keer ⌘Z zet ze terug.
+    func archiveBulk(_ chosen: [GmailMailItem], appState: AppState) {
+        let threads = chosen.map(\.threadID)
+        guard !threads.isEmpty else { return }
+        for thread in threads { remove(threadID: thread) }
+        bundleOpen = false
+        Task {
+            let done = await gmail.archiveBulk(threadIDs: threads)
+            let failed = threads.count - done.count
+            if failed > 0 {
+                appState.showToast("\(done.count) gearchiveerd; \(failed) mislukt", seconds: 5)
+                await reload()
+            } else {
+                appState.announce(done.count == 1 ? "1 mail gearchiveerd" : "\(done.count) mails gearchiveerd", seconds: 3)
+            }
+        }
     }
 
     var sections: [Section] {
@@ -341,7 +389,7 @@ final class MailModeStore {
     // MARK: Bladen
 
     func openSheet(_ kind: MailModeSheet) {
-        guard selected != nil else { return }
+        guard selected != nil || kind == .bulk else { return }
         sheet = kind
     }
 
