@@ -30,11 +30,15 @@ struct ComposeView: View {
     /// In een eigen venster (losgehaald): `restored` is wat er al ingevuld was.
     var detached = false
     var restored: ComposeDraft?
+    /// Mailmodus: na versturen wordt het gesprek meteen gearchiveerd (geen Enter-aftelling).
+    var archivesOnSend = false
 
     init(ref: ComposeRef, embedded: Bool = false, preloaded: MailContent? = nil, externalBody: Binding<String>? = nil,
          suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil,
-         onDiscard: (() -> Void)? = nil, detached: Bool = false, restored: ComposeDraft? = nil) {
+         onDiscard: (() -> Void)? = nil, detached: Bool = false, restored: ComposeDraft? = nil,
+         archivesOnSend: Bool = false) {
         self.ref = ref
+        self.archivesOnSend = archivesOnSend
         self.embedded = embedded
         self.detached = detached
         self.restored = restored
@@ -657,7 +661,9 @@ struct ComposeView: View {
             let waiting = isReply ? ref.source.flatMap { WaitingWatcher.shared.didReply(threadID: $0.threadID) } : nil
             let message = waiting.map { "Mail verzonden · kaart naar \($0)" } ?? "Mail verzonden"
             // Antwoord of doorgestuurd: 4 seconden lang archiveert Enter het gesprek.
-            if let source = ref.source {
+            if ref.source != nil, archivesOnSend {
+                appState.announce(message + " · gearchiveerd")
+            } else if let source = ref.source {
                 SendFollowUp.offerArchive(source, message: message, appState: appState)
             } else {
                 appState.announce(message)

@@ -48,6 +48,12 @@ private let claudeTint = Color(red: 0.85, green: 0.47, blue: 0.34)
 /// Aan de drie streepjes bovenaan pak je het gesprek vast en sleep je het naar een kolom, de agenda of het Claude-icoon.
 struct MailWindowView: View {
     let ref: MailRef
+    /// In de mailmodus: alleen het gesprek (kop en knoppen staan in de mailmodus zelf).
+    var embedded = false
+    /// De mailmodus vraagt om een antwoord (toets R of het Claude-concept).
+    var trigger: MailReplyTrigger?
+    /// Mailmodus: na versturen wordt het gesprek gearchiveerd en opent de volgende mail.
+    var onReplySent: (() -> Void)?
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
@@ -70,8 +76,11 @@ struct MailWindowView: View {
     /// Een blok waar het gesprek naartoe moet scrollen (bijv. een net gestarte analyse).
     @State private var scrollTarget: String?
 
-    init(ref: MailRef) {
+    init(ref: MailRef, embedded: Bool = false, trigger: MailReplyTrigger? = nil, onReplySent: (() -> Void)? = nil) {
         self.ref = ref
+        self.embedded = embedded
+        self.trigger = trigger
+        self.onReplySent = onReplySent
         _model = State(initialValue: MailThreadModel(ref: ref))
     }
 
@@ -79,10 +88,12 @@ struct MailWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            grabber
-            header
-            if showTaskRow { taskRow }
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            if !embedded {
+                grabber
+                header
+                if showTaskRow { taskRow }
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            }
             conversation
         }
         .background(ThingsColor.backgroundContent)
@@ -104,7 +115,7 @@ struct MailWindowView: View {
     private func start() async {
         taskTitle = ref.subject
         wasInList = gmail.messages.contains { $0.threadID == ref.threadID }
-        await model.load(notBefore: ContinuousClock.now + .seconds(FoldSpeed.mailOpen.duration))
+        await model.load(notBefore: embedded ? nil : ContinuousClock.now + .seconds(FoldSpeed.mailOpen.duration))
         // Geen antwoordblok vooraf: dat komt pas bij ⌘R, Beantwoorden, Allen of Doorsturen.
         if ref.analyze, ClaudeKeychain.read() != nil {
             let target = model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID)
@@ -348,6 +359,15 @@ struct MailWindowView: View {
                 .opacity(0)
                 .accessibilityHidden(true)
             }
+            .onChange(of: trigger?.request?.id) { _, _ in
+                // De mailmodus vraagt om een antwoord op de nieuwste mail, eventueel met tekst erin.
+                guard let request = trigger?.request, let newest = model.mails.last else { return }
+                replyRef = composeRef(request.mode, for: newest)
+                if let text = request.text { replyBody = text }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation { proxy.scrollTo("reply", anchor: .center) }
+                }
+            }
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }
                 // Even wachten tot het nieuwe blok in de lijst staat.
@@ -374,13 +394,19 @@ struct MailWindowView: View {
                         suggestion: draft.flatMap { $0.id == usedDraftID ? nil : $0.text },
                         onSuggestionDone: { usedDraftID = model.latestDraft?.id },
                         onSent: {
-                            // Verstuurd: het gesprek vouwt weg.
-                            PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
+                            if embedded {
+                                self.replyRef = nil
+                                onReplySent?()
+                            } else {
+                                // Verstuurd: het gesprek vouwt weg.
+                                PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
+                            }
                         },
                         onDiscard: {
                             usedDraftID = model.latestDraft?.id
                             self.replyRef = nil
-                        })
+                        },
+                        archivesOnSend: embedded)
                 .id(replyRef.id)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))

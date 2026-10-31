@@ -129,18 +129,24 @@ struct GmailPanel: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            if look == .standaard {
-                Image(systemName: "envelope.fill")
-                    .foregroundStyle(ThingsColor.accent)
-                Text(headerTitle)
-                    .lineLimit(1)
-                    .thingsFont(.heading)
-                    .foregroundStyle(ThingsColor.textPrimary)
-            } else {
-                MailHeaderTitle(title: headerTitle, unread: unreadCount, total: gmail.messages.count, mailbox: mailboxName)
-                    .lineLimit(1)
+            // Dubbelklik op de kop: de mailmodus (het hele venster als mailclient).
+            HStack(spacing: 8) {
+                if look == .standaard {
+                    Image(systemName: "envelope.fill")
+                        .foregroundStyle(ThingsColor.accent)
+                    Text(headerTitle)
+                        .lineLimit(1)
+                        .thingsFont(.heading)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                } else {
+                    MailHeaderTitle(title: headerTitle, unread: unreadCount, total: gmail.messages.count, mailbox: mailboxName)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer()
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { MailModeStore.shared.open() }
+            .help("Dubbelklik voor de mailmodus")
             if gmail.state == .signedIn {
                 if gmail.isLoading {
                     ProgressView().controlSize(.small)
@@ -511,13 +517,18 @@ struct GmailPanel: View {
     }
 }
 
-private struct GmailRow: View {
+/// Eén mail in de lijst, in de vorm van het thema (Mail-paneel en mailmodus).
+struct GmailRow: View {
     let message: GmailMessageSummary
     let isBusy: Bool
     let isSelected: Bool
     var accountLabel: String? = nil
     /// Kleurstreepje van de mailbox voor de afzender (Spark).
     var accountColor: Color? = nil
+    /// Labels onder de tekst (mailmodus: klant, taak, bijlage).
+    var tags: [MailRowTag] = []
+    /// Dubbelklik; zonder: het gesprek als paneel openen.
+    var onOpen: (() -> Void)? = nil
     let onSelect: () -> Void
     let onArchive: () -> Void
     let onDragStarted: () -> Void
@@ -654,6 +665,26 @@ private struct GmailRow: View {
                         .lineLimit(2)
                         .padding(.leading, 13)
                 }
+                if !tags.isEmpty {
+                    HStack(spacing: 5) {
+                        ForEach(tags) { tag in
+                            HStack(spacing: 3) {
+                                if let symbol = tag.systemImage {
+                                    Image(systemName: symbol).font(.werk(size: 9, weight: .semibold))
+                                }
+                                Text(tag.text).lineLimit(1)
+                            }
+                            .font(.werk(size: 10.5, weight: .medium))
+                            .foregroundStyle(tag.highlighted ? ThingsColor.accent : ThingsColor.tagText)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(RoundedRectangle(cornerRadius: min(5, ThingsMetrics.cardRadius), style: .continuous)
+                                .fill(ThingsColor.tagBackground))
+                        }
+                    }
+                    .padding(.leading, 13)
+                    .padding(.top, 3)
+                }
                 if look == .principes && isSelected {
                     Capsule().fill(ThingsColor.accent).frame(width: 34, height: 3)
                         .padding(.leading, 13)
@@ -663,7 +694,7 @@ private struct GmailRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             // Eerst dubbelklik, dan enkele klik: anders wint de enkele klik altijd.
-            .onTapGesture(count: 2, perform: open)
+            .onTapGesture(count: 2) { if let onOpen { onOpen() } else { open() } }
             .onTapGesture(perform: onSelect)
             .onDrag {
                 onDragStarted()
@@ -671,6 +702,7 @@ private struct GmailRow: View {
             }
             .contextMenu {
                 Button("Openen") { open() }
+                Button("Openen in mailmodus") { MailModeStore.shared.open(selecting: message) }
                 Button("Analyseer met Claude") { analyze() }
                 Button("Losse analyse (eigen venster)") {
                     ClaudeAnalyzer.shared.analyze(messageID: message.id, subject: message.subject)
@@ -749,4 +781,12 @@ private struct GmailRow: View {
         }
         return date.formatted(.dateTime.day().month(.abbreviated))
     }
+}
+
+/// Een label onder een mail in de lijst (mailmodus): de klant, "Taak", "Bijlage".
+struct MailRowTag: Identifiable {
+    let text: String
+    var systemImage: String? = nil
+    var highlighted = false
+    var id: String { text }
 }

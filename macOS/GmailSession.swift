@@ -544,6 +544,70 @@ final class GmailSession {
         return GmailAPI.summary(fromMessageJSON: data)
     }
 
+    // MARK: Mailmodus
+
+    /// Mails voor de mailmodus uit één mailbox: `query` in de zoektaal van Gmail, nieuwste eerst, één per gesprek.
+    func mailItems(query: String, account: String?, maxResults: Int = 50) async throws -> [GmailMailItem] {
+        let list = try await api("messages", query: [URLQueryItem(name: "q", value: query),
+                                                     URLQueryItem(name: "maxResults", value: String(maxResults))],
+                                 account: account)
+        var seenThreads = Set<String>()
+        let refs = GmailAPI.messageRefs(fromListJSON: list).refs.filter { seenThreads.insert($0.threadID).inserted }
+        return await mailItems(ids: refs.map(\.id), account: account, headers: GmailAPI.mailItemHeaders)
+    }
+
+    /// Alle mail (ook verzonden en gearchiveerd) sinds `since`, met alleen afzender en ontvangers: voor de klanten op
+    /// volgorde van contact en het aanvullen van adressen. Hooguit `limit` mails.
+    func activityItems(since: Date, account: String?, limit: Int = 400) async -> [GmailMailItem] {
+        var refs: [GmailAPI.MessageRef] = []
+        var pageToken: String?
+        repeat {
+            var query = [URLQueryItem(name: "q", value: "after:\(Int(since.timeIntervalSince1970))"),
+                         URLQueryItem(name: "maxResults", value: "200")]
+            if let pageToken { query.append(URLQueryItem(name: "pageToken", value: pageToken)) }
+            guard let data = try? await api("messages", query: query, account: account) else { break }
+            let page = GmailAPI.messageRefs(fromListJSON: data)
+            refs += page.refs
+            pageToken = page.nextPageToken
+        } while pageToken != nil && refs.count < limit
+        return await mailItems(ids: refs.prefix(limit).map(\.id), account: account, headers: ["From", "To", "Cc"])
+    }
+
+    /// Haalt de koppen van mails op, acht tegelijk (zo blijft het binnen wat Gmail per seconde toestaat).
+    private func mailItems(ids: [String], account: String?, headers: [String]) async -> [GmailMailItem] {
+        let query = [URLQueryItem(name: "format", value: "metadata")]
+            + headers.map { URLQueryItem(name: "metadataHeaders", value: $0) }
+        var found: [(Int, GmailMailItem)] = []
+        var start = 0
+        while start < ids.count {
+            let chunk = Array(ids[start..<min(start + 8, ids.count)].enumerated()).map { ($0.offset + start, $0.element) }
+            let results = await withTaskGroup(of: (Int, GmailMailItem?).self) { group -> [(Int, GmailMailItem)] in
+                for (index, id) in chunk {
+                    group.addTask {
+                        let data = try? await self.api("messages/\(id)", query: query, account: account)
+                        return (index, data.flatMap(GmailAPI.mailItem(fromMessageJSON:)))
+                    }
+                }
+                var list: [(Int, GmailMailItem)] = []
+                for await (index, item) in group {
+                    if let item { list.append((index, item)) }
+                }
+                return list
+            }
+            found += results
+            start += 8
+        }
+        let key = account ?? ""
+        for (_, item) in found {
+            messageAccount[item.id] = key
+            messageAccount[item.threadID] = key
+        }
+        return found.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    /// De eigen adressen (alle gekoppelde mailboxen), in kleine letters.
+    var ownAddresses: Set<String> { Set(accounts.map { $0.lowercased() }) }
+
     // MARK: Verzonden mails (dagafsluiting)
 
     /// Verzonden mails tussen `start` en `end` uit alle gekoppelde mailboxen, oudste eerst.
@@ -766,8 +830,9 @@ final class GmailSession {
         return text
     }
 
-    /// Archiveert het gesprek zonder er een kaart van te maken (de knop in de lijst).
-    func archiveMessage(_ message: GmailMessageSummary, appState: AppState) async {
+    /// Archiveert het gesprek zonder er een kaart van te maken (de knop in de lijst). `announce: false` als de
+    /// melding al ergens anders staat (mailmodus).
+    func archiveMessage(_ message: GmailMessageSummary, appState: AppState, announce: Bool = true) async {
         guard !busyMessageIDs.contains(message.id) else { return }
         busyMessageIDs.insert(message.id)
         defer { busyMessageIDs.remove(message.id) }
@@ -776,7 +841,7 @@ final class GmailSession {
             removeThreadFromLists(message.threadID)
             bodyCache[message.id] = nil
             recordArchive(threadID: message.threadID)
-            appState.showToast("Mail gearchiveerd in Gmail")
+            if announce { appState.showToast("Mail gearchiveerd in Gmail") }
         } catch {
             appState.showToast("Archiveren mislukt: \(error.localizedDescription)", seconds: 5)
         }
