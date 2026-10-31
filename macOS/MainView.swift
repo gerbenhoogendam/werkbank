@@ -24,7 +24,7 @@ struct MainView: View {
     @State private var monthOpen = false
 
     private static let defaultGmailWidth = 300.0
-    private static let gmailRange = 240.0...480.0
+    private static let gmailRange = 240.0...720.0
 
     private static let defaultBoardFraction = 0.45
     private static let defaultAgendaFraction = 0.75
@@ -307,8 +307,9 @@ extension View {
     }
 }
 
-/// Scheidingslijn tussen twee panelen die je door te slepen kunt verschuiven.
-private struct SplitDivider: View {
+/// Scheidingslijn tussen twee panelen die je door te slepen kunt verschuiven. In het midden een kort greepje, ook in
+/// thema's met losse vlakken (daar is de lijn zelf onzichtbaar), zodat je ziet dat hij schuift. Dubbelklik zet terug.
+struct SplitDivider: View {
     /// `true`: een horizontale lijn (verschuift op en neer); `false`: een verticale lijn (links/rechts).
     let isHorizontalLine: Bool
     var label: String? = nil
@@ -330,6 +331,9 @@ private struct SplitDivider: View {
                       : (ThemeStore.shared.look.panelGap > 0 ? Color.clear : ThingsColor.separator))
                 .frame(width: isHorizontalLine ? nil : (isHovering ? 2 : 1),
                        height: isHorizontalLine ? (isHovering ? 2 : 1) : nil)
+            Capsule()
+                .fill(isHovering ? ThingsColor.accent : ThingsColor.textTertiary.opacity(0.45))
+                .frame(width: isHorizontalLine ? 32 : 3, height: isHorizontalLine ? 3 : 32)
         }
         .frame(width: isHorizontalLine ? nil : Self.thickness, height: isHorizontalLine ? Self.thickness : nil)
         .contentShape(Rectangle())

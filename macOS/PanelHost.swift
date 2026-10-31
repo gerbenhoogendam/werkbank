@@ -1,3 +1,4 @@
+import AppKit
 import Observation
 import SwiftUI
 
@@ -117,32 +118,88 @@ final class PanelStore {
     }
 }
 
-/// Legt de open panelen in het midden van het venster: één paneel met ±20% ruimte links en rechts,
-/// twee panelen elk de helft. Tijdens het slepen van een mail worden ze onzichtbaar, zodat de doelen vrij liggen.
+/// Legt de open panelen in het midden van het venster: één paneel in het midden, twee naast elkaar. De breedte is te
+/// verslepen (één paneel aan zijn randen, twee aan de lijn ertussen) en blijft bewaard; dubbelklik zet terug. Tijdens
+/// het slepen van een mail worden ze onzichtbaar, zodat de doelen vrij liggen.
 struct PanelOverlay: View {
     private let store = PanelStore.shared
     private let dragState = MailDragState.shared
+
+    /// Eén paneel: deel van de breedte (standaard 60%, zoals ±20% ruimte links en rechts).
+    @AppStorage("panels.singleWidth") private var singleWidth = PanelOverlay.defaultSingle
+    /// Twee panelen: het deel voor het linker.
+    @AppStorage("panels.split") private var split = PanelOverlay.defaultSplit
+    @State private var dragStart: Double?
+
+    static let defaultSingle = 0.6
+    static let defaultSplit = 0.5
+    private static let singleRange = 0.35...0.96
+    private static let splitRange = 0.25...0.75
 
     var body: some View {
         GeometryReader { geo in
             let single = store.panels.count < 2
             let height = max(geo.size.height - 40, 1)
-            HStack(spacing: 12) {
-                ForEach(store.panels) { panel in
+            let available = max(geo.size.width - 24, 1)
+            HStack(spacing: 0) {
+                ForEach(Array(store.panels.enumerated()), id: \.element.id) { index, panel in
+                    if !single, index == 1 {
+                        SplitDivider(isHorizontalLine: false, label: "Schuif de verdeling tussen de panelen",
+                                     fill: .clear,
+                                     onChanged: { translation in
+                                         let start = dragStart ?? split
+                                         dragStart = start
+                                         split = clamp(start + Double(translation) / available, Self.splitRange)
+                                     },
+                                     onEnded: { dragStart = nil },
+                                     onReset: { split = Self.defaultSplit })
+                            .frame(width: 12)
+                    }
                     PanelChrome(panel: panel)
                         .transition(panel.foldsLikeDuo
                                     ? AnyTransition.duoFold(height: height,
                                                             hidesInstantly: store.ghostedIDs.contains(panel.id))
                                     : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(width: width(of: index, single: single, available: available, total: geo.size.width))
+                        .frame(maxHeight: .infinity)
+                        .overlay(alignment: .leading) { if single { edge(sign: -1, total: geo.size.width) } }
+                        .overlay(alignment: .trailing) { if single { edge(sign: 1, total: geo.size.width) } }
                 }
             }
-            .padding(.horizontal, single ? geo.size.width * 0.2 : 12)
+            .frame(width: geo.size.width)
             .padding(.vertical, 20)
             .opacity(dragState.isDragging ? 0 : 1)
             .allowsHitTesting(!dragState.isDragging)
             .animation(.easeOut(duration: 0.15), value: dragState.isDragging)
         }
+    }
+
+    private func width(of index: Int, single: Bool, available: Double, total: Double) -> Double {
+        if single { return total * clamp(singleWidth, Self.singleRange) }
+        let left = (available - 12) * clamp(split, Self.splitRange)
+        return index == 0 ? left : available - 12 - left
+    }
+
+    /// Een rand van het enkele paneel: slepen maakt het aan beide kanten even veel breder of smaller.
+    private func edge(sign: Double, total: Double) -> some View {
+        Color.clear
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .offset(x: sign * 4)
+            .onHover { inside in (inside ? NSCursor.resizeLeftRight : NSCursor.arrow).set() }
+            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    let start = dragStart ?? singleWidth
+                    dragStart = start
+                    singleWidth = clamp(start + sign * 2 * Double(value.translation.width) / max(total, 1), Self.singleRange)
+                }
+                .onEnded { _ in dragStart = nil })
+            .simultaneousGesture(TapGesture(count: 2).onEnded { singleWidth = Self.defaultSingle })
+            .accessibilityLabel("Schuif de breedte van het paneel")
+    }
+
+    private func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double {
+        min(max(value, range.lowerBound), range.upperBound)
     }
 }
 

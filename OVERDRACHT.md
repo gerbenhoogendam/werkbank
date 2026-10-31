@@ -274,6 +274,14 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 - Nieuw model en nieuwe velden: het CloudKit-schema moet naar Production voordat een TestFlight-build het
   synchroniseert.
 
+## Panelen in de breedte (D1, 31 okt)
+
+- De panelen die midden over het board openen (mail, opstellen, Claude; `PanelOverlay` in `macOS/PanelHost.swift`)
+  zijn in de breedte te verslepen: één paneel aan zijn randen (breder of smaller aan beide kanten,
+  `panels.singleWidth`, standaard 60%), twee panelen aan de lijn ertussen (`panels.split`). Dubbelklik zet terug.
+- `SplitDivider` (`macOS/MainView.swift`) heeft een greepje in het midden, ook in thema's met losse vlakken waar de lijn
+  zelf onzichtbaar is. Het Mail-paneel links mag tot 720 pt breed (was 480).
+
 ## Open punten
 
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in
