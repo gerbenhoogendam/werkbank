@@ -105,7 +105,7 @@ struct ComposeView: View {
             reviewSection
             footer
         }
-        .background(ThingsColor.backgroundContent)
+        .background(ThingsColor.mailPaper)
         .task { await prepare() }
         .onChange(of: suggestion) { _, _ in suggestionDismissed = false }
         .onChange(of: bodyText) { _, _ in markEngaged() }

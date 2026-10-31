@@ -190,6 +190,19 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Bewaren maakt een contact, of vult een bestaand contact met hetzelfde e-mailadres aan (alleen lege velden en nieuwe
     nummers, website en adres). Recht `personal-information.addressbook` en `NSContactsUsageDescription`.
 
+24. **Themakeuze in de werkbalk, witte mail, klikbare links.** Rechtsboven staat een palet-menu met alle thema's
+    (`MainView`). Een mail (`ThreadMailCard`) en het opstelvenster (`ComposeView`) zijn in de lichte weergave altijd wit
+    (`ThingsColor.mailPaper`). Losse webadressen in de tekst van een mail worden links (`MailLinks` in WerkbankCore,
+    zowel in platte tekst als in HTML, niet in tags, bestaande links, stijlen of scripts), zoals Spark.
+
+## Opdracht in voorbereiding: mailclient-modus
+
+Dubbelklik op Mail (het paneel links) schakelt naar een modus waarin het hele venster een volwaardige mailclient is:
+zoeken in één mailbox, met Tab naar alle mail of een combinatie van mailboxen, en aanvullen van e-mailadressen bij
+opstellen. Uitgangspunt van de eigenaar: een verwerkte, beantwoorde of tot taak gemaakte mail wordt gearchiveerd; de
+mappenstructuur van de mailboxen doet er niet toe. De client moet de rest van de app aanvullen (taken, tijd,
+agenda, Claude), geen losse mailapp worden. Eerst tien voorstellen voorgelegd; bouwen pas na akkoord.
+
 ## Open punten
 
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in

@@ -243,9 +243,10 @@ public enum MailContentParser {
 
     private static let cidReference = try! NSRegularExpression(pattern: #"cid:([^"'\s)>]+)"#, options: [.caseInsensitive])
 
+    /// De mail als HTML voor de weergave, met losse webadressen in de tekst klikbaar (`MailLinks`).
     static func displayHTML(html: String?, plain: String?, attachments: [MailAttachment]) -> String {
-        if let html { return inlineCIDImages(in: html, attachments: attachments) }
-        if let plain { return "<pre class=\"plain\">" + escapeHTML(plain) + "</pre>" }
+        if let html { return inlineCIDImages(in: MailLinks.linkify(html: html), attachments: attachments) }
+        if let plain { return "<pre class=\"plain\">" + MailLinks.linkify(text: escapeHTML(plain)) + "</pre>" }
         return "<p><i>(Geen inhoud)</i></p>"
     }
 

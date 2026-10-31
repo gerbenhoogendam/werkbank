@@ -82,6 +82,9 @@ enum ThingsColor {
     static var cardBackground: Color { ThemeStore.shared.color(.card) }
     static var agendaBackground: Color { ThemeStore.shared.color(.agenda) }
     static var timeListBackground: Color { ThemeStore.shared.color(.timeList) }
+    /// Achtergrond van een mail (lezen en opstellen): in de lichte weergave altijd wit, wat het thema ook is; in de
+    /// donkere die van de panelen.
+    static var mailPaper: Color { Color.dynamic(light: 0xFFFFFF, dark: ThemeStore.shared.themeColor(.surface).dark) }
 
     // Tekst
     static var textPrimary: Color { ThemeStore.shared.color(.text) }

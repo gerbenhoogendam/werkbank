@@ -175,6 +175,22 @@ struct MainView: View {
                 .help("Vier werkweken tegelijk (⌥⌘A)")
             }
             ToolbarItem(placement: .primaryAction) {
+                // Snel wisselen van thema; eigen kleuren per thema blijven bewaard.
+                Menu {
+                    Picker("Thema", selection: Binding(get: { ThemeStore.shared.theme.id },
+                                                       set: { ThemeStore.shared.select($0) })) {
+                        ForEach(WerkbankTheme.all) { theme in
+                            Text(theme.name).tag(theme.id)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Label("Thema", systemImage: "paintpalette")
+                }
+                .help("Thema wisselen")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     showArchive.toggle()
                 } label: {

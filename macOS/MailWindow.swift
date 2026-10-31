@@ -451,7 +451,7 @@ private struct ThreadMailCard: View {
         }
         .task(id: mail.id) { if showsHistoryByDefault { showHistory = true } }
         .padding(isExpanded ? 14 : 10)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.backgroundContent))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.mailPaper))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
     }
 
