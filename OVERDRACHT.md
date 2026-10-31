@@ -217,6 +217,13 @@ beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet to
   archiveren (uitsluiten per afzender, domein of soort; `MailBulk` in WerkbankCore; uitgesloten mail staat in de lijst).
 - **Opstellen** (`AddressField.swift`, `AddressBook.swift`, `AddressSuggestions` in WerkbankCore): adressen aanvullen
   uit wie je mailde, Contacten en de klantenlijst; menu Opvolgen naast Verstuur.
+- **Mappen** (`MailModeFolders` in `MailModeView.swift`, `MailFolders.swift` in WerkbankCore): kolom links (aan/uit in
+  de werkbalk) met Postvak IN, Met ster, Verstuurd, Alle mail, Spam, Prullenbak en per mailbox de eigen labels.
+  Zoeken in Postvak IN zoekt in alle mail, in een andere map in die map. Archiveren buiten de inbox laat de mail in de
+  lijst staan en gaat naar de volgende. Concepten staan er bewust niet in (de gespreksweergave toont geen concepten).
+- **Standaard mailprogramma** (`macOS/DefaultMailApp.swift`, `MailtoLink` in WerkbankCore): het mailto-schema staat in
+  `project.yml`; een link opent het hoofdvenster met een ingevulde nieuwe mail (Apple Event `kAEGetURL` in
+  `AppDelegate`). Voorkeuren › Mail toont welk programma mailto opent, met een knop om Werkbank te kiezen.
 - Niet gebouwd (bewust): automatische tijdregistratie tijdens mailen, contextpaneel naast de mail, teller en dag
   afsluiten.
 
@@ -226,7 +233,8 @@ en het aanpassen ervan; taak met en zonder archiveren; tijd schrijven; inplannen
 .ics bij de ontvanger als uitnodiging binnen, verschijnt de afspraak in je agenda); vrije momenten in een antwoord;
 opvolgen (komt het gesprek terug, verdwijnt het bij een antwoord); concept (stijl, gebruikte context, korter en
 uitgebreider); bulk met uitvinken, uitsluiten en ⌘Z; aanvullen in Aan/Cc/Bcc (vraagt macOS om Contacten); opvolgen
-bij versturen.
+bij versturen; elke map en een label met submappen; Werkbank als standaard instellen en een mailto-link klikken, ook
+als Werkbank nog niet draait.
 
 Bekende beperkingen: de afspraak in je eigen agenda en de uitnodiging zijn niet gekoppeld (EventKit kan geen
 genodigden toevoegen), dus een acceptatie van de ontvanger werkt je afspraak niet bij. "Met bijlage" in de lijst is een
