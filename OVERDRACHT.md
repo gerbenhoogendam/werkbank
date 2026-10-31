@@ -195,30 +195,43 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`ThingsColor.mailPaper`). Losse webadressen in de tekst van een mail worden links (`MailLinks` in WerkbankCore,
     zowel in platte tekst als in HTML, niet in tags, bestaande links, stijlen of scripts), zoals Spark.
 
-## Opdracht in voorbereiding: mailclient-modus
+## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
-Dubbelklik op Mail (het paneel links) schakelt naar een modus waarin het hele venster een volwaardige mailclient is:
-zoeken in één mailbox, met Tab naar alle mail of een combinatie van mailboxen, en aanvullen van e-mailadressen bij
-opstellen. Uitgangspunt van de eigenaar: een verwerkte, beantwoorde of tot taak gemaakte mail wordt gearchiveerd; de
-mappenstructuur van de mailboxen doet er niet toe. De client moet de rest van de app aanvullen (taken, tijd,
-agenda, Claude), geen losse mailapp worden. Eerst tien voorstellen voorgelegd; bouwen pas na akkoord.
+Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
+venster een mailclient; Esc, de knop Werkbank of dubbelklik op de titel gaat terug. Dubbelklik op een mail in het
+paneel opent nog steeds het gesprek in het paneel (zoals eerder). Uitgangspunt van de eigenaar: een verwerkte,
+beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet toe. Klikbaar concept: Claude-canvas
+"Werkbank mailmodus".
 
-Gekozen (31 okt), bouwen na akkoord op het klikbare concept (Claude-canvas "Werkbank mailmodus"):
-- Eén toets per handeling, eindigt in archiveren en opent de volgende mail: E archiveren, T taak, S tijd schrijven,
-  P inplannen, R beantwoorden, F opvolgen, C Claude-concept, Tab volgende mailbox/combinatie, / zoeken, J/K
-  volgende/vorige. Alle toetsen aan te passen in Voorkeuren.
-- Klanten rechts (niet links), gerangschikt op hoeveel mail er de laatste dertig dagen met die klant was, doorzoekbaar;
-  een klik toont alle mail van die klant uit alle mailboxen.
-- Zoeken met de Gmail-zoektaal plus filters (met bijlage, zonder taak, wacht op antwoord, ongelezen, klant).
-- Adressen aanvullen uit verzonden mail, macOS Contacten en de klantenlijst (klantnaam geeft de mensen van die klant).
-- Opvolgen: archiveren en terug als er binnen X dagen geen antwoord is (kaart in Wacht op klant), of later terug
-  (snoozen); ook te kiezen bij versturen.
-- Inplannen: datum/tijd in de mail herkennen, voorbeeld op de eigen week met overlap, uitnodiging, en vrije momenten
-  in een antwoord zetten.
-- Claude-concept met klantkennis (gesprek, kaarten, agenda, geheugen); eerst grondig testen.
-- Nieuwsbrieven en meldingen in één keer archiveren; per afzender of per soort uit te sluiten met de rechtermuisknop;
-  alles mee behalve wat je uitvinkt.
-- Niet: automatische tijdregistratie tijdens mailen, contextpaneel naast de mail, teller en dag afsluiten.
+- **Schil** (`macOS/MailMode/MailModeView.swift`, `MailModeStore.swift`): lijst links met zoeken in de Gmail-zoektaal
+  en filters (met bijlage, ongelezen, zonder taak, wacht op antwoord), de bundel nieuwsbrieven en meldingen, de mail in
+  het midden (`MailWindowView` met `embedded`), klanten rechts op volgorde van mail in dertig dagen
+  (`MailActivityStore`, `ClientActivity` in WerkbankCore). Tab wisselt mailbox › combinatie › alle mail.
+- **Toetsen** (`MailModeKeys.swift`): E archiveren, T taak, S tijd schrijven, P inplannen, R beantwoorden, F opvolgen,
+  C concept, Tab bereik, / zoeken, J/K volgende/vorige. Aan te passen in Voorkeuren › Mail; gaan mee naar je andere
+  Macs. Versturen vanuit de mailmodus archiveert meteen en opent de volgende mail.
+- **Bladen** (`MailModeSheets.swift`): taak, tijd schrijven, inplannen (datums uit de mail via `DateProposals`, vrije
+  momenten via `FreeSlots`, de week met overlap; uitnodiging als .ics-bijlage in een antwoord dat je zelf verstuurt),
+  opvolgen (`FollowUps.swift`: terug als er geen antwoord kwam, eventueel met een kaart in Wacht op klant, of later
+  terug; controle elke vijf minuten), Claude-concept (`MailConcept.swift`), nieuwsbrieven en meldingen in één keer
+  archiveren (uitsluiten per afzender, domein of soort; `MailBulk` in WerkbankCore; uitgesloten mail staat in de lijst).
+- **Opstellen** (`AddressField.swift`, `AddressBook.swift`, `AddressSuggestions` in WerkbankCore): adressen aanvullen
+  uit wie je mailde, Contacten en de klantenlijst; menu Opvolgen naast Verstuur.
+- Niet gebouwd (bewust): automatische tijdregistratie tijdens mailen, contextpaneel naast de mail, teller en dag
+  afsluiten.
+
+Te testen (alleen met een testmailbox en testagenda, of met toestemming; vrijwel elke handeling archiveert):
+openen en sluiten; elk thema (de mail zelf wit); Tab door de bereiken; zoeken en filters; klik op een klant; elke toets
+en het aanpassen ervan; taak met en zonder archiveren; tijd schrijven; inplannen met en zonder uitnodiging (komt de
+.ics bij de ontvanger als uitnodiging binnen, verschijnt de afspraak in je agenda); vrije momenten in een antwoord;
+opvolgen (komt het gesprek terug, verdwijnt het bij een antwoord); concept (stijl, gebruikte context, korter en
+uitgebreider); bulk met uitvinken, uitsluiten en ⌘Z; aanvullen in Aan/Cc/Bcc (vraagt macOS om Contacten); opvolgen
+bij versturen.
+
+Bekende beperkingen: de afspraak in je eigen agenda en de uitnodiging zijn niet gekoppeld (EventKit kan geen
+genodigden toevoegen), dus een acceptatie van de ontvanger werkt je afspraak niet bij. "Met bijlage" in de lijst is een
+schatting op `multipart/mixed`. Klantenranglijst en aanvullen kijken de eerste keer een maand terug (hooguit 400 mails
+per mailbox) en groeien daarna aan.
 
 ## Open punten
 
@@ -255,6 +268,7 @@ onbekend); plan mijn dag.
 | Agenda | `macOS/AgendaView.swift`, `macOS/EventDetailView.swift`, `Shared/Services/CalendarService.swift` |
 | Tijd schrijven en timer | `Shared/Views/TimeListView.swift`, `Shared/Services/TimerService.swift`, `macOS/MiniTimer.swift`, `macOS/QuickEntry.swift`, `macOS/Dictation.swift` (inspreken) |
 | Gmail | `macOS/GmailSession.swift` (API, mailboxen, verplaatsen), `macOS/GmailPanel.swift`, `macOS/MailWindow.swift`, `macOS/MailThread.swift`, `macOS/ComposeView.swift`, `macOS/SendFollowUp.swift` |
+| Mailmodus | `macOS/MailMode/` (schil, toetsen, bladen, opvolgen, concept, aanvullen), `WerkbankCore/…/MailMode.swift`, `DateProposals.swift`, `AddressSuggestions.swift`, `MailBulk.swift` |
 | Claude | `macOS/ClaudeAnalysis.swift` (aanvraag, streaming), `macOS/MailReview.swift`, `macOS/DayClose.swift` |
 | Ongedaan maken | `Shared/Services/UndoCenter.swift` |
 | Logica met tests | `WerkbankCore/` |
