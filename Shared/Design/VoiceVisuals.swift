@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Kleuren van de inspreekanimatie, naar de gloed van Siri (Apple Intelligence).
-private enum SiriPalette {
+enum SiriPalette {
     static let lavender = Color(hex: 0xBC82F3)
     static let pink = Color(hex: 0xF5B9EA)
     static let periwinkle = Color(hex: 0x8D9FFF)

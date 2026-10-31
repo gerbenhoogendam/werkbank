@@ -46,6 +46,12 @@ final class Dictation {
     @ObservationIgnored private var holding = false
     /// Bij een verbetering: het scherm op het moment dat de toets werd ingedrukt.
     @ObservationIgnored private var pendingScreenshot: Task<CapturedScreen, Never>?
+    /// Verbetering kort aangetikt: de aanwijsmodus blijft aan tot de volgende tik, Klaar of ⏎.
+    @ObservationIgnored private var latched = false
+    @ObservationIgnored private var keyDownAt = Date()
+    @ObservationIgnored private var feedbackSession: FeedbackSession?
+    /// De klikken en kaders van de laatste opname, tot de tekst er is.
+    @ObservationIgnored private var pendingMarks: [FeedbackMark] = []
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
@@ -119,10 +125,17 @@ final class Dictation {
     // MARK: Opnemen
 
     private func keyDown(_ kind: Purpose) {
+        // Aanwijsmodus (kort getikt): de volgende tik rondt af.
+        if kind == .feedback, purpose == .feedback, latched {
+            finishRecording()
+            return
+        }
         switch phase {
         case .ready:
             holding = true
+            latched = false
             purpose = kind
+            keyDownAt = Date()
             if kind == .feedback { pendingScreenshot = Task { await FeedbackScreenshot.capture() } }
         case .downloading(let fraction):
             let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
@@ -145,21 +158,36 @@ final class Dictation {
                 AppState.shared.announce("Geen toegang tot de microfoon (Systeeminstellingen › Privacy)", seconds: 4)
                 return
             }
-            guard holding, phase == .ready else { return }
+            guard holding || latched, phase == .ready else { return }
             do {
                 try recorder.start { value in
                     Task { @MainActor in Dictation.shared.level = value }
                 }
                 phase = .listening
+                if kind == .feedback { showOverlay() }
             } catch {
                 AppState.shared.announce("Opnemen mislukt: \(error.localizedDescription)", seconds: 4)
             }
         }
     }
 
+    /// Loslaten rondt af. Bij een verbetering die kort is aangetikt blijft de aanwijsmodus aan.
     private func keyUp(_ kind: Purpose) {
-        guard kind == purpose else { return }
+        guard kind == purpose, !latched else { return }
+        if kind == .feedback, holding, Date().timeIntervalSince(keyDownAt) < 0.4 {
+            latched = true
+            return
+        }
+        finishRecording()
+    }
+
+    /// Klaar met opnemen (toets los, nog een tik, Klaar of ⏎): omzetten.
+    private func finishRecording() {
         holding = false
+        latched = false
+        let marks = feedbackSession?.marks ?? []
+        FeedbackOverlay.shared.hide()
+        feedbackSession = nil
         guard phase == .listening else { return }
         let samples = recorder.stop()
         level = 0
@@ -168,8 +196,38 @@ final class Dictation {
             phase = .ready
             return
         }
+        pendingMarks = marks
         phase = .transcribing
         Task { await finish(samples) }
+    }
+
+    /// Esc of Annuleren in de aanwijsmodus: niets bewaren.
+    private func cancelRecording() {
+        holding = false
+        latched = false
+        FeedbackOverlay.shared.hide()
+        feedbackSession = nil
+        pendingScreenshot = nil
+        pendingMarks = []
+        if phase == .listening {
+            _ = recorder.stop()
+            level = 0
+            phase = .ready
+        }
+        AppState.shared.announce("Verbetering geannuleerd")
+    }
+
+    /// De aanwijsmodus over het hoofdvenster (als dat er is); Werkbank komt naar voren.
+    private func showOverlay() {
+        guard let window = FeedbackScreenshot.mainWindow else { return }
+        let session = FeedbackSession()
+        session.startedAt = Date()
+        feedbackSession = session
+        NSApp.activate(ignoringOtherApps: true)
+        window.orderFront(nil)
+        FeedbackOverlay.shared.show(over: window, session: session,
+                                    onFinish: { Dictation.shared.finishRecording() },
+                                    onCancel: { Dictation.shared.cancelRecording() })
     }
 
     private func finish(_ samples: [Float]) async {
@@ -206,16 +264,25 @@ extension Dictation {
     /// Een verbetering (of meerdere achter elkaar) bewaren in Voorkeuren › Verbeteringen.
     fileprivate func finishFeedback(_ samples: [Float], with whisper: WhisperKit) async {
         let hint = "Werkbank, mailmodus, board, agenda, Tijd schrijven, iPhone, Mac."
+        let marks = pendingMarks
+        pendingMarks = []
         do {
-            var text = try await WhisperModel.transcribe(samples, with: whisper, hint: hint)
-            if text.isEmpty { text = try await WhisperModel.transcribe(samples, with: whisper, hint: nil) }
-            guard !text.isEmpty else {
+            var result = try await WhisperModel.transcribeWords(samples, with: whisper, hint: hint)
+            if result.text.isEmpty { result = try await WhisperModel.transcribeWords(samples, with: whisper, hint: nil) }
+            guard !result.text.isEmpty else {
                 AppState.shared.announce("Niets verstaan")
                 return
             }
+            // [1], [2] … achter het woord dat je zei toen je klikte (zonder woordtijden: achteraan).
+            var text = result.text
+            if !marks.isEmpty {
+                text = result.words.isEmpty
+                    ? text + " " + marks.map { "[\($0.number)]" }.joined(separator: " ")
+                    : FeedbackTranscript.text(result.words, marks: marks)
+            }
             let screenshot = await pendingScreenshot?.value
             pendingScreenshot = nil
-            let added = FeatureRequests.add(FeatureRequestSplitter.split(text), screenshot: screenshot,
+            let added = FeatureRequests.add(FeatureRequestSplitter.split(text), screenshot: screenshot, marks: marks,
                                             in: Persistence.container.mainContext)
             AppState.shared.announce(added.count == 1 ? "Verbetering bewaard" : "\(added.count) verbeteringen bewaard",
                                      seconds: 3)

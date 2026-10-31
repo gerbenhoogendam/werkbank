@@ -139,10 +139,17 @@ private struct RequestPage: View {
                 .font(.system(size: 12.5))
                 .fixedSize(horizontal: false, vertical: true)
             if let data = request.screenshot, let image = ScreenshotEncoding.image(data) {
+                let marks = request.marks
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .overlay {
+                        GeometryReader { proxy in
+                            ForEach(marks) { mark in
+                                FeedbackMarkView(mark: mark, size: proxy.size, color: Self.markColor)
+                            }
+                        }
+                    }
                     .overlay(alignment: .topLeading) {
                         Text("Screenshot \(reference) · \(FeaturePrompt.stamp(request.moment, seconds: true))")
                             .font(.system(size: 9, weight: .semibold))
@@ -152,6 +159,16 @@ private struct RequestPage: View {
                             .background(Color.black.opacity(0.7))
                             .padding(6)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                if !marks.isEmpty {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(marks.prefix(5)) { mark in
+                            detail(of: mark, in: image)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(height: 128)
+                }
             } else {
                 Text("Geen screenshot")
                     .font(.system(size: 11))
@@ -162,5 +179,55 @@ private struct RequestPage: View {
         .foregroundStyle(Color.black)
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    static let markColor = Color(red: 0.9, green: 0.16, blue: 0.2)
+
+    /// Uitsnede rond een klik of kader, met dezelfde markering en wat er gebeurde.
+    private func detail(of mark: FeedbackMark, in image: CGImage) -> some View {
+        let cut = Self.crop(image, around: mark)
+        return VStack(alignment: .leading, spacing: 3) {
+            if let cut {
+                Image(decorative: cut.image, scale: 1)
+                    .resizable()
+                    .scaledToFit()
+                    .overlay {
+                        GeometryReader { proxy in
+                            FeedbackMarkView(mark: cut.mark, size: proxy.size, color: Self.markColor)
+                        }
+                    }
+                    .frame(maxHeight: 104, alignment: .topLeading)
+                    .border(Color.gray.opacity(0.4), width: 0.5)
+            }
+            Text(mark.summary)
+                .font(.system(size: 8.5))
+                .foregroundStyle(Color.gray)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: 150, alignment: .leading)
+    }
+
+    /// Een stuk van de screenshot rond de markering, en de markering op dat stuk.
+    static func crop(_ image: CGImage, around mark: FeedbackMark) -> (image: CGImage, mark: FeedbackMark)? {
+        let width = Double(image.width)
+        let height = Double(image.height)
+        var rect: CGRect
+        if mark.kind == .click {
+            let side = min(width, height) * 0.22
+            rect = CGRect(x: mark.x * width - side, y: mark.y * height - side * 0.7, width: side * 2, height: side * 1.4)
+        } else {
+            let padX = max(mark.width * width * 0.15, 24)
+            let padY = max(mark.height * height * 0.15, 24)
+            rect = CGRect(x: mark.x * width - padX, y: mark.y * height - padY,
+                          width: mark.width * width + 2 * padX, height: mark.height * height + 2 * padY)
+        }
+        rect = rect.intersection(CGRect(x: 0, y: 0, width: width, height: height)).integral
+        guard !rect.isEmpty, rect.width > 1, rect.height > 1, let cut = image.cropping(to: rect) else { return nil }
+        var local = mark
+        local.x = (mark.x * width - Double(rect.minX)) / Double(rect.width)
+        local.y = (mark.y * height - Double(rect.minY)) / Double(rect.height)
+        local.width = mark.width * width / Double(rect.width)
+        local.height = mark.height * height / Double(rect.height)
+        return (cut, local)
     }
 }

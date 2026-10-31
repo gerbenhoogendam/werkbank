@@ -174,7 +174,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Mac: `Shared/Services/Speech.swift` (`WhisperModel`, `SpeechRecorder`). Nieuwe kaart: plus in de kolomkop.
     Later: kolommen onder elkaar in één `List` (secties, inklappen per apparaat in `board.collapsedColumns`); ruime
     velden (`entryField()`); tijdens inspreken staat in het actieve veld een golfvorm (`VoiceWave`) met een gloeiende
-    Siri-rand (`VoiceGlow`, `iOS/VoiceVisuals.swift`). Opnieuw gedaan met de skills in `.claude/skills`
+    Siri-rand (`VoiceGlow`, `Shared/Design/VoiceVisuals.swift`). Opnieuw gedaan met de skills in `.claude/skills`
     (find-animation-opportunities, animate): het stemniveau loopt via een veer (`VoiceMotion`, `ThingsMotion.alive`),
     stroming en gloed volgen je stem, tekst verschijnt uit een lichte waas (`ThingsMotion.materialize`), knoppen geven
     mee (`PressScaleButtonStyle`); alle waarden staan in `ThingsMotion`, met verminderde beweging.
@@ -255,7 +255,20 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 - **Voorkeuren › Verbeteringen** (`Shared/Views/FeatureRequestsView.swift`, Mac en iPhone): verzameld (aanpassen,
   toevoegen, weg), de prompt (desktop en mobiel apart, `FeaturePrompt`) kopiëren, markeren als doorgegeven, en
   terugzetten uit Doorgegeven.
-- Nieuw model: het CloudKit-schema moet naar Production voordat een TestFlight-build het synchroniseert.
+- **Screenshot bij elke invoer** (`macOS/FeedbackScreenshot.swift`, `iOS/FeedbackScreenshot.swift`): Mac het
+  hoofdvenster via ScreenCaptureKit op het moment van F18 of typen (toestemming voor schermopname; zonder: wat het
+  venster zelf tekent, mails blijven dan leeg); iPhone het scherm op het moment van de knop. Opgeslagen in
+  `FeatureRequest.screenshot` (externalStorage, via iCloud) met `capturedAt`.
+- **Aanwijsmodus** (`macOS/FeedbackOverlay.swift`): tijdens het inspreken ligt over het hoofdvenster een laag met de
+  Siri-rand (`VoiceGlow`, nu in `Shared/Design/VoiceVisuals.swift`). Klik = genummerde stip, slepen = kader; de app
+  eronder reageert niet. F18 kort tikken: aan tot de volgende tik, Klaar of ⏎; vasthouden: loslaten rondt af. Esc of
+  Annuleren gooit weg, ⌘Z haalt de laatste markering weg. Whisper geeft woordtijden (`transcribeWords`); [n] komt achter
+  het woord dat je zei toen je klikte (`FeedbackTranscript` in WerkbankCore). Markeringen in `marksData`.
+- **PDF voor Claude** (`Shared/Services/FeatureExport.swift`): eerst de prompt (D1, M1 … met datum, tijd, apparaat
+  en aangewezen plekken), dan per verbetering een pagina met de screenshot, de markeringen en uitsneden rond elke klik
+  of elk kader. Mac: iCloud Drive › Werkbank/Verbeteringen; iPhone: delen.
+- Nieuw model en nieuwe velden: het CloudKit-schema moet naar Production voordat een TestFlight-build het
+  synchroniseert.
 
 ## Open punten
 

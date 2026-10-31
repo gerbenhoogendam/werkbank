@@ -19,6 +19,8 @@ final class FeatureRequest {
     @Attribute(.externalStorage) var screenshot: Data?
     /// Wanneer de screenshot is gemaakt (het label in de prompt).
     var capturedAt: Date?
+    /// Klikken en kaders uit de aanwijsmodus (JSON van `FeedbackMark`); [n] in de tekst verwijst ernaar.
+    var marksData: Data?
 
     init(text: String, platform: FeaturePlatform, source: String) {
         self.text = text
@@ -33,10 +35,12 @@ final class FeatureRequest {
     }
 
     var device: String { source == "iphone" ? "iPhone" : "Mac" }
+    var marks: [FeedbackMark] { FeedbackMark.decode(marksData) }
     var moment: Date { capturedAt ?? createdAt }
 
     var promptItem: FeaturePrompt.Item {
-        FeaturePrompt.Item(text: text, platform: platform, date: moment, device: device, hasScreenshot: screenshot != nil)
+        FeaturePrompt.Item(text: text, platform: platform, date: moment, device: device, hasScreenshot: screenshot != nil,
+                           marks: marks)
     }
 }
 
@@ -62,10 +66,15 @@ enum FeatureRequests {
 
     /// Bewaart de verbeteringen; zonder hint in de tekst gelden ze voor dit apparaat. ⌘Z haalt ze weer weg.
     /// `screenshot`: het scherm op het moment van vastleggen; alle verbeteringen uit één keer inspreken krijgen dezelfde.
+    /// `marks`: de klikken en kaders van die opname; elke verbetering krijgt die waar haar tekst [n] naar verwijst
+    /// (één verbetering: alle).
     @discardableResult
-    static func add(_ texts: [String], screenshot: CapturedScreen?, in context: ModelContext) -> [FeatureRequest] {
-        add(texts.map { FeaturePrompt.Item(text: $0, platform: FeatureRequestSplitter.platform(of: $0) ?? defaultPlatform) },
-            screenshot: screenshot, in: context)
+    static func add(_ texts: [String], screenshot: CapturedScreen?, marks: [FeedbackMark] = [],
+                    in context: ModelContext) -> [FeatureRequest] {
+        add(texts.map { text in
+            FeaturePrompt.Item(text: text, platform: FeatureRequestSplitter.platform(of: text) ?? defaultPlatform,
+                               marks: texts.count == 1 ? marks : marks.filter { text.contains("[\($0.number)]") })
+        }, screenshot: screenshot, in: context)
     }
 
     @discardableResult
@@ -76,6 +85,7 @@ enum FeatureRequests {
             let request = FeatureRequest(text: text, platform: item.platform, source: source)
             request.screenshot = screenshot?.data
             request.capturedAt = screenshot?.date
+            request.marksData = FeedbackMark.encode(item.marks)
             return request
         }
         guard !added.isEmpty else { return [] }

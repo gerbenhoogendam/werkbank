@@ -133,14 +133,17 @@ public enum FeaturePrompt {
         /// "Mac" of "iPhone".
         public var device: String?
         public var hasScreenshot: Bool
+        /// Klikken en kaders uit de aanwijsmodus; [n] in de tekst verwijst ernaar.
+        public var marks: [FeedbackMark]
 
         public init(text: String, platform: FeaturePlatform, date: Date? = nil, device: String? = nil,
-                    hasScreenshot: Bool = false) {
+                    hasScreenshot: Bool = false, marks: [FeedbackMark] = []) {
             self.text = text
             self.platform = platform
             self.date = date
             self.device = device
             self.hasScreenshot = hasScreenshot
+            self.marks = marks
         }
     }
 
@@ -178,6 +181,10 @@ public enum FeaturePrompt {
             "Werk volgens CLAUDE.md en OVERDRACHT.md in de repo. Is een punt onduidelijk of strijdig met een eerdere "
                 + "afspraak, vraag het dan eerst. Meld per punt (met het nummer) wat je gedaan hebt en wat (nog) niet.",
         ]
+        if items.contains(where: { !$0.marks.isEmpty }) {
+            lines.append("Waar ik tijdens het inspreken op het scherm klikte of een kader trok, staat [n] in de tekst, "
+                         + "achter het woord dat ik op dat moment zei; daaronder staat waar dat was.")
+        }
         if screenshotsInDocument, items.contains(where: \.hasScreenshot) {
             lines.append("Na deze lijst heeft elke verbetering een eigen pagina met hetzelfde nummer, de datum en tijd en "
                          + "een screenshot van het scherm op het moment dat ik hem insprak of typte. Gebruik die als "
@@ -197,6 +204,10 @@ public enum FeaturePrompt {
             if screenshotsInDocument, item.hasScreenshot { details.append("screenshot") }
             let label = details.isEmpty ? reference : "\(reference) (\(details.joined(separator: ", ")))"
             lines.append("\(label): \(item.text.trimmingCharacters(in: .whitespacesAndNewlines))")
+            if !item.marks.isEmpty {
+                let what = screenshotsInDocument ? "Aangewezen (zelfde nummers op de screenshot)" : "Aangewezen"
+                lines.append("   \(what): " + item.marks.map(\.summary).joined(separator: "; "))
+            }
         }
         return lines.joined(separator: "\n") + "\n"
     }

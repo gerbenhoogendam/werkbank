@@ -36,7 +36,7 @@ enum FeedbackScreenshot {
     }
 
     /// Het hoofdvenster (niet Voorkeuren of een los paneel).
-    private static var mainWindow: NSWindow? {
+    static var mainWindow: NSWindow? {
         let candidates = NSApp.windows.filter {
             $0.isVisible && !$0.isMiniaturized && $0.canBecomeMain && !($0 is NSPanel)
                 && !($0.identifier?.rawValue.localizedCaseInsensitiveContains("settings") ?? false)

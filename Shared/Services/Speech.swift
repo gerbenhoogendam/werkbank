@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import WerkbankCore
 import WhisperKit
 
 /// WhisperKit voor inspreken op de Mac (F17, `Dictation`) en de iPhone (Tijd schrijven, `PhoneDictation`): het model
@@ -72,6 +73,25 @@ enum WhisperModel {
         }
         let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
         return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Als `transcribe`, met de tijd van elk woord in de opname (voor de aanwijsmodus bij verbeteringen). Geeft
+    /// Whisper geen woordtijden, dan alleen de tekst.
+    static func transcribeWords(_ samples: [Float], with whisper: WhisperKit,
+                                hint: String?) async throws -> (text: String, words: [FeedbackTranscript.Word]) {
+        var options = DecodingOptions(language: "nl", temperature: 0, usePrefillPrompt: true, skipSpecialTokens: true,
+                                      withoutTimestamps: false)
+        options.wordTimestamps = true
+        if let hint, !hint.isEmpty, let tokenizer = whisper.tokenizer {
+            let tokens = tokenizer.encode(text: " " + hint).filter { $0 < tokenizer.specialTokens.specialTokenBegin }
+            options.promptTokens = Array(tokens.suffix(100))
+        }
+        let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
+        let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = results.flatMap(\.segments).flatMap { $0.words ?? [] }.map {
+            FeedbackTranscript.Word(text: $0.word, start: Double($0.start), end: Double($0.end))
+        }
+        return (text, words)
     }
 
     /// Klantnamen uit de laatste tijdregels (meest recent eerst), voor de hint en het koppelen.

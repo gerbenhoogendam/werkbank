@@ -205,7 +205,8 @@ private struct FeatureRequestRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 TextField("", text: $request.text, axis: .vertical)
                     .labelsHidden()
-                Text("\(FeaturePrompt.stamp(request.moment)) · \(request.device)")
+                Text("\(FeaturePrompt.stamp(request.moment)) · \(request.device)"
+                     + (request.marks.isEmpty ? "" : " · \(request.marks.count) aangewezen"))
                     .font(.werk(size: 11))
                     .foregroundStyle(ThingsColor.textSecondary)
             }

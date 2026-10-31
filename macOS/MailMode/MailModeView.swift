@@ -64,7 +64,7 @@ struct MailModeView: View {
 
     private func handle(_ event: NSEvent) -> Bool {
         guard store.isActive, let window, event.window === window, window.attachedSheet == nil,
-              !PanelStore.shared.hasFocusPanels else { return false }
+              !PanelStore.shared.hasFocusPanels, !FeedbackOverlay.shared.isShown else { return false }
         if store.sheet != nil {
             // In een blad gaan alle toetsen naar het blad; Esc sluit het.
             guard event.keyCode == 53 else { return false }
