@@ -203,6 +203,23 @@ opstellen. Uitgangspunt van de eigenaar: een verwerkte, beantwoorde of tot taak 
 mappenstructuur van de mailboxen doet er niet toe. De client moet de rest van de app aanvullen (taken, tijd,
 agenda, Claude), geen losse mailapp worden. Eerst tien voorstellen voorgelegd; bouwen pas na akkoord.
 
+Gekozen (31 okt), bouwen na akkoord op het klikbare concept (Claude-canvas "Werkbank mailmodus"):
+- Eén toets per handeling, eindigt in archiveren en opent de volgende mail: E archiveren, T taak, S tijd schrijven,
+  P inplannen, R beantwoorden, F opvolgen, C Claude-concept, Tab volgende mailbox/combinatie, / zoeken, J/K
+  volgende/vorige. Alle toetsen aan te passen in Voorkeuren.
+- Klanten rechts (niet links), gerangschikt op hoeveel mail er de laatste dertig dagen met die klant was, doorzoekbaar;
+  een klik toont alle mail van die klant uit alle mailboxen.
+- Zoeken met de Gmail-zoektaal plus filters (met bijlage, zonder taak, wacht op antwoord, ongelezen, klant).
+- Adressen aanvullen uit verzonden mail, macOS Contacten en de klantenlijst (klantnaam geeft de mensen van die klant).
+- Opvolgen: archiveren en terug als er binnen X dagen geen antwoord is (kaart in Wacht op klant), of later terug
+  (snoozen); ook te kiezen bij versturen.
+- Inplannen: datum/tijd in de mail herkennen, voorbeeld op de eigen week met overlap, uitnodiging, en vrije momenten
+  in een antwoord zetten.
+- Claude-concept met klantkennis (gesprek, kaarten, agenda, geheugen); eerst grondig testen.
+- Nieuwsbrieven en meldingen in één keer archiveren; per afzender of per soort uit te sluiten met de rechtermuisknop;
+  alles mee behalve wat je uitvinkt.
+- Niet: automatische tijdregistratie tijdens mailen, contextpaneel naast de mail, teller en dag afsluiten.
+
 ## Open punten
 
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in
