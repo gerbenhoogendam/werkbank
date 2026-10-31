@@ -164,7 +164,7 @@ private struct MailTaskSheet: View {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         store.closeSheet()
         if archive {
-            store.remove(threadID: item.threadID)
+            store.takeOut(threadID: item.threadID)
             FollowUpStore.shared.clearReturned(threadID: item.threadID)
         }
         Task {
@@ -652,7 +652,7 @@ private struct MailFollowSheet: View {
         FollowUpStore.shared.add(threadID: item.threadID, account: account, subject: item.subject, kind: .noReply, due: due)
         let waiting = BoardService.columns(in: context).first { $0.id == "waiting" }
         if card, let waiting {
-            store.remove(threadID: item.threadID)
+            store.takeOut(threadID: item.threadID)
             Task {
                 await GmailSession.shared.createTask(from: item.summary, title: plainSubject(item.subject), minutes: 0,
                                                      column: waiting, context: context, appState: appState)

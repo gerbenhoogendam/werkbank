@@ -52,6 +52,8 @@ struct SignaturePreferences: View {
                 }
             }
 
+            DefaultMailAppSection()
+
             MailModeKeysSection()
 
             if !MailModeStore.shared.bulkRules.isEmpty {

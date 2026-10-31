@@ -87,6 +87,12 @@ targets:
             NSUbiquitousContainerIsDocumentScopePublic: true
             NSUbiquitousContainerName: Werkbank
             NSUbiquitousContainerSupportedFolderLevels: Any
+        # mailto-links: Werkbank kan het standaard mailprogramma zijn (een link opent een concept).
+        CFBundleURLTypes:
+          - CFBundleURLName: E-mailadres
+            CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - mailto
         # Type van de mail die uit het Gmail-paneel naar het board wordt gesleept.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: nl.itgwerkbank.gmail-message

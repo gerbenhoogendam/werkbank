@@ -546,11 +546,14 @@ final class GmailSession {
 
     // MARK: Mailmodus
 
-    /// Mails voor de mailmodus uit één mailbox: `query` in de zoektaal van Gmail, nieuwste eerst, één per gesprek.
-    func mailItems(query: String, account: String?, maxResults: Int = 50) async throws -> [GmailMailItem] {
-        let list = try await api("messages", query: [URLQueryItem(name: "q", value: query),
-                                                     URLQueryItem(name: "maxResults", value: String(maxResults))],
-                                 account: account)
+    /// Mails voor de mailmodus uit één mailbox: een map en/of zoektekst in de zoektaal van Gmail, nieuwste eerst, één
+    /// per gesprek.
+    func mailItems(_ request: MailListRequest, account: String?, maxResults: Int = 50) async throws -> [GmailMailItem] {
+        var query = [URLQueryItem(name: "maxResults", value: String(maxResults))]
+        if !request.query.isEmpty { query.append(URLQueryItem(name: "q", value: request.query)) }
+        query += request.labelIDs.map { URLQueryItem(name: "labelIds", value: $0) }
+        if request.includeSpamTrash { query.append(URLQueryItem(name: "includeSpamTrash", value: "true")) }
+        let list = try await api("messages", query: query, account: account)
         var seenThreads = Set<String>()
         let refs = GmailAPI.messageRefs(fromListJSON: list).refs.filter { seenThreads.insert($0.threadID).inserted }
         return await mailItems(ids: refs.map(\.id), account: account, headers: GmailAPI.mailItemHeaders)
@@ -571,6 +574,11 @@ final class GmailSession {
             pageToken = page.nextPageToken
         } while pageToken != nil && refs.count < limit
         return await mailItems(ids: refs.prefix(limit).map(\.id), account: account, headers: ["From", "To", "Cc"])
+    }
+
+    /// De eigen labels van een mailbox (de mappen in de mailmodus), als boom.
+    func userLabels(account: String) async throws -> [GmailLabel] {
+        MailFolders.userTree(GmailAPI.labels(fromJSON: try await api("labels", account: account)))
     }
 
     /// Bepaalde mails voor de mailmodus (de gesprekken waarop een antwoord wordt verwacht).

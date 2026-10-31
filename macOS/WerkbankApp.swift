@@ -1,11 +1,23 @@
 import AppKit
 import KeyboardShortcuts
 import SwiftUI
+import WerkbankCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Volledig scherm staat als eigen item in het menu Venster (⌃⌘F); niet nog eens automatisch van macOS.
         UserDefaults.standard.set(false, forKey: "NSFullScreenMenuItemEverywhere")
+        // mailto-links (Werkbank als standaard mailprogramma). Vóór het opstarten, zodat ook de link die de app
+        // start binnenkomt.
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleGetURL(_:withReplyEvent:)),
+                                                     forEventClass: AEEventClass(kInternetEventClass),
+                                                     andEventID: AEEventID(kAEGetURL))
+    }
+
+    @objc private func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let link = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let prefill = MailtoLink.parse(link) else { return }
+        MainActor.assumeIsolated { DefaultMailApp.compose(prefill) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

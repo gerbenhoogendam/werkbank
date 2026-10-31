@@ -37,6 +37,10 @@ final class MailModeStore {
 
     private(set) var isActive = false
     private(set) var scope: Scope = .all
+    /// De map uit de kolom links (Postvak IN, Verstuurd, een label …); een klant gaat erboven.
+    private(set) var folder: MailFolder = .inbox
+    /// De eigen labels per mailbox, als boom.
+    private(set) var labelsByAccount: [String: [GmailLabel]] = [:]
     private(set) var query = ""
     private(set) var filters: Set<Filter> = []
     /// Alle mail van één klant, uit alle mailboxen.
@@ -80,10 +84,12 @@ final class MailModeStore {
             scope = .all
         }
         client = nil
+        folder = .inbox
         selectedID = message?.id
         isActive = true
         Task {
             await reload()
+            await refreshLabels()
             await refreshClients()
         }
     }
@@ -122,13 +128,40 @@ final class MailModeStore {
     }
 
     /// Meer dan één mailbox in de lijst: dan staat bij elke mail uit welke.
-    var showsAccounts: Bool { client != nil || accounts(of: scope).count > 1 }
+    var showsAccounts: Bool { client != nil || (folder.account == nil && accounts(of: scope).count > 1) }
+
+    /// De mailboxen van het bereik, voor hun labels in de kolom met mappen.
+    var scopeAccounts: [String] { accounts(of: scope).compactMap { $0 } }
 
     func select(scope newScope: Scope) {
         scope = newScope
         client = nil
+        if let account = folder.account, !accounts(of: newScope).contains(account) { folder = .inbox }
         selectedID = nil
         Task { await reload() }
+    }
+
+    func select(folder newFolder: MailFolder) {
+        folder = newFolder
+        client = nil
+        bundleOpen = false
+        selectedID = nil
+        Task { await reload() }
+    }
+
+    func refreshLabels() async {
+        for account in gmail.accounts {
+            if let labels = try? await gmail.userLabels(account: account) { labelsByAccount[account] = labels }
+        }
+    }
+
+    /// De kop boven de lijst.
+    var listTitle: String { client ?? folder.title }
+
+    /// Waar het zoekveld in zoekt: in Postvak IN alle mail van het bereik, anders de map.
+    var searchTitle: String {
+        if let client { return client }
+        return folder == .inbox ? title(of: scope) : folder.title
     }
 
     /// Tab: de volgende mailbox, de combinatie, alle mail en weer van voren af.
@@ -185,11 +218,12 @@ final class MailModeStore {
         if filters.contains(.waiting) {
             found = await waitingItems()
         } else {
-            let q = MailSearch.query(text: query, attachment: filters.contains(.attachment),
-                                     unread: filters.contains(.unread), clientDomains: domains)
-            for account in accounts(of: client != nil ? .all : scope) {
+            let request = MailSearch.request(text: query, folder: folder, attachment: filters.contains(.attachment),
+                                             unread: filters.contains(.unread), clientDomains: domains)
+            let targets: [String?] = client != nil ? accounts(of: .all) : (folder.account.map { [$0] } ?? accounts(of: scope))
+            for account in targets {
                 do {
-                    found += try await gmail.mailItems(query: q, account: account)
+                    found += try await gmail.mailItems(request, account: account)
                 } catch {
                     failure = failure ?? error.localizedDescription
                 }
@@ -251,12 +285,12 @@ final class MailModeStore {
     /// Nieuwsbrieven en meldingen; alleen als er niet gezocht of gefilterd wordt. Wat je uitsloot van archiveren in
     /// één keer wil je lezen: dat staat gewoon in de lijst.
     var bundle: [GmailMailItem] {
-        isFiltering ? [] : filtered.filter(isBundled)
+        isFiltering || folder != .inbox ? [] : filtered.filter(isBundled)
     }
 
     /// De mails in de lijst, in volgorde: zonder zoeken en filters staat de bundel apart (tenzij opengeklapt).
     var listed: [GmailMailItem] {
-        if isFiltering || bundleOpen { return filtered }
+        if isFiltering || bundleOpen || folder != .inbox { return filtered }
         return filtered.filter { !isBundled($0) }
     }
 
@@ -290,7 +324,7 @@ final class MailModeStore {
     func archiveBulk(_ chosen: [GmailMailItem], appState: AppState) {
         let threads = chosen.map(\.threadID)
         guard !threads.isEmpty else { return }
-        for thread in threads { remove(threadID: thread) }
+        for thread in threads { takeOut(threadID: thread) }
         bundleOpen = false
         Task {
             let done = await gmail.archiveBulk(threadIDs: threads)
@@ -351,6 +385,38 @@ final class MailModeStore {
         selectedID = order[next].id
     }
 
+    /// De lijst toont de inbox: archiveren haalt een mail er dan uit.
+    private var listIsInbox: Bool {
+        folder == .inbox && query.trimmingCharacters(in: .whitespaces).isEmpty && client == nil && !filters.contains(.waiting)
+    }
+
+    /// Na archiveren (of een handeling die archiveert): uit de inbox weg; in een andere map, bij zoeken of een klant
+    /// blijft de mail staan (zonder inbox) en gaat de selectie naar de volgende.
+    func takeOut(threadID: String) {
+        guard !listIsInbox else {
+            remove(threadID: threadID)
+            return
+        }
+        let wasSelected = selected?.threadID == threadID
+        for index in items.indices where items[index].threadID == threadID {
+            items[index].labels.removeAll { $0 == "INBOX" }
+        }
+        if wasSelected { selectNext() }
+    }
+
+    /// In de lijst: bij je eigen mail de ontvanger ("Aan: …") in plaats van jezelf.
+    func rowSummary(_ item: GmailMailItem) -> GmailMessageSummary {
+        var summary = item.summary
+        let own = gmail.ownAddresses
+        let others = item.recipients.filter { !own.contains($0) }
+        guard let from = item.fromAddress?.lowercased(), own.contains(from), let first = others.first else { return summary }
+        MailActivityStore.shared.loadIfNeeded()
+        let name = MailActivityStore.shared.names[first] ?? first
+        summary.fromName = "Aan: " + name + (others.count > 1 ? " +\(others.count - 1)" : "")
+        summary.fromAddress = first
+        return summary
+    }
+
     /// Haalt een gesprek uit de lijst en kiest de mail die er nu staat (de volgende, of de laatste).
     func remove(threadID: String) {
         let order = listed
@@ -380,7 +446,7 @@ final class MailModeStore {
     /// Archiveert een gesprek na een handeling en opent de volgende mail. `announcing`: de melding (leeg: geen,
     /// `nil`: de gewone van archiveren).
     func archive(_ item: GmailMailItem, announcing text: String?, appState: AppState) {
-        remove(threadID: item.threadID)
+        takeOut(threadID: item.threadID)
         FollowUpStore.shared.clearReturned(threadID: item.threadID)
         if let text, !text.isEmpty { appState.announce(text, seconds: 3) }
         Task { await gmail.archiveMessage(item.summary, appState: appState, announce: text == nil) }

@@ -43,10 +43,9 @@ final class MailModeTests: XCTestCase {
     }
 
     func testSearchQuery() {
-        XCTAssertEqual(MailSearch.query(text: ""), "in:inbox")
-        XCTAssertEqual(MailSearch.query(text: " factuur ", attachment: true, unread: true), "factuur has:attachment is:unread")
-        XCTAssertEqual(MailSearch.query(text: "", clientDomains: ["vandijk.nl"]), "{from:vandijk.nl to:vandijk.nl cc:vandijk.nl}")
-        XCTAssertEqual(MailSearch.query(text: "offerte", clientDomains: ["a.nl", "b.nl"]),
+        XCTAssertEqual(MailSearch.request(text: " factuur ", folder: .inbox, attachment: true, unread: true).query,
+                       "factuur has:attachment is:unread")
+        XCTAssertEqual(MailSearch.request(text: "offerte", folder: .inbox, clientDomains: ["a.nl", "b.nl"]).query,
                        "offerte {from:a.nl from:b.nl to:a.nl to:b.nl cc:a.nl cc:b.nl}")
     }
 

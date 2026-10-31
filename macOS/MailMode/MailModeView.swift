@@ -11,12 +11,18 @@ struct MailModeView: View {
 
     @State private var window: NSWindow?
     @State private var keyMonitor: Any?
+    @AppStorage(MailModeFolders.visibleKey) private var showsFolders = true
 
     var body: some View {
         VStack(spacing: 0) {
             MailModeToolbar()
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
             HStack(spacing: 0) {
+                if showsFolders {
+                    MailModeFolders()
+                        .frame(width: 200)
+                    Rectangle().fill(ThingsColor.separator).frame(width: 1)
+                }
                 MailModeList()
                     .frame(width: 380)
                 Rectangle().fill(ThingsColor.separator).frame(width: 1)
@@ -107,6 +113,7 @@ struct MailModeView: View {
 private struct MailModeToolbar: View {
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
+    @AppStorage(MailModeFolders.visibleKey) private var showsFolders = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -115,6 +122,12 @@ private struct MailModeToolbar: View {
             }
             .buttonStyle(MailModeButtonStyle())
             .help("Terug naar Werkbank (Esc)")
+
+            Button { showsFolders.toggle() } label: {
+                Image(systemName: "sidebar.left")
+            }
+            .buttonStyle(MailModeButtonStyle(prominent: false))
+            .accessibilityLabel("Mappen")
 
             MailHeaderTitle(title: "Mail", unread: store.items.filter(\.isUnread).count, total: store.items.count,
                             mailbox: store.title(of: store.scope))
@@ -171,7 +184,7 @@ private struct MailModeList: View {
                     Image(systemName: "magnifyingglass")
                         .font(.werk(size: 12, weight: .medium))
                         .foregroundStyle(ThingsColor.textSecondary)
-                    TextField("Zoeken in \(store.client ?? store.title(of: store.scope))",
+                    TextField("Zoeken in \(store.searchTitle)",
                               text: Binding(get: { store.query }, set: { store.setQuery($0) }))
                         .textFieldStyle(.plain)
                         .font(.werk(size: 13))
@@ -206,7 +219,7 @@ private struct MailModeList: View {
 
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
 
-            ThemedHeading(title: store.client ?? store.title(of: store.scope), count: store.listed.count)
+            ThemedHeading(title: store.listTitle, count: store.listed.count)
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 6)
@@ -259,7 +272,7 @@ private struct MailModeList: View {
     }
 
     private func row(_ item: GmailMailItem) -> some View {
-        GmailRow(message: item.summary,
+        GmailRow(message: store.rowSummary(item),
                  isBusy: gmail.busyMessageIDs.contains(item.id),
                  isSelected: store.selectedID == item.id,
                  accountLabel: store.showsAccounts ? gmail.account(for: item.id).map(gmail.displayName) : nil,
@@ -286,7 +299,9 @@ private struct MailModeList: View {
         if kind != .person { tags.append(MailRowTag(text: kind.title)) }
         if store.hasTask(item) { tags.append(MailRowTag(text: "Taak", systemImage: "checkmark.circle", highlighted: true)) }
         if item.mayHaveAttachment { tags.append(MailRowTag(text: "Bijlage", systemImage: "paperclip")) }
-        if !item.isInInbox && !item.isSent { tags.append(MailRowTag(text: "Gearchiveerd", systemImage: "archivebox")) }
+        if store.folder == .inbox, !item.isInInbox, !item.isSent {
+            tags.append(MailRowTag(text: "Gearchiveerd", systemImage: "archivebox"))
+        }
         return tags
     }
 
@@ -331,6 +346,77 @@ private struct MailModeList: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Mappen
+
+/// De mappen van Gmail voor het bereik (Postvak IN, Verstuurd …) en per mailbox de eigen labels, als boom.
+struct MailModeFolders: View {
+    static let visibleKey = "mailMode.showsFolders"
+    private let store = MailModeStore.shared
+    private let gmail = GmailSession.shared
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(MailFolder.standard, id: \.self) { folder in
+                    row(folder, depth: 0)
+                }
+                ForEach(store.scopeAccounts, id: \.self) { account in
+                    let labels = store.labelsByAccount[account] ?? []
+                    if !labels.isEmpty {
+                        ThemedHeading(title: gmail.displayName(account))
+                            .padding(.horizontal, 8)
+                            .padding(.top, 16)
+                            .padding(.bottom, 4)
+                        ForEach(labels) { label in
+                            row(.label(account: account, id: label.id, name: label.name), depth: label.depth)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+        }
+        .scrollIndicators(.never)
+        .background(ThingsColor.backgroundSidebar)
+    }
+
+    private func row(_ folder: MailFolder, depth: Int) -> some View {
+        let isOn = store.client == nil && store.folder == folder
+        return Button { store.select(folder: folder) } label: {
+            HStack(spacing: 7) {
+                Image(systemName: Self.icon(folder))
+                    .font(.werk(size: 12, weight: .medium))
+                    .foregroundStyle(isOn ? ThingsColor.accent : ThingsColor.textSecondary)
+                    .frame(width: 16)
+                Text(folder.title)
+                    .font(.werk(size: 12.5, weight: isOn ? .semibold : .regular))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 8 + CGFloat(depth) * 14)
+            .padding(.trailing, 8)
+            .frame(height: 28)
+            .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
+                .fill(isOn ? ThingsColor.selection : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func icon(_ folder: MailFolder) -> String {
+        switch folder {
+        case .inbox: "tray"
+        case .starred: "star"
+        case .sent: "paperplane"
+        case .all: "archivebox"
+        case .spam: "xmark.bin"
+        case .trash: "trash"
+        case .label: "folder"
+        }
     }
 }
 

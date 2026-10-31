@@ -10,6 +10,8 @@ struct ComposeRef: Codable, Hashable {
     var id = UUID()
     var mode: Mode
     var source: MailRef?
+    /// Een nieuwe mail die al is ingevuld (een mailto-link).
+    var prefill: MailPrefill?
 }
 
 /// Mail opstellen als paneel boven het hoofdvenster. Verstuurt via de Gmail API, met de handtekening uit Voorkeuren.
@@ -519,7 +521,16 @@ struct ComposeView: View {
         fromAccount = ref.source?.account ?? gmail.activeAccount ?? gmail.accounts.first ?? ""
         if attachments.isEmpty { attachments = initialAttachments }
         guard let source = ref.source else {
-            focus = .to
+            if let prefill = ref.prefill {
+                toText = prefill.to
+                ccText = prefill.cc
+                bccText = prefill.bcc
+                subject = prefill.subject
+                if !prefill.body.isEmpty { bodyBinding.wrappedValue = prefill.body }
+                showCc = !prefill.cc.isEmpty
+                showBcc = !prefill.bcc.isEmpty
+            }
+            focus = toText.isEmpty ? .to : .body
             return
         }
         isLoading = preloaded == nil

@@ -1,7 +1,7 @@
 import Foundation
 
-// De mailmodus: een mail met alle koppen die de lijst, de bundel en de klanten nodig hebben, de soort mail, de
-// zoekopdracht voor Gmail en de klanten op volgorde van hoeveel mail er met ze was.
+// De mailmodus: een mail met alle koppen die de lijst, de bundel en de klanten nodig hebben, de soort mail en de
+// klanten op volgorde van hoeveel mail er met ze was.
 
 // MARK: - Soort mail
 
@@ -141,29 +141,6 @@ extension GmailAPI {
                              mimeType: message.payload?.mimeType ?? "",
                              listUnsubscribe: !value("list-unsubscribe").isEmpty,
                              bulk: precedence.contains("bulk") || precedence.contains("list"))
-    }
-}
-
-// MARK: - Zoeken
-
-/// De zoekopdracht voor Gmail (`q`). Zonder zoektekst en klant: de inbox. Met zoektekst of klant: alle mail (Gmail
-/// laat spam en prullenbak dan zelf weg), zodat je ook gearchiveerde mail terugvindt.
-public enum MailSearch {
-    public static func query(text: String, attachment: Bool = false, unread: Bool = false,
-                             clientDomains: [String] = []) -> String {
-        var parts: [String] = []
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty && clientDomains.isEmpty { parts.append("in:inbox") }
-        if !trimmed.isEmpty { parts.append(trimmed) }
-        if attachment { parts.append("has:attachment") }
-        if unread { parts.append("is:unread") }
-        let domains = clientDomains.map { $0.lowercased() }.filter { !$0.isEmpty && !$0.contains(" ") }
-        if !domains.isEmpty {
-            // {a b c} is OF in Gmail: mail van, aan of in cc bij een van de domeinen.
-            let terms = ["from", "to", "cc"].flatMap { field in domains.map { "\(field):\($0)" } }
-            parts.append("{" + terms.joined(separator: " ") + "}")
-        }
-        return parts.joined(separator: " ")
     }
 }
 
