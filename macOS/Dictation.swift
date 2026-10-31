@@ -33,11 +33,15 @@ final class Dictation {
     enum Purpose { case timeEntry, feedback }
 
     private(set) var phase: Phase = .off
+    /// De stand van het spraakmodel, ook tijdens opnemen en omzetten (dan toont `phase` die).
+    private(set) var modelPhase: Phase = .off
     /// Geluidsniveau tijdens opnemen (0…1), voor de pil.
     private(set) var level: Double = 0
     private(set) var purpose: Purpose = .timeEntry
 
     var isActive: Bool { phase == .listening || phase == .transcribing }
+    /// De aanwijsmodus voor een verbetering staat aan (knop in de werkbalk of F18).
+    var isFeedbackActive: Bool { purpose == .feedback && phase == .listening }
 
     @ObservationIgnored private var whisper: WhisperKit?
     @ObservationIgnored private let recorder = SpeechRecorder()
@@ -76,8 +80,15 @@ final class Dictation {
             loadTask?.cancel()
             loadTask = nil
             whisper = nil
+            modelPhase = .off
             phase = .off
         }
+    }
+
+    /// Het model verandert van stand; tijdens opnemen of omzetten blijft de pil daarbij.
+    private func setModel(_ new: Phase) {
+        modelPhase = new
+        if phase != .listening && phase != .transcribing { phase = new }
     }
 
     /// Opnieuw proberen na een fout (Voorkeuren); bij een kapot model eerst opnieuw downloaden.
@@ -106,59 +117,88 @@ final class Dictation {
             } else {
                 folder = try await WhisperModel.download(variant: Self.model) { fraction in
                     // Niet meer als inspreken intussen is uitgezet.
-                    if Dictation.shared.loadTask != nil { Dictation.shared.phase = .downloading(fraction) }
+                    if Dictation.shared.loadTask != nil { Dictation.shared.setModel(.downloading(fraction)) }
                 }
             }
             guard !Task.isCancelled else { return }
-            phase = .loading
+            setModel(.loading)
             let loaded = try await WhisperModel.load(folder: folder)
             guard !Task.isCancelled else { return }
             whisper = loaded
-            phase = .ready
+            setModel(.ready)
         } catch {
             guard !Task.isCancelled else { return }
             WhisperModel.forget()
-            phase = .failed("Spraakmodel laden mislukt: \(error.localizedDescription)")
+            setModel(.failed("Spraakmodel laden mislukt: \(error.localizedDescription)"))
         }
     }
 
     // MARK: Opnemen
 
     private func keyDown(_ kind: Purpose) {
-        // Aanwijsmodus (kort getikt): de volgende tik rondt af.
-        if kind == .feedback, purpose == .feedback, latched {
-            finishRecording()
+        if kind == .feedback {
+            // Aanwijsmodus (kort getikt): de volgende tik rondt af.
+            if purpose == .feedback, latched {
+                finishRecording()
+            } else if !isActive {
+                prepareForFeedback()
+                begin(.feedback, latched: false)
+            }
             return
         }
         switch phase {
         case .ready:
-            holding = true
-            latched = false
-            purpose = kind
-            keyDownAt = Date()
-            if kind == .feedback { pendingScreenshot = Task { await FeedbackScreenshot.capture() } }
+            begin(.timeEntry, latched: false)
         case .downloading(let fraction):
             let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
             AppState.shared.announce("Spraakmodel downloaden: \(percent)")
-            return
         case .loading:
             AppState.shared.announce("Spraakmodel wordt geladen")
-            return
         case .off:
             AppState.shared.announce("Inspreken staat uit (Voorkeuren › Overig)", seconds: 4)
-            return
         case .failed(let message):
             AppState.shared.announce(message, seconds: 4)
-            return
         case .listening, .transcribing:
-            return
+            break
         }
+    }
+
+    /// De knop Verbetering in de werkbalk: de aanwijsmodus aan, of afronden als hij al aan staat. Zet inspreken zo
+    /// nodig aan (de eerste keer downloadt het spraakmodel; opnemen kan al, omzetten wacht tot het klaar is) en vraagt
+    /// om de microfoon en schermopname.
+    func toggleFeedbackMode() {
+        if isFeedbackActive {
+            finishRecording()
+        } else if !isActive {
+            prepareForFeedback()
+            begin(.feedback, latched: true)
+        }
+    }
+
+    /// Inspreken aan (het model downloadt en laadt), of na een fout opnieuw proberen.
+    private func prepareForFeedback() {
+        if !Self.isEnabled || modelPhase == .off {
+            apply(enabled: true)
+        } else if case .failed = modelPhase {
+            retry()
+        }
+    }
+
+    /// Begint met opnemen (de eerste keer vraagt macOS om de microfoon). Een verbetering mag al terwijl het model nog
+    /// downloadt of laadt; een tijdregel alleen als het klaar is (dat regelt `keyDown`).
+    private func begin(_ kind: Purpose, latched: Bool) {
+        holding = !latched
+        self.latched = latched
+        purpose = kind
+        keyDownAt = Date()
+        if kind == .feedback { pendingScreenshot = Task { await FeedbackScreenshot.capture() } }
         Task {
             guard await AVAudioApplication.requestRecordPermission() else {
                 AppState.shared.announce("Geen toegang tot de microfoon (Systeeminstellingen › Privacy)", seconds: 4)
+                self.latched = false
                 return
             }
-            guard holding || latched, phase == .ready else { return }
+            guard holding || self.latched, !isActive else { return }
             do {
                 try recorder.start { value in
                     Task { @MainActor in Dictation.shared.level = value }
@@ -166,6 +206,7 @@ final class Dictation {
                 phase = .listening
                 if kind == .feedback { showOverlay() }
             } catch {
+                self.latched = false
                 AppState.shared.announce("Opnemen mislukt: \(error.localizedDescription)", seconds: 4)
             }
         }
@@ -193,11 +234,14 @@ final class Dictation {
         level = 0
         // Korter dan een halve seconde: per ongeluk aangetikt.
         guard samples.count > WhisperKit.sampleRate / 2 else {
-            phase = .ready
+            phase = modelPhase
             return
         }
         pendingMarks = marks
         phase = .transcribing
+        if whisper == nil, purpose == .feedback {
+            AppState.shared.announce("Omzetten zodra het spraakmodel klaar is", seconds: 4)
+        }
         Task { await finish(samples) }
     }
 
@@ -212,7 +256,7 @@ final class Dictation {
         if phase == .listening {
             _ = recorder.stop()
             level = 0
-            phase = .ready
+            phase = modelPhase
         }
         AppState.shared.announce("Verbetering geannuleerd")
     }
@@ -231,8 +275,13 @@ final class Dictation {
     }
 
     private func finish(_ samples: [Float]) async {
-        defer { if phase == .transcribing { phase = .ready } }
-        guard let whisper else { return }
+        defer { if phase == .transcribing { phase = modelPhase } }
+        // Een verbetering die is ingesproken terwijl het model nog downloadde of laadde: daarop wachten.
+        if whisper == nil, purpose == .feedback { await loadTask?.value }
+        guard let whisper else {
+            AppState.shared.announce("Spraakmodel niet beschikbaar: niets bewaard", seconds: 4)
+            return
+        }
         if purpose == .feedback {
             await finishFeedback(samples, with: whisper)
             return
@@ -252,7 +301,7 @@ final class Dictation {
             if entry == nil { entry = await DictationSplitter.split(text, clients: names) }
             var result = entry ?? DictatedTimeEntry(performed: text)
             result.client = WhisperModel.matchClient(result.client, known: names)
-            phase = .ready
+            phase = modelPhase
             QuickEntryController.shared.show(dictation: result)
         } catch {
             AppState.shared.announce("Omzetten mislukt: \(error.localizedDescription)", seconds: 4)

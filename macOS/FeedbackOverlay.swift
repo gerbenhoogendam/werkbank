@@ -175,6 +175,11 @@ private struct FeedbackOverlayView: View {
                 }
                 .animation(.easeOut(duration: 0.12), value: dictation.level)
             }
+            modelStatus
+            if !FeedbackScreenshot.hasPermission {
+                Button("Schermopname toestaan") { FeedbackScreenshot.requestPermission() }
+                    .buttonStyle(OverlayButtonStyle())
+            }
             if !session.marks.isEmpty {
                 Text("\(session.marks.count)")
                     .font(.werk(size: 12, weight: .semibold))
@@ -195,6 +200,41 @@ private struct FeedbackOverlayView: View {
         .frame(height: 44)
         .background(Capsule().fill(Color.black.opacity(0.82)).shadow(color: .black.opacity(0.35), radius: 10, y: 3))
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.14)))
+    }
+}
+
+private extension FeedbackOverlayView {
+    /// Het spraakmodel als het nog niet klaar is: opnemen loopt al, omzetten wacht erop.
+    @ViewBuilder var modelStatus: some View {
+        switch dictation.modelPhase {
+        case .downloading(let fraction):
+            HStack(spacing: 6) {
+                Text("Spraakmodel")
+                ProgressView(value: fraction)
+                    .frame(width: 70)
+                    .tint(.white)
+                Text(fraction.formatted(.percent.precision(.fractionLength(0))))
+                    .monospacedDigit()
+            }
+            .font(.werk(size: 11.5, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.85))
+        case .loading, .off:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small).tint(.white)
+                Text("Spraakmodel laden")
+            }
+            .font(.werk(size: 11.5, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.85))
+        case .failed(let message):
+            Text(message)
+                .font(.werk(size: 11.5, weight: .medium))
+                .foregroundStyle(SiriPalette.coral)
+                .lineLimit(1)
+            Button("Opnieuw") { dictation.retry() }
+                .buttonStyle(OverlayButtonStyle())
+        case .ready, .listening, .transcribing:
+            EmptyView()
+        }
     }
 }
 

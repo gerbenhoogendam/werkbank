@@ -259,6 +259,10 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   hoofdvenster via ScreenCaptureKit op het moment van F18 of typen (toestemming voor schermopname; zonder: wat het
   venster zelf tekent, mails blijven dan leeg); iPhone het scherm op het moment van de knop. Opgeslagen in
   `FeatureRequest.screenshot` (externalStorage, via iCloud) met `capturedAt`.
+- **Knop Verbetering** in de werkbalk (lampje, `Dictation.toggleFeedbackMode`): zet de aanwijsmodus aan zoals F18 kort
+  tikken. Staat inspreken uit, dan gaat het aan en downloadt het spraakmodel; opnemen begint meteen, omzetten wacht tot
+  het model klaar is (`modelPhase` naast `phase`). Microfoon en schermopname worden zo nodig gevraagd; de laag toont
+  de stand van het model en een knop Schermopname toestaan. Op de iPhone zet de knop Verbetering inspreken zelf aan.
 - **Aanwijsmodus** (`macOS/FeedbackOverlay.swift`): tijdens het inspreken ligt over het hoofdvenster een laag met de
   Siri-rand (`VoiceGlow`, nu in `Shared/Design/VoiceVisuals.swift`). Klik = genummerde stip, slepen = kader; de app
   eronder reageert niet. F18 kort tikken: aan tot de volgende tik, Klaar of ⏎; vasthouden: loslaten rondt af. Esc of

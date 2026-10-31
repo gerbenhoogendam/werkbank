@@ -66,8 +66,9 @@ struct FeedbackDictationSheet: View {
             }
         }
         .task {
-            // Meteen opnemen: één tik op de knop en praten.
-            guard enabled else { return }
+            // Meteen opnemen: één tik op de knop en praten. Staat inspreken uit, dan gaat het aan (de eerste keer
+            // downloadt het spraakmodel; opnemen kan al, omzetten wacht erop).
+            if !enabled { dictation.apply(enabled: true) }
             dictation.prepare()
             await start()
         }
@@ -75,61 +76,68 @@ struct FeedbackDictationSheet: View {
     }
 
     @ViewBuilder private var recordButton: some View {
-        if !enabled {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        Button(action: toggle) {
             VStack(spacing: 10) {
-                Text("Inspreken staat uit")
-                    .font(.werk(size: 16))
-                    .foregroundStyle(ThingsColor.textSecondary)
-                Button("Aanzetten") {
-                    dictation.apply(enabled: true)
-                    Task { await start() }
+                if dictation.isRecording {
+                    VoiceWave(level: dictation.level, motion: voiceMotion)
+                        .frame(height: 56)
+                    Text("Klaar")
+                        .font(.werk(size: 17, weight: .semibold))
+                } else {
+                    Image(systemName: "mic.fill")
+                        .font(.werk(size: 30, weight: .semibold))
+                    Text(drafts.isEmpty ? "Inspreken" : "Nog iets inspreken")
+                        .font(.werk(size: 17, weight: .semibold))
                 }
-                .buttonStyle(.borderedProminent)
             }
+            .foregroundStyle(ThingsColor.accent)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
-        } else {
-            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-            Button(action: toggle) {
-                VStack(spacing: 10) {
-                    if dictation.isRecording {
-                        VoiceWave(level: dictation.level, motion: voiceMotion)
-                            .frame(height: 56)
-                        Text("Klaar")
-                            .font(.werk(size: 17, weight: .semibold))
-                    } else {
-                        Image(systemName: "mic.fill")
-                            .font(.werk(size: 30, weight: .semibold))
-                        Text(drafts.isEmpty ? "Inspreken" : "Nog iets inspreken")
-                            .font(.werk(size: 17, weight: .semibold))
-                    }
-                }
-                .foregroundStyle(ThingsColor.accent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 22)
-                .background(shape.fill(ThingsColor.backgroundSidebar))
-                .overlay {
-                    if dictation.isRecording {
-                        VoiceGlow(level: dictation.level, motion: voiceMotion, shape: shape)
-                    } else {
-                        shape.strokeBorder(ThingsColor.separator)
-                    }
-                }
-                .contentShape(shape)
-            }
-            .buttonStyle(PressScaleButtonStyle())
-            if case .downloading(let fraction) = dictation.phase {
-                HStack(spacing: 8) {
-                    Text("Spraakmodel")
-                        .font(.werk(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.fieldLabel)
-                    ProgressView(value: fraction)
-                    Text(fraction.formatted(.percent.precision(.fractionLength(0))))
-                        .font(.werk(size: 13))
-                        .monospacedDigit()
-                        .foregroundStyle(ThingsColor.textSecondary)
+            .padding(.vertical, 22)
+            .background(shape.fill(ThingsColor.backgroundSidebar))
+            .overlay {
+                if dictation.isRecording {
+                    VoiceGlow(level: dictation.level, motion: voiceMotion, shape: shape)
+                } else {
+                    shape.strokeBorder(ThingsColor.separator)
                 }
             }
+            .contentShape(shape)
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        modelStatus
+    }
+
+    /// Het spraakmodel als het nog niet klaar is.
+    @ViewBuilder private var modelStatus: some View {
+        switch dictation.phase {
+        case .downloading(let fraction):
+            HStack(spacing: 8) {
+                Text("Spraakmodel")
+                    .font(.werk(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.fieldLabel)
+                ProgressView(value: fraction)
+                Text(fraction.formatted(.percent.precision(.fractionLength(0))))
+                    .font(.werk(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+        case .loading:
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("Spraakmodel laden")
+                    .font(.werk(size: 13))
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+        case .failed(let message):
+            HStack(spacing: 8) {
+                Text(message)
+                    .font(.werk(size: 13))
+                    .foregroundStyle(ThingsColor.error)
+                Button("Opnieuw") { dictation.retry() }
+            }
+        case .off, .standby, .ready:
+            EmptyView()
         }
     }
 

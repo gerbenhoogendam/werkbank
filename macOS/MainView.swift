@@ -183,6 +183,15 @@ struct MainView: View {
                 .help("Vier werkweken tegelijk (⌥⌘A)")
             }
             ToolbarItem(placement: .primaryAction) {
+                // Verbetering inspreken en aanwijzen; regelt zo nodig spraakmodel, microfoon en schermopname.
+                Button {
+                    Dictation.shared.toggleFeedbackMode()
+                } label: {
+                    Label("Verbetering", systemImage: Dictation.shared.isFeedbackActive ? "lightbulb.fill" : "lightbulb")
+                }
+                .help("Verbetering inspreken en aanwijzen (F18)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 // Snel wisselen van thema; eigen kleuren per thema blijven bewaard.
                 Menu {
                     Picker("Thema", selection: Binding(get: { ThemeStore.shared.theme.id },
