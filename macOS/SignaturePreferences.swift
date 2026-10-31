@@ -52,6 +52,8 @@ struct SignaturePreferences: View {
                 }
             }
 
+            MailModeKeysSection()
+
             Section {
                 Picker("Handtekening voor", selection: $key) {
                     Text("Alle mailboxen (standaard)").tag(MailSignatures.defaultKey)
@@ -134,4 +136,72 @@ struct SignaturePreferences: View {
     }
 
     private var previewHTML: String { MailSignatures.previewHTML(html, logo: logo) }
+}
+
+/// Voorkeuren › Mail: de toetsen van de mailmodus. Klik op een toets en druk de nieuwe in; Esc laat hem staan.
+private struct MailModeKeysSection: View {
+    @State private var recording: MailModeAction?
+    @State private var monitor: Any?
+    @State private var error: String?
+    @State private var revision = 0
+
+    var body: some View {
+        Section("Sneltoetsen in de mailmodus") {
+            ForEach(MailModeAction.allCases) { action in
+                LabeledContent(action.title) {
+                    if recording == action {
+                        Button("…") { stop() }
+                            .buttonStyle(.borderedProminent)
+                            .frame(minWidth: 54)
+                    } else {
+                        Button(MailModeKeys.key(for: action)) { record(action) }
+                            .frame(minWidth: 54)
+                    }
+                }
+            }
+            .id(revision)
+            if let error {
+                Text(error).foregroundStyle(.red)
+            }
+            Button("Standaard herstellen") {
+                stop()
+                MailModeKeys.resetAll()
+                error = nil
+                revision += 1
+            }
+        }
+        .onDisappear(perform: stop)
+    }
+
+    private func record(_ action: MailModeAction) {
+        stop()
+        recording = action
+        error = nil
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated { capture(event, for: action) }
+            return nil
+        }
+    }
+
+    private func capture(_ event: NSEvent, for action: MailModeAction) {
+        defer { stop() }
+        if event.keyCode == 53 { return }
+        guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+              let key = MailModeKeys.key(from: event) else {
+            error = "Kies een letter, cijfer, leesteken of Tab, zonder ⌘, ⌃ of ⌥."
+            return
+        }
+        if let other = MailModeKeys.conflict(key, excluding: action) {
+            error = "\(key) staat al op \(other.title)."
+            return
+        }
+        MailModeKeys.set(key, for: action)
+        revision += 1
+    }
+
+    private func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        recording = nil
+    }
 }

@@ -32,13 +32,16 @@ struct ComposeView: View {
     var restored: ComposeDraft?
     /// Mailmodus: na versturen wordt het gesprek meteen gearchiveerd (geen Enter-aftelling).
     var archivesOnSend = false
+    /// Bijlagen waarmee het venster begint (de uitnodiging bij Inplannen in de mailmodus).
+    var initialAttachments: [MailAttachment] = []
 
     init(ref: ComposeRef, embedded: Bool = false, preloaded: MailContent? = nil, externalBody: Binding<String>? = nil,
          suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil,
          onDiscard: (() -> Void)? = nil, detached: Bool = false, restored: ComposeDraft? = nil,
-         archivesOnSend: Bool = false) {
+         archivesOnSend: Bool = false, initialAttachments: [MailAttachment] = []) {
         self.ref = ref
         self.archivesOnSend = archivesOnSend
+        self.initialAttachments = initialAttachments
         self.embedded = embedded
         self.detached = detached
         self.restored = restored
@@ -500,6 +503,7 @@ struct ComposeView: View {
             return
         }
         fromAccount = ref.source?.account ?? gmail.activeAccount ?? gmail.accounts.first ?? ""
+        if attachments.isEmpty { attachments = initialAttachments }
         guard let source = ref.source else {
             focus = .to
             return

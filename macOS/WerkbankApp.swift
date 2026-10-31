@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         BoardService.ensureColumns(in: Persistence.container.mainContext)
         MiniTimerController.shared.start()
         WaitingWatcher.shared.start()
+        FollowUpStore.shared.start()
         IdleWatcher.shared.start()
         WerkbankSync.start()
         Dictation.shared.start()

@@ -573,6 +573,11 @@ final class GmailSession {
         return await mailItems(ids: refs.prefix(limit).map(\.id), account: account, headers: ["From", "To", "Cc"])
     }
 
+    /// Bepaalde mails voor de mailmodus (de gesprekken waarop een antwoord wordt verwacht).
+    func mailItems(messageIDs: [String], account: String?) async -> [GmailMailItem] {
+        await mailItems(ids: messageIDs, account: account, headers: GmailAPI.mailItemHeaders)
+    }
+
     /// Haalt de koppen van mails op, acht tegelijk (zo blijft het binnen wat Gmail per seconde toestaat).
     private func mailItems(ids: [String], account: String?, headers: [String]) async -> [GmailMailItem] {
         let query = [URLQueryItem(name: "format", value: "metadata")]
@@ -781,12 +786,20 @@ final class GmailSession {
         _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
     }
 
+    /// Zet een gesprek terug in de inbox (opvolgen zonder antwoord, later terug).
+    func moveToInbox(threadID: String, account: String?) async throws {
+        note(account: account, forMessageID: threadID)
+        let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["INBOX"]])
+        _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: account ?? messageAccount[threadID])
+    }
+
     /// Zet een gesprek terug in de inbox (⌘Z na archiveren).
     private func restoreToInbox(threadID: String) async {
         do {
             let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["INBOX"]])
             _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
             await reload()
+            if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
         } catch {
             AppState.shared.announce("Terugzetten in de inbox mislukt")
         }
@@ -847,10 +860,11 @@ final class GmailSession {
         }
     }
 
-    /// Maakt van een geopende mail een taak (met eigen titel en eventueel al bestede tijd) en archiveert hem daarna.
-    /// Zelfde volgorde als bij slepen: eerst de kaart, dan archiveren; mislukt dat, dan blijft de kaart staan.
+    /// Maakt van een geopende mail een taak (met eigen titel en eventueel al bestede tijd) en archiveert hem daarna
+    /// (tenzij `archive` uit staat). Zelfde volgorde als bij slepen: eerst de kaart, dan archiveren; mislukt dat, dan
+    /// blijft de kaart staan.
     func createTask(from message: GmailMessageSummary, title: String, minutes: Int, column: BoardColumn,
-                    context: ModelContext, appState: AppState) async {
+                    archive shouldArchive: Bool = true, context: ModelContext, appState: AppState) async {
         guard !busyMessageIDs.contains(message.id) else { return }
         busyMessageIDs.insert(message.id)
         defer { busyMessageIDs.remove(message.id) }
@@ -874,6 +888,11 @@ final class GmailSession {
 
         let columnTitle = BoardService.title(of: BoardService.resolve(column, in: context), in: context)
         let timeNote = logged > 0 ? ", \(logged) min gelogd" : ""
+        guard shouldArchive else {
+            recordCardFromMail(cardID: card.id, threadID: message.threadID, archived: false, context: context)
+            appState.showToast("Taak gemaakt in \(columnTitle)\(timeNote)", seconds: 3)
+            return
+        }
         do {
             try await archive(threadID: message.threadID)
             removeThreadFromLists(message.threadID)

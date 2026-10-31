@@ -71,6 +71,8 @@ struct MailWindowView: View {
     /// Op welke mail het antwoordblok antwoordt (en hoe).
     @State private var replyRef: ComposeRef?
     @State private var replyBody = ""
+    /// Bijlagen voor het volgende antwoord (de uitnodiging bij Inplannen in de mailmodus).
+    @State private var replyAttachments: [MailAttachment] = []
     /// Het conceptantwoord dat al is overgenomen of overgeslagen.
     @State private var usedDraftID: UUID?
     /// Een blok waar het gesprek naartoe moet scrollen (bijv. een net gestarte analyse).
@@ -320,6 +322,7 @@ struct MailWindowView: View {
                                            isExpanded: model.isExpanded(mail.id),
                                            onToggle: { model.toggle(mail.id) },
                                            onReply: { mode in
+                                               replyAttachments = []
                                                replyRef = composeRef(mode, for: mail)
                                                withAnimation { proxy.scrollTo("reply", anchor: .center) }
                                            },
@@ -350,6 +353,7 @@ struct MailWindowView: View {
                 // ⌘R: allen beantwoorden op de nieuwste mail.
                 Button("") {
                     guard let newest = model.mails.last else { return }
+                    replyAttachments = []
                     replyRef = composeRef(.replyAll, for: newest)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         withAnimation { proxy.scrollTo("reply", anchor: .center) }
@@ -362,6 +366,7 @@ struct MailWindowView: View {
             .onChange(of: trigger?.request?.id) { _, _ in
                 // De mailmodus vraagt om een antwoord op de nieuwste mail, eventueel met tekst erin.
                 guard let request = trigger?.request, let newest = model.mails.last else { return }
+                replyAttachments = request.attachments
                 replyRef = composeRef(request.mode, for: newest)
                 if let text = request.text { replyBody = text }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -404,9 +409,11 @@ struct MailWindowView: View {
                         },
                         onDiscard: {
                             usedDraftID = model.latestDraft?.id
+                            replyAttachments = []
                             self.replyRef = nil
                         },
-                        archivesOnSend: embedded)
+                        archivesOnSend: embedded,
+                        initialAttachments: replyAttachments)
                 .id(replyRef.id)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))

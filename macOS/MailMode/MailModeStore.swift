@@ -18,13 +18,14 @@ final class MailModeStore {
     }
 
     enum Filter: String, CaseIterable, Identifiable {
-        case attachment, unread, noTask
+        case attachment, unread, noTask, waiting
         var id: String { rawValue }
         var title: String {
             switch self {
             case .attachment: "Met bijlage"
             case .unread: "Ongelezen"
             case .noTask: "Zonder taak"
+            case .waiting: "Wacht op antwoord"
             }
         }
     }
@@ -53,6 +54,10 @@ final class MailModeStore {
     private(set) var searchFocusRequest = 0
     /// Het gesprek rechts opent een antwoord (toets R, of het Claude-concept).
     let replyTrigger = MailReplyTrigger()
+    /// Het blad dat open staat (taak, tijd, inplannen, opvolgen, concept).
+    private(set) var sheet: MailModeSheet?
+    /// Datums en tijden in een mail (zonder het geciteerde deel), per mail.
+    private(set) var proposalsByID: [String: [DateProposal]] = [:]
 
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var loadToken = 0
@@ -82,6 +87,7 @@ final class MailModeStore {
 
     func close() {
         isActive = false
+        sheet = nil
         searchTask?.cancel()
     }
 
@@ -171,16 +177,19 @@ final class MailModeStore {
             loadError = "Bij deze klant staat geen domein in de klantenlijst."
             return
         }
-        let q = MailSearch.query(text: query, attachment: filters.contains(.attachment), unread: filters.contains(.unread),
-                                 clientDomains: domains)
-        let targets = accounts(of: client != nil ? .all : scope)
         var found: [GmailMailItem] = []
         var failure: String?
-        for account in targets {
-            do {
-                found += try await gmail.mailItems(query: q, account: account)
-            } catch {
-                failure = failure ?? error.localizedDescription
+        if filters.contains(.waiting) {
+            found = await waitingItems()
+        } else {
+            let q = MailSearch.query(text: query, attachment: filters.contains(.attachment),
+                                     unread: filters.contains(.unread), clientDomains: domains)
+            for account in accounts(of: client != nil ? .all : scope) {
+                do {
+                    found += try await gmail.mailItems(query: q, account: account)
+                } catch {
+                    failure = failure ?? error.localizedDescription
+                }
             }
         }
         guard token == loadToken else { return }
@@ -193,6 +202,19 @@ final class MailModeStore {
         if selected == nil { selectedID = listed.first?.id }
         if MailActivityStore.shared.add(found) { refreshRanking() }
     }
+
+    /// De gesprekken waarop een antwoord wordt verwacht (opvolgen), met de nieuwste mail van elk.
+    private func waitingItems() async -> [GmailMailItem] {
+        var result: [GmailMailItem] = []
+        for entry in FollowUpStore.shared.waiting {
+            guard let messages = try? await gmail.threadMessages(threadID: entry.threadID, account: entry.account),
+                  let newest = messages.max(by: { $0.date < $1.date }) else { continue }
+            result += await gmail.mailItems(messageIDs: [newest.id], account: entry.account)
+        }
+        return result
+    }
+
+    func refreshTasks() { refreshTaskThreads() }
 
     private func refreshTaskThreads() {
         taskThreadIDs = Set(BoardService.allCards(in: Persistence.container.mainContext).compactMap(\.mailThreadID))
@@ -298,15 +320,45 @@ final class MailModeStore {
     /// Archiveert het gekozen gesprek en opent de volgende mail.
     func archiveSelected(appState: AppState) {
         guard let item = selected else { return }
-        remove(threadID: item.threadID)
-        Task { await gmail.archiveMessage(item.summary, appState: appState) }
+        archive(item, announcing: nil, appState: appState)
     }
 
     /// Na versturen in de mailmodus: het gesprek archiveren en de volgende mail openen (de melding komt van het versturen).
     func archiveAfterSending(threadID: String, appState: AppState) {
         guard let item = items.first(where: { $0.threadID == threadID }) else { return }
-        remove(threadID: threadID)
-        Task { await gmail.archiveMessage(item.summary, appState: appState, announce: false) }
+        archive(item, announcing: "", appState: appState)
+    }
+
+    /// Archiveert een gesprek na een handeling en opent de volgende mail. `announcing`: de melding (leeg: geen,
+    /// `nil`: de gewone van archiveren).
+    func archive(_ item: GmailMailItem, announcing text: String?, appState: AppState) {
+        remove(threadID: item.threadID)
+        FollowUpStore.shared.clearReturned(threadID: item.threadID)
+        if let text, !text.isEmpty { appState.announce(text, seconds: 3) }
+        Task { await gmail.archiveMessage(item.summary, appState: appState, announce: text == nil) }
+    }
+
+    // MARK: Bladen
+
+    func openSheet(_ kind: MailModeSheet) {
+        guard selected != nil else { return }
+        sheet = kind
+    }
+
+    func closeSheet() { sheet = nil }
+
+    /// Datums en tijden die in de mail worden voorgesteld en nog moeten komen (zonder het geciteerde deel). "Morgen"
+    /// telt vanaf de dag dat de mail is verstuurd.
+    @discardableResult
+    func proposals(for item: GmailMailItem) async -> [DateProposal] {
+        if let cached = proposalsByID[item.id] { return cached }
+        guard let raw = try? await gmail.rawMessageData(id: item.id) else { return [] }
+        let reference = item.date ?? .now
+        let found = await Task.detached(priority: .utility) {
+            DateProposals.find(in: QuoteSplitter.mainText(of: MailContentParser.parse(raw)), reference: reference)
+        }.value.filter { $0.start > .now }
+        proposalsByID[item.id] = found
+        return found
     }
 
     // MARK: Klanten
@@ -342,11 +394,14 @@ final class MailReplyTrigger {
         let id = UUID()
         var mode: ComposeRef.Mode
         var text: String?
+        var attachments: [MailAttachment] = []
+
+        static func == (lhs: Request, rhs: Request) -> Bool { lhs.id == rhs.id }
     }
 
     private(set) var request: Request?
 
-    func reply(_ mode: ComposeRef.Mode = .replyAll, text: String? = nil) {
-        request = Request(mode: mode, text: text)
+    func reply(_ mode: ComposeRef.Mode = .replyAll, text: String? = nil, attachments: [MailAttachment] = []) {
+        request = Request(mode: mode, text: text, attachments: attachments)
     }
 }

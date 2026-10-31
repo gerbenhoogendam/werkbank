@@ -28,6 +28,13 @@ struct MailModeView: View {
             }
         }
         .background(ThingsColor.backgroundSidebar)
+        .overlay {
+            if let sheet = store.sheet, let item = store.selected {
+                MailModeSheetHost(sheet: sheet, item: item)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: store.sheet)
         .background(WindowReader(window: $window))
         .onAppear(perform: installKeys)
         .onDisappear(perform: removeKeys)
@@ -52,6 +59,12 @@ struct MailModeView: View {
     private func handle(_ event: NSEvent) -> Bool {
         guard store.isActive, let window, event.window === window, window.attachedSheet == nil,
               !PanelStore.shared.hasFocusPanels else { return false }
+        if store.sheet != nil {
+            // In een blad gaan alle toetsen naar het blad; Esc sluit het.
+            guard event.keyCode == 53 else { return false }
+            store.closeSheet()
+            return true
+        }
         if window.firstResponder is NSText { return false }
         if event.keyCode == 53 {
             store.close()
@@ -71,9 +84,21 @@ struct MailModeView: View {
         case .search: store.requestSearchFocus()
         case .next: store.selectNext()
         case .previous: store.selectPrevious()
-        case .task, .time, .plan, .follow, .claude: return false
+        case .task, .time, .plan, .follow, .claude:
+            guard store.selected != nil else { return false }
+            store.openSheet(Self.sheet(for: action))
         }
         return true
+    }
+
+    static func sheet(for action: MailModeAction) -> MailModeSheet {
+        switch action {
+        case .time: .time
+        case .plan: .plan
+        case .follow: .follow
+        case .claude: .concept
+        default: .task
+        }
     }
 }
 
@@ -250,6 +275,12 @@ private struct MailModeList: View {
 
     private func tags(for item: GmailMailItem) -> [MailRowTag] {
         var tags: [MailRowTag] = []
+        if let returned = FollowUpStore.shared.returned[item.threadID] {
+            tags.append(MailRowTag(text: "Terug · \(returned)", systemImage: "arrow.uturn.backward", highlighted: true))
+        }
+        if FollowUpStore.shared.items.contains(where: { $0.threadID == item.threadID }) {
+            tags.append(MailRowTag(text: "Opvolgen", systemImage: "clock.arrow.circlepath"))
+        }
         if store.client == nil, let client = store.clientName(for: item) { tags.append(MailRowTag(text: client)) }
         let kind = store.kind(of: item)
         if kind != .person { tags.append(MailRowTag(text: kind.title)) }
@@ -305,11 +336,15 @@ private struct MailModeReader: View {
         if let item = store.selected {
             VStack(alignment: .leading, spacing: 0) {
                 header(item)
+                if let proposal = store.proposalsByID[item.id]?.first {
+                    proposalBanner(proposal)
+                }
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
                 MailWindowView(ref: MailRef(message: item.summary), embedded: true, trigger: store.replyTrigger,
                                onReplySent: { store.archiveAfterSending(threadID: item.threadID, appState: appState) })
                     .id(item.threadID)
             }
+            .task(id: item.id) { await store.proposals(for: item) }
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "checkmark.circle")
@@ -381,12 +416,43 @@ private struct MailModeReader: View {
                 MailActionButton(title: "Beantwoorden", systemImage: "arrowshape.turn.up.left", action: .reply) {
                     store.replyTrigger.reply()
                 }
+                MailActionButton(title: "Taak", systemImage: "checkmark.circle", action: .task) { store.openSheet(.task) }
+                MailActionButton(title: "Tijd schrijven", systemImage: "clock", action: .time) { store.openSheet(.time) }
+                MailActionButton(title: "Inplannen", systemImage: "calendar", action: .plan) { store.openSheet(.plan) }
+                MailActionButton(title: "Opvolgen", systemImage: "arrow.uturn.backward.circle", action: .follow) {
+                    store.openSheet(.follow)
+                }
+                MailActionButton(title: "Concept", systemImage: "sparkles", action: .claude) { store.openSheet(.concept) }
             }
         }
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 12)
         .background(ThingsColor.backgroundSidebar)
+    }
+
+    /// Een datum of tijd uit de mail, met Inplannen ernaast.
+    private func proposalBanner(_ proposal: DateProposal) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.werk(size: 13, weight: .medium))
+                .foregroundStyle(ThingsColor.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Voorstel in deze mail")
+                    .font(.werk(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.fieldLabel)
+                Text(proposal.hasTime
+                     ? "\(DutchDate.weekdayAndDay(proposal.start)) · \(DutchDate.time(proposal.start))–\(DutchDate.time(proposal.end))"
+                     : DutchDate.weekdayAndDay(proposal.start))
+                    .font(.werk(size: 13, weight: .medium))
+                    .foregroundStyle(ThingsColor.textPrimary)
+            }
+            Spacer(minLength: 8)
+            MailActionButton(title: "Inplannen", systemImage: "calendar", action: .plan) { store.openSheet(.plan) }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 9)
+        .background(ThingsColor.selection.opacity(0.35))
     }
 }
 
