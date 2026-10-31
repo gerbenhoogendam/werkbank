@@ -46,6 +46,17 @@ struct AgendaNavButton: View {
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(ThingsColor.cardBackground))
                     .overlay(Circle().strokeBorder(ThingsColor.separator, lineWidth: 1))
+            case .telemetrie:
+                // Een pijl tussen zoekerhoekjes.
+                icon(size: 10, weight: .bold, color: ThingsColor.textPrimary)
+                    .frame(width: 26, height: 26)
+                    .overlay(CornerBrackets(length: 5).stroke(ThingsColor.textSecondary, lineWidth: 1))
+            case .viertakt:
+                // Een wit knopje zoals -15° en +15°.
+                icon(size: 10, weight: .bold, color: ThingsColor.textPrimary)
+                    .frame(width: 32, height: 26)
+                    .background(Rectangle().fill(ThingsColor.cardBackground))
+                    .overlay(Rectangle().strokeBorder(ThingsColor.separator, lineWidth: 1))
             case .standaard:
                 icon(size: 11, weight: .semibold, color: ThingsColor.textSecondary)
                     .frame(width: 22, height: 22)
@@ -116,6 +127,13 @@ struct AgendaTodayButton: View {
             case .sneeuwwitje:
                 DialKnob(angle: 0, size: 30)
                     .accessibilityLabel("Vandaag")
+            case .telemetrie:
+                HUDLabel(text: "Vandaag", color: ThingsColor.running, size: 10)
+                    .padding(.horizontal, 9)
+                    .frame(height: 26)
+                    .overlay(CornerBrackets(length: 5).stroke(ThingsColor.running, lineWidth: 1))
+            case .viertakt:
+                EngineChip(text: "Vandaag", style: .selected)
             case .standaard:
                 Text("Vandaag")
                     .thingsFont(.metadata)
@@ -193,6 +211,22 @@ struct AgendaCalendarChip: View {
                     .overlay(Rectangle().strokeBorder(hidden ? ThingsColor.textSecondary : color, lineWidth: 1))
                     .frame(width: 8, height: 8)
                 KarmijnLabel(text: title, color: hidden ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+            }
+        case .telemetrie:
+            // Een vakje van de celbank: gevuld als de agenda aan staat, gestippeld als hij uit staat.
+            HStack(spacing: 6) {
+                Rectangle()
+                    .fill(hidden ? Color.clear : color)
+                    .overlay(Rectangle().strokeBorder(hidden ? ThingsColor.checkboxStroke : color,
+                                                      style: StrokeStyle(lineWidth: 1, dash: hidden ? [2, 2] : [])))
+                    .frame(width: 14, height: 9)
+                HUDLabel(text: title, color: hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary, size: 10)
+            }
+        case .viertakt:
+            // Een streepje in de kleur van de agenda, zoals de legenda "— AIR & FUEL".
+            HStack(spacing: 6) {
+                Rectangle().fill(color).frame(width: 14, height: 2).opacity(hidden ? 0.3 : 1)
+                EngineLabel(text: title, color: hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary, size: 10)
             }
         }
     }
@@ -310,6 +344,25 @@ struct AgendaDayHeader: View {
                 }
             }
             .frame(maxWidth: .infinity)
+        case .telemetrie:
+            // Weekdag als label, het dagnummer in smalle cijfers; vandaag oranje met het ruitje.
+            HStack(alignment: .center, spacing: 6) {
+                HUDLabel(text: weekday)
+                Text(number)
+                    .font(.werkNumbers(size: 17, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(isToday ? ThingsColor.today : ThingsColor.textPrimary)
+                if isToday { HUDDiamond(size: 6) }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 2)
+        case .viertakt:
+            // Het dagnummer in een rondje van de ontstekingsvolgorde; vandaag rood gevuld.
+            HStack(spacing: 7) {
+                EngineLabel(text: weekday)
+                FiringDot(text: number, isOn: isToday, size: 26)
+            }
+            .frame(maxWidth: .infinity)
         case .standaard:
             HStack(spacing: 6) {
                 Text(weekday).font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
@@ -403,6 +456,8 @@ enum AgendaLook {
         case .drukproef: (ThingsColor.today, 1)
         case .spark: (ThingsColor.deadline, 2)
         case .karmijn: (ThingsColor.running, 2)
+        case .telemetrie: (ThingsColor.running, 1)
+        case .viertakt: (ThingsColor.running, 2)
         case .standaard: (ThingsColor.deadline, 1.5)
         }
     }
@@ -415,7 +470,8 @@ enum AgendaLook {
         case .wandklok: 8
         case .tischsuper, .drukproef, .spark: 6
         case .standaard: 4
-        case .karmijn: 0
+        case .viertakt: 3
+        case .karmijn, .telemetrie: 0
         }
     }
 
@@ -439,6 +495,8 @@ struct NowMarker: View {
         case .wandklok: 10
         case .sneeuwwitje: 12
         case .principes, .rekenmachine: 14
+        case .telemetrie: 9
+        case .viertakt: 10
         default: 7
         }
     }
@@ -465,6 +523,12 @@ struct NowMarker: View {
                 .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
         case .tischsuper:
             EmptyView()
+        case .telemetrie:
+            HUDDiamond(size: 9, color: color)
+        case .viertakt:
+            // Het rode rondje van de cilinder die nu ontsteekt.
+            Circle().fill(color).frame(width: 10, height: 10)
+                .overlay(Circle().strokeBorder(color.opacity(0.35), lineWidth: 3).padding(-3))
         default:
             Circle().fill(color).frame(width: 7, height: 7)
         }

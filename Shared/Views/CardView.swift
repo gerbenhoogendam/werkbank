@@ -510,7 +510,8 @@ private struct CardFont: ViewModifier {
             switch ThemeStore.shared.look {
             case .drukproef: content.font(.werk(size: kind.size + 2, weight: .medium)).tracking(-0.35)
             case .spark: content.font(.werk(size: kind.size, weight: .semibold))
-            case .wandklok, .principes, .sneeuwwitje, .karmijn: content.font(.werk(size: kind.size, weight: .medium))
+            case .wandklok, .principes, .sneeuwwitje, .karmijn, .viertakt: content.font(.werk(size: kind.size, weight: .medium))
+            case .telemetrie: content.font(.werk(size: kind.size + 0.5, weight: .medium))
             default: content.font(.werk(size: kind.size))
             }
         } else {
@@ -565,6 +566,25 @@ private struct CardSurface: View {
             Rectangle()
                 .fill(isRunning ? Color.clear : ThingsColor.cardBackground)
                 .overlay(Rectangle().strokeBorder(isRunning ? ThemeParts.karmijn : ThingsColor.separator, lineWidth: 1))
+        case .telemetrie:
+            // Een paneel met een afgesneden hoek; een lopende kaart krijgt een oranje rand met hoekjes eromheen.
+            let panel = ChamferedRect(cut: 8)
+            panel.fill(ThingsColor.cardBackground)
+                .overlay(panel.strokeBorder(isRunning ? ThingsColor.running : ThingsColor.separator, lineWidth: 1))
+                .overlay {
+                    if isRunning {
+                        CornerBrackets(length: 6).stroke(ThingsColor.running, lineWidth: 2).padding(-3)
+                    }
+                }
+        case .viertakt:
+            // Een witte kaart met een zachte schaduw; een lopende kaart heeft een rood streepje linksboven.
+            shape.fill(ThingsColor.cardBackground)
+                .overlay(alignment: .topLeading) {
+                    if isRunning { Rectangle().fill(ThingsColor.running).frame(width: 22, height: 3) }
+                }
+                .clipShape(shape)
+                .shadow(color: ThingsColor.cardShadow, radius: 1, y: 1)
+                .shadow(color: ThingsColor.cardShadow, radius: 10, y: 4)
         case .standaard:
             shape.fill(ThingsColor.cardBackground)
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
@@ -654,6 +674,34 @@ private struct RunningStrip: View {
                     .kerning(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(ThingsColor.textPrimary)
+            }
+        case .telemetrie:
+            // "◆ LOOPT" zoals de status van een besturingsscherm, en een blokjesbalk die elk uur volloopt.
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .center, spacing: 6) {
+                    HUDDiamond(size: 7)
+                    HUDLabel(text: "Loopt", color: ThingsColor.running)
+                    Spacer()
+                    Text(Self.formatHMS(elapsed))
+                        .font(.werkNumbers(size: 16, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.textPrimary)
+                }
+                SegmentBar(fraction: elapsed.truncatingRemainder(dividingBy: 3600) / 3600, segments: 20, height: 6)
+            }
+        case .viertakt:
+            // De looptijd groot en rood, met de toerenteller die elk uur volloopt.
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .lastTextBaseline) {
+                    Text(time)
+                        .font(.werkNumbers(size: 26, weight: .bold))
+                        .kerning(-1)
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.running)
+                    Spacer()
+                    EngineLabel(text: "Loopt")
+                }
+                RevGauge(fraction: elapsed.truncatingRemainder(dividingBy: 3600) / 3600, height: 4)
             }
         case .standaard:
             HStack {

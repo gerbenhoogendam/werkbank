@@ -252,17 +252,21 @@ extension MainView {
     fileprivate func dividerFill(_ neighbour: Color) -> Color {
         switch ThemeStore.shared.look {
         case .standaard: ThingsColor.backgroundContent
-        case .drukproef, .karmijn: ThingsColor.window
+        case .drukproef, .karmijn, .telemetrie: ThingsColor.window
         default: neighbour
         }
     }
 }
 
 extension View {
-    /// Een paneel van het hoofdvenster; bij losse vlakken (Drukproef) met afgeronde hoeken.
+    /// Een paneel van het hoofdvenster; bij losse vlakken (Drukproef) met afgeronde hoeken, in Telemetrie met een
+    /// afgesneden hoek en een haarlijn erom.
     @ViewBuilder func themePanel() -> some View {
         let radius = ThemeStore.shared.look.panelRadius
-        if radius > 0 {
+        if ThemeStore.shared.look == .telemetrie {
+            clipShape(ChamferedRect(cut: 16))
+                .overlay(ChamferedRect(cut: 16).strokeBorder(ThingsColor.separator, lineWidth: 1).allowsHitTesting(false))
+        } else if radius > 0 {
             clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         } else {
             self

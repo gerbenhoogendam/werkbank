@@ -127,7 +127,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     niet voor afspraken van een hele dag. Alleen testen in een testagenda. Na te gaan: optillen en schaduw, scrollen
     bij de rand, grepen bij korte afspraken, uitnodigingen van anderen (EventKit kan weigeren), Exchange/Google-sync.
 19. **Thema's** (`Shared/Design/Theme.swift`, `Shared/Views/ThemePreferences.swift`). Voorkeuren › Thema: Standaard
-    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef, Spark en Karmijn. Elk onderdeel
+    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef, Spark, Karmijn, Telemetrie en
+    Viertakt. Elk onderdeel
     heeft een rol (venster, mail, kop van mail, bord, kolom, kaart, agenda, tijdlijst, tekst, accent, …) met een kleur
     voor licht en donker; per thema kun je elke rol zelf kiezen en terugzetten. Lettertype, cijferletter en
     basisgrootte (11–17) gelden overal waar `Font.werk`/`thingsFont` staat. Tischsuper tekent het mailpaneel altijd
@@ -150,6 +151,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     `LidSheen`, houten uiteinden; Rekenmachine `LCDDigits` (DSEG7, met zwakke 8-en eronder) en `CalcKey`; Drukproef
     `Waveform`, koppen in drie kleuren (`DutchNumber`) en grote telcijfers; Spark Week/Dag-tabjes, persoon/bel
     (`MailLook.isNotification`), kopregel boven de lijst en de lege envelop.
+    Telemetrie en Viertakt (naar twee screenshots van de eigenaar, geen schets in de canvas): Telemetrie is een
+    besturingsscherm met losse panelen met een afgesneden hoek (`ChamferedRect`, `themePanel`), zoekerhoekjes
+    (`CornerBrackets`), blokjesbalken (`SegmentBar`), het ruitje (`HUDDiamond`) en smalle kapitalen (`HUDLabel`, Barlow
+    Semi Condensed voor tekst en Barlow Condensed voor koppen en cijfers, SIL OFL); Viertakt is een technische
+    tekening met een rood streepje boven de koppen, grote vette rode cijfers, de toerenteller (`RevGauge`), zwarte en
+    rode knopjes (`EngineChip`), rondjes van de ontstekingsvolgorde voor de dagnummers (`FiringDot`), legendastreepjes
+    bij agenda's en afspraken (`EngineLabel`), in Helvetica Neue. Na te gaan: of Barlow met de gewichten echt laadt,
+    leesbaarheid van de smalle letter in de maillijst, de afgesneden hoeken bij smalle panelen.
 20. **Logo's in de maillijst** (`MailSenderIcon` in `MailTheme.swift`, Voorkeuren › Weergave › Mail › "Logo's bij
     afzenders", standaard aan, in elk thema). Het logo komt via `SenderLogoService` van de website achter het domein
     van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.

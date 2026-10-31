@@ -105,9 +105,10 @@ enum ThemeRole: String, CaseIterable, Identifiable {
 /// De vormgeving naast de kleuren (kolomkoppen, kaarten, agenda, mail, tijdlijst, timerpil), zoals in de schetsen.
 enum ThemeLook: String {
     case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn
+    case telemetrie, viertakt
 
-    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef).
-    var panelGap: CGFloat { self == .drukproef ? 8 : 0 }
+    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie).
+    var panelGap: CGFloat { self == .drukproef || self == .telemetrie ? 8 : 0 }
     var panelRadius: CGFloat { self == .drukproef ? 14 : 0 }
 }
 
@@ -132,7 +133,8 @@ struct WerkbankTheme: Identifiable, Equatable {
 
     var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
 
-    static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn]
+    static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark,
+                                       karmijn, telemetrie, viertakt]
 
     static func named(_ id: String) -> WerkbankTheme { all.first { $0.id == id } ?? standaard }
 }
@@ -281,6 +283,40 @@ extension WerkbankTheme {
         .deadline: ThemeColor(0x85051F, 0xE64A62), .tag: ThemeColor(0xE8DFCF, 0x241210),
         .tagText: ThemeColor(0x5E534A, 0xB3A79A), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0, darkOpacity: 0),
     ], fontFamily: "Helvetica Neue", numberFamily: "Anton", cardRadius: 0, darkAgenda: true)
+
+    /// Besturingsscherm van een testopstelling: lichtgrijze panelen met een afgesneden hoek, smalle kapitalen
+    /// (Barlow Condensed), signaaloranje en blokjesbalken.
+    static let telemetrie = WerkbankTheme(id: "telemetrie", name: "Telemetrie", colors: [
+        .window: ThemeColor(0xDFE1E4, 0x0B0D0F), .mail: ThemeColor(0xF0F1F2, 0x15181B),
+        .mailHeader: ThemeColor(0xF0F1F2, 0x15181B), .board: ThemeColor(0xF0F1F2, 0x15181B),
+        .column: ThemeColor(0xE8E9EB, 0x1A1D21), .card: ThemeColor(0xF9F9FA, 0x1F2327),
+        .agenda: ThemeColor(0xF0F1F2, 0x15181B), .timeList: ThemeColor(0xF0F1F2, 0x15181B),
+        .surface: ThemeColor(0xF0F1F2, 0x15181B), .surfaceAlt: ThemeColor(0xE8E9EB, 0x1E2226),
+        .text: ThemeColor(0x26292D, 0xE4E6E9), .textSecondary: ThemeColor(0x5B6066, 0x9CA2AA),
+        .textTertiary: ThemeColor(0x6E737A, 0x7F858D), .fieldLabel: ThemeColor(0xB84A0E, 0xFF8A45),
+        .separator: ThemeColor(0xC4C8CD, 0x30353B), .checkbox: ThemeColor(0x8A9097, 0x5A6168),
+        .accent: ThemeColor(0xD9561A, 0xFF7A30), .selection: ThemeColor(0xF8DCCB, 0x3A2418),
+        .running: ThemeColor(0xF26A21, 0xFF7A30), .today: ThemeColor(0xF26A21, 0xFF7A30),
+        .deadline: ThemeColor(0xC2301C, 0xFF5A45), .tag: ThemeColor(0xE1E3E6, 0x262B30),
+        .tagText: ThemeColor(0x5B6066, 0x9CA2AA), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0, darkOpacity: 0),
+    ], fontFamily: "Barlow Semi Condensed", numberFamily: "Barlow Condensed", cardRadius: 0)
+
+    /// Technische tekening van een motor: studiogrijs, witte kaarten met een zachte schaduw, zwart en één rood,
+    /// grote vette cijfers en kleine kapitalen met veel letterafstand.
+    static let viertakt = WerkbankTheme(id: "viertakt", name: "Viertakt", colors: [
+        .window: ThemeColor(0xEBEBEB, 0x111111), .mail: ThemeColor(0xF4F4F4, 0x181818),
+        .mailHeader: ThemeColor(0xF4F4F4, 0x181818), .board: ThemeColor(0xEBEBEB, 0x111111),
+        .column: ThemeColor(0xEBEBEB, 0x111111), .card: ThemeColor(0xFBFBFB, 0x1F1F1F),
+        .agenda: ThemeColor(0xF4F4F4, 0x181818), .timeList: ThemeColor(0xF4F4F4, 0x181818),
+        .surface: ThemeColor(0xF4F4F4, 0x181818), .surfaceAlt: ThemeColor(0xEAEAEA, 0x232323),
+        .text: ThemeColor(0x151515, 0xF2F2F2), .textSecondary: ThemeColor(0x666666, 0xA3A3A3),
+        .textTertiary: ThemeColor(0x767676, 0x8A8A8A), .fieldLabel: ThemeColor(0xC4161C, 0xFF4A4F),
+        .separator: ThemeColor(0xD9D9D9, 0x2E2E2E), .checkbox: ThemeColor(0x999999, 0x5C5C5C),
+        .accent: ThemeColor(0xD7141B, 0xFF3B40), .selection: ThemeColor(0xF7D9DA, 0x3F1A1B),
+        .running: ThemeColor(0xE1252B, 0xFF3B40), .today: ThemeColor(0xE1252B, 0xFF3B40),
+        .deadline: ThemeColor(0xD9700F, 0xFF9A3C), .tag: ThemeColor(0xE6E6E6, 0x2A2A2A),
+        .tagText: ThemeColor(0x4D4D4D, 0xB5B5B5), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0.08, darkOpacity: 0.5),
+    ], fontFamily: "Helvetica Neue", cardRadius: 3)
 }
 
 // MARK: - Opslag en de kleuren die de app gebruikt
@@ -321,10 +357,12 @@ final class ThemeStore: @unchecked Sendable {
     }
 
     /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef, Anton en Playfair Display voor Karmijn,
-    /// DSEG7 voor de lcd-cijfers van Rekenmachine).
+    /// DSEG7 voor de lcd-cijfers van Rekenmachine, Barlow (Semi) Condensed voor Telemetrie).
     private static func registerBundledFonts() {
         for name in ["Michroma-Regular", "Anton-Regular", "PlayfairDisplay-Regular", "PlayfairDisplay-Italic",
-                     "PlayfairDisplay-BoldItalic", "DSEG7Classic-Italic"] {
+                     "PlayfairDisplay-BoldItalic", "DSEG7Classic-Italic",
+                     "BarlowCondensed-Regular", "BarlowCondensed-Medium", "BarlowCondensed-SemiBold", "BarlowCondensed-Bold",
+                     "BarlowSemiCondensed-Regular", "BarlowSemiCondensed-Medium", "BarlowSemiCondensed-SemiBold"] {
             guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }

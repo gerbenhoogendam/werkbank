@@ -105,6 +105,47 @@ struct ThemedHeading: View {
             }
         case .tischsuper:
             SuperscriptTitle(title: title, superscript: count.map { "\($0)" } ?? detail ?? "")
+        case .telemetrie:
+            // Smalle kapitalen zoals de paneelkoppen van een besturingsscherm; het aantal met een voorloopnul, oranje als er
+            // iets loopt.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.werkNumbers(size: baseSize + 1, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                if let count {
+                    Text(String(format: "%02d", count))
+                        .font(.werkNumbers(size: baseSize + 1, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(highlight ? ThingsColor.running : ThingsColor.textTertiary)
+                } else if let detail {
+                    HUDLabel(text: detail)
+                }
+            }
+        case .viertakt:
+            // Een kort rood streepje erboven en de titel strak, met het aantal achter een rode punt ("Inbox · 12").
+            VStack(alignment: .leading, spacing: 6) {
+                Rectangle().fill(ThingsColor.today).frame(width: 22, height: 3)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(title)
+                        .font(.werk(size: baseSize + 3, weight: .semibold))
+                        .kerning(-0.4)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    if let count {
+                        Text("·")
+                            .font(.werk(size: baseSize + 3, weight: .bold))
+                            .foregroundStyle(ThingsColor.today)
+                        Text("\(count)")
+                            .font(.werk(size: baseSize + 3))
+                            .monospacedDigit()
+                            .foregroundStyle(highlight ? ThingsColor.running : ThingsColor.textSecondary)
+                    } else if let detail {
+                        EngineLabel(text: detail)
+                    }
+                }
+            }
         case .sneeuwwitje:
             // Rechts een paar luidsprekersleuven, zoals in de kast van de SK 4.
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -634,6 +675,181 @@ struct KarmijnGlow: View {
         EllipticalGradient(colors: [ThemeParts.karmijn.opacity(scheme == .dark ? 0.55 : 0.12), .clear],
                            center: UnitPoint(x: 0.18, y: 0), startRadiusFraction: 0, endRadiusFraction: 0.75)
             .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Telemetrie
+
+/// Rechthoek met de rechterbovenhoek schuin afgesneden, zoals de panelen van een besturingsscherm (Telemetrie).
+struct ChamferedRect: InsettableShape {
+    var cut: CGFloat = 12
+    var inset: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let frame = rect.insetBy(dx: inset, dy: inset)
+        let corner = min(cut, frame.width / 2, frame.height / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: frame.minX, y: frame.minY))
+        path.addLine(to: CGPoint(x: frame.maxX - corner, y: frame.minY))
+        path.addLine(to: CGPoint(x: frame.maxX, y: frame.minY + corner))
+        path.addLine(to: CGPoint(x: frame.maxX, y: frame.maxY))
+        path.addLine(to: CGPoint(x: frame.minX, y: frame.maxY))
+        path.closeSubpath()
+        return path
+    }
+
+    func inset(by amount: CGFloat) -> ChamferedRect {
+        var shape = self
+        shape.inset += amount
+        return shape
+    }
+}
+
+/// Vier hoekjes zoals in een zoeker (Telemetrie): om knoppen, de gekozen mailbox en de lopende kaart.
+struct CornerBrackets: Shape {
+    var length: CGFloat = 6
+
+    func path(in rect: CGRect) -> Path {
+        let size = min(length, rect.width / 3, rect.height / 3)
+        var path = Path()
+        let corners: [(CGPoint, CGFloat, CGFloat)] = [
+            (CGPoint(x: rect.minX, y: rect.minY), 1, 1), (CGPoint(x: rect.maxX, y: rect.minY), -1, 1),
+            (CGPoint(x: rect.maxX, y: rect.maxY), -1, -1), (CGPoint(x: rect.minX, y: rect.maxY), 1, -1),
+        ]
+        for (corner, dx, dy) in corners {
+            path.move(to: CGPoint(x: corner.x + dx * size, y: corner.y))
+            path.addLine(to: corner)
+            path.addLine(to: CGPoint(x: corner.x, y: corner.y + dy * size))
+        }
+        return path
+    }
+}
+
+/// Een rij vierkantjes, gevuld tot `fraction` (Telemetrie), zoals de balk "propulsion load".
+struct SegmentBar: View {
+    let fraction: Double
+    var segments = 20
+    var height: CGFloat = 8
+    var color: Color = ThingsColor.running
+
+    var body: some View {
+        let filled = Int((min(max(fraction, 0), 1) * Double(segments)).rounded(.up))
+        HStack(spacing: 2) {
+            ForEach(0..<segments, id: \.self) { index in
+                Rectangle()
+                    .fill(index < filled ? color : Color.clear)
+                    .overlay(Rectangle().strokeBorder(index < filled ? color : ThingsColor.checkboxStroke, lineWidth: 1))
+                    .frame(height: height)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Klein label in smalle kapitalen met veel letterafstand (Telemetrie): "STATUS", "TE FACTUREREN".
+struct HUDLabel: View {
+    let text: String
+    var color: Color = ThingsColor.textSecondary
+    var size: CGFloat = 9.5
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.werkNumbers(size: size, weight: .semibold))
+            .tracking(size * 0.16)
+            .foregroundStyle(color)
+            .lineLimit(1)
+    }
+}
+
+/// Het ruitje voor "ACTIVE" (Telemetrie): wat loopt, ongelezen mail en het begin van de lijn van nu.
+struct HUDDiamond: View {
+    var size: CGFloat = 7
+    var color: Color = ThingsColor.running
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: size * 0.72, height: size * 0.72)
+            .rotationEffect(.degrees(45))
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Viertakt
+
+/// Klein label in kapitalen met ruime letterafstand (Viertakt): "SLIDER-CRANK", "REV / MIN".
+struct EngineLabel: View {
+    let text: String
+    var color: Color = ThingsColor.textSecondary
+    var size: CGFloat = 9.5
+    var weight: Font.Weight = .medium
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.werk(size: size, weight: weight))
+            .tracking(size * 0.2)
+            .foregroundStyle(color)
+            .lineLimit(1)
+    }
+}
+
+/// Toerenteller (Viertakt): een dunne lijn met een kort, dik rood stuk, zoals onder "1881".
+struct RevGauge: View {
+    let fraction: Double
+    var height: CGFloat = 5
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottomLeading) {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                Rectangle()
+                    .fill(ThingsColor.running)
+                    .frame(width: max(height * 2, geo.size.width * min(max(fraction, 0), 1)), height: height)
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Rechthoekige knop van het bedieningspaneel (Viertakt): zwart als gekozen, rood als aan, anders alleen tekst.
+struct EngineChip: View {
+    enum Style { case plain, selected, on }
+
+    let text: String
+    var style: Style = .plain
+    var size: CGFloat = 9.5
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.werk(size: size, weight: .bold))
+            .tracking(size * 0.1)
+            .foregroundStyle(style == .plain ? ThingsColor.textPrimary : (style == .on ? Color.white : ThingsColor.window))
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Rectangle().fill(style == .selected ? ThingsColor.textPrimary
+                                         : (style == .on ? ThingsColor.running : Color.clear)))
+    }
+}
+
+/// Genummerd rondje van de ontstekingsvolgorde (Viertakt): rood gevuld als het aan de beurt is.
+struct FiringDot: View {
+    let text: String
+    var isOn = false
+    var size: CGFloat = 26
+
+    var body: some View {
+        Text(text)
+            .font(.werk(size: size * 0.42, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
+            .frame(minWidth: size, minHeight: size)
+            .background(Circle().fill(isOn ? ThingsColor.running : ThingsColor.cardBackground))
+            .overlay(Circle().strokeBorder(isOn ? ThingsColor.running.opacity(0.35) : ThingsColor.separator,
+                                           lineWidth: isOn ? 3 : 1).padding(isOn ? -2 : 0))
     }
 }
 

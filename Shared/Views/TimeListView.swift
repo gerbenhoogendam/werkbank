@@ -212,6 +212,16 @@ struct TimeListView: View {
                         .minimumScaleFactor(0.6)
                         .displayTight(32)
                 }
+            case .telemetrie:
+                VStack(alignment: .leading, spacing: 4) {
+                    ThemedHeading(title: "Tijd schrijven", count: count)
+                    HUDLabel(text: "Nog te factureren")
+                }
+            case .viertakt:
+                VStack(alignment: .leading, spacing: 4) {
+                    ThemedHeading(title: "Tijd schrijven", count: count)
+                    EngineLabel(text: "Nog te factureren")
+                }
             default:
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Tijd schrijven")
@@ -538,6 +548,17 @@ struct TimeEntryRow: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
                 .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.tagBackground))
+        case .telemetrie:
+            Text(trailingTime)
+                .font(.werkNumbers(size: 15, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textPrimary)
+        case .viertakt:
+            Text(trailingTime)
+                .font(.werk(size: 13.5, weight: .bold))
+                .kerning(-0.3)
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textPrimary)
         default:
             Text(trailingTime)
                 .thingsFont(.todoTitle)
@@ -1073,6 +1094,54 @@ private struct TimeTotalFooter: View {
                         .foregroundStyle(ThingsColor.textPrimary)
                 }
             }
+        case .telemetrie:
+            // Een uitleespaneel: label en totaal, en een blokjesbalk tot een werkdag van acht uur.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HUDLabel(text: "Totaal te factureren")
+                        HUDLabel(text: "\(count) \(count == 1 ? "regel" : "regels")", color: ThingsColor.textTertiary)
+                    }
+                    Spacer()
+                    Text(text)
+                        .font(.werkNumbers(size: 34, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.textPrimary)
+                }
+                SegmentBar(fraction: hours / 8, segments: 32, height: 9)
+                HStack {
+                    HUDLabel(text: "0", color: ThingsColor.textTertiary, size: 8.5)
+                    Spacer()
+                    HUDLabel(text: "8 u", color: ThingsColor.textTertiary, size: 8.5)
+                }
+            }
+            .padding(12)
+            .background(ChamferedRect(cut: 10).fill(ThingsColor.cardBackground))
+            .overlay(ChamferedRect(cut: 10).strokeBorder(ThingsColor.separator, lineWidth: 1))
+        case .viertakt:
+            // Zoals het toerental: groot en rood, de schaal tot acht uur rechts, de toerenteller eronder.
+            VStack(alignment: .leading, spacing: 5) {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1).padding(.bottom, 8)
+                HStack(alignment: .lastTextBaseline) {
+                    Text(text)
+                        .font(.werkNumbers(size: 46, weight: .bold))
+                        .kerning(-1.8)
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.running)
+                    Spacer()
+                    Text("8:00").font(.werk(size: 11)).monospacedDigit().foregroundStyle(ThingsColor.textSecondary)
+                }
+                RevGauge(fraction: hours / 8, height: 6)
+                HStack {
+                    EngineLabel(text: "0", size: 8.5)
+                    Spacer()
+                    EngineLabel(text: "Te factureren", size: 8.5)
+                }
+                Text("\(count) \(count == 1 ? "regel" : "regels")")
+                    .font(.werk(size: 12))
+                    .foregroundStyle(ThingsColor.textPrimary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .spark, .standaard:
             VStack(spacing: 10) {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)

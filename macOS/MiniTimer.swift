@@ -219,6 +219,8 @@ struct MiniTimerView: View {
                 }
             } else if look == .tischsuper {
                 SpeakerGrille(color: Color(hex: 0x5A5856))
+            } else if look == .telemetrie {
+                HUDDiamond(size: size.dot + 3, color: isRunning ? pill.dot : ThingsColor.textTertiary)
             } else if look == .principes {
                 // De schuifknop links stopt de timer, zoals op de affiche.
                 Button(action: stop) { ToggleKnob(height: size.buttonSize) }
@@ -243,6 +245,10 @@ struct MiniTimerView: View {
                         .lineLimit(1)
                 } else if look == .karmijn, size != .small {
                     KarmijnLabel(text: entry.client, color: pill.text2, size: size.titleFont - 3.5)
+                } else if look == .telemetrie, size != .small {
+                    HUDLabel(text: entry.client, color: pill.text2, size: size.titleFont - 3)
+                } else if look == .viertakt, size != .small {
+                    EngineLabel(text: entry.client, color: pill.text2, size: size.titleFont - 3.5)
                 } else if look == .drukproef || look == .rekenmachine, size != .small {
                     Text(entry.client.uppercased())
                         .font(.werk(size: size.titleFont - 3, weight: .medium))
@@ -254,7 +260,7 @@ struct MiniTimerView: View {
                     .font(.werk(size: size.titleFont, weight: .medium))
                     .foregroundStyle(pill.text)
                     .lineLimit(1)
-                if size != .small, ![.drukproef, .rekenmachine, .karmijn, .wandklok, .tischsuper].contains(look) {
+                if size != .small, ![.drukproef, .rekenmachine, .karmijn, .wandklok, .tischsuper, .telemetrie, .viertakt].contains(look) {
                     Text(entry.client)
                         .font(.werk(size: size.titleFont - 2))
                         .foregroundStyle(pill.text2)
@@ -296,8 +302,8 @@ struct MiniTimerView: View {
                     Text(time)
                         .font(Self.timeFont(look, size: size.timeFont))
                         .monospacedDigit()
-                        .tracking(look == .drukproef ? -1 : 0)
-                        .foregroundStyle(look == .drukproef || look == .karmijn ? ThingsColor.today : pill.text)
+                        .tracking(look == .drukproef ? -1 : (look == .viertakt ? -0.8 : 0))
+                        .foregroundStyle(look == .drukproef || look == .karmijn || look == .viertakt ? ThingsColor.today : pill.text)
                         .fixedSize()
                 }
             }
@@ -345,6 +351,8 @@ struct MiniTimerView: View {
         case .karmijn: .werkNumbers(size: size)
         case .sneeuwwitje: .werk(size: size, weight: .light)
         case .tischsuper: .werk(size: size, weight: .ultraLight)
+        case .telemetrie: .werkNumbers(size: size, weight: .semibold)
+        case .viertakt: .werkNumbers(size: size, weight: .bold)
         default: .werk(size: size, weight: .medium)
         }
     }
@@ -360,13 +368,17 @@ struct MiniTimerView: View {
             } else if look == .sneeuwwitje {
                 DialKnob(angle: 0, size: size.buttonSize)
             } else {
-                RoundedRectangle(cornerRadius: look == .drukproef ? 0 : 2, style: .continuous)
+                RoundedRectangle(cornerRadius: look == .drukproef || look == .telemetrie || look == .viertakt ? 0 : 2,
+                                 style: .continuous)
                     .fill(pill.stopIcon)
                     .frame(width: size.buttonSize * 0.3, height: size.buttonSize * 0.3)
                     .frame(width: size.buttonSize, height: size.buttonSize)
                     .background {
-                        if look == .karmijn {
+                        if look == .karmijn || look == .viertakt {
                             RoundedRectangle(cornerRadius: 2, style: .continuous).fill(pill.stopFill)
+                        } else if look == .telemetrie {
+                            Rectangle().fill(pill.stopFill)
+                                .overlay(CornerBrackets(length: 4).stroke(pill.stopFill, lineWidth: 1).padding(-3))
                         } else {
                             Circle().fill(pill.stopFill)
                         }
@@ -473,6 +485,10 @@ struct MiniTimerView: View {
                         Circle().strokeBorder(ThingsColor.checkboxStroke, lineWidth: 1)
                     } else if ThemeStore.shared.look == .karmijn {
                         Circle().strokeBorder(ThingsColor.separator, lineWidth: 1)
+                    } else if ThemeStore.shared.look == .telemetrie {
+                        Rectangle().strokeBorder(ThingsColor.separator, lineWidth: 1)
+                    } else if ThemeStore.shared.look == .viertakt {
+                        Rectangle().fill(pill.buttonFill)
                     } else {
                         Circle().fill(pill.buttonFill)
                     }
@@ -537,6 +553,16 @@ private struct PillTheme {
             PillTheme(background: ThingsColor.backgroundContent, border: ThemeParts.karmijn, text: ThingsColor.textPrimary,
                       text2: ThingsColor.textSecondary, dot: ThingsColor.running, showsDot: false, buttonFill: .clear,
                       buttonIcon: ThingsColor.running, stopFill: ThemeParts.karmijn, stopIcon: ThemeParts.creme, radius: 4)
+        case .telemetrie:
+            PillTheme(background: ThingsColor.cardBackground, border: ThingsColor.separator, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, showsDot: false, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.running, stopIcon: ThingsColor.cardBackground,
+                      radius: 2)
+        case .viertakt:
+            PillTheme(background: ThingsColor.cardBackground, border: .clear, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.textPrimary, stopIcon: ThingsColor.cardBackground,
+                      radius: 4)
         }
     }
 }

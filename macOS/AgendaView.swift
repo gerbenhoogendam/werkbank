@@ -376,6 +376,45 @@ struct AgendaView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+        } else if look == .telemetrie {
+            // De kop van een besturingsscherm: de titel in oranje smalle kapitalen, het bereik als label eronder.
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(titleParts.main.uppercased())
+                        .font(.werkNumbers(size: 22, weight: .bold))
+                        .tracking(0.6)
+                        .foregroundStyle(ThingsColor.today)
+                    if !titleParts.detail.isEmpty { HUDLabel(text: titleParts.detail) }
+                }
+                .lineLimit(1)
+                navigation(look)
+                    .padding(.leading, 4)
+                Spacer(minLength: 8)
+                calendarFilters
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+        } else if look == .viertakt {
+            // Zoals "V8 · Four-Stroke": een rood streepje erboven, de titel met een rode punt, het bereik in kapitalen.
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Rectangle().fill(ThingsColor.today).frame(width: 26, height: 3)
+                    (Text("Agenda") + Text(" · ").foregroundColor(ThingsColor.today) + Text(titleParts.main))
+                        .font(.werk(size: 22, weight: .semibold))
+                        .kerning(-0.6)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    if !titleParts.detail.isEmpty { EngineLabel(text: titleParts.detail) }
+                }
+                .lineLimit(1)
+                navigation(look)
+                    .padding(.leading, 6)
+                Spacer(minLength: 8)
+                calendarFilters
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
         } else if look == .principes {
             // Twee koppen naast elkaar met elk een regel erboven, zoals de affiche.
             HStack(alignment: .top, spacing: 14) {
@@ -597,7 +636,7 @@ struct AgendaView: View {
 
     private static func hourLabel(_ hour: Int, look: ThemeLook) -> String {
         switch look {
-        case .wandklok, .rekenmachine, .principes: String(format: "%02d", hour)
+        case .wandklok, .rekenmachine, .principes, .telemetrie: String(format: "%02d", hour)
         case .tischsuper: "\(hour)"
         default: String(format: "%02d:00", hour)
         }
@@ -606,6 +645,7 @@ struct AgendaView: View {
     private static func hourFont(_ look: ThemeLook) -> Font {
         switch look {
         case .wandklok: .werk(size: 11.5)
+        case .telemetrie: .werkNumbers(size: 12, weight: .medium)
         case .drukproef, .karmijn: .werk(size: 10)
         case .standaard: .werk(size: ThingsTextStyle.metadata.size)
         default: .werk(size: 11)
@@ -1136,6 +1176,9 @@ private struct EventBlock: View {
                         Circle().fill(event.color).frame(width: 6, height: 6)
                     case .spark:
                         RoundedRectangle(cornerRadius: 1.5).fill(event.color).frame(width: 3, height: 11)
+                    case .viertakt:
+                        // Het streepje van de legenda in de kleur van de agenda.
+                        Rectangle().fill(event.color).frame(width: 10, height: 2)
                     default:
                         EmptyView()
                     }
@@ -1181,6 +1224,14 @@ private struct EventBlock: View {
                 shape.fill(event.color.opacity(dark ? 0.2 : 0.12))
             case .principes, .rekenmachine, .drukproef, .karmijn:
                 shape.fill(event.color)
+            case .telemetrie:
+                // Een getinte strook met links een volle streep in de kleur van de agenda.
+                Rectangle().fill(event.color.opacity(dark ? 0.24 : 0.13))
+                    .overlay(alignment: .leading) { Rectangle().fill(event.color).frame(width: 2) }
+            case .viertakt:
+                // Een wit kaartje met een zachte schaduw, zoals de panelen naast de motor.
+                shape.fill(ThingsColor.cardBackground)
+                    .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 0.5))
             }
         }
         .background(isLifted ? ThingsColor.backgroundContent : Color.clear)

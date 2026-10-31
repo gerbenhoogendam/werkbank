@@ -372,6 +372,24 @@ struct BoardView: View {
         case .rekenmachine:
             CalcKey(label: "+", size: 22)
                 .contentShape(Rectangle())
+        case .telemetrie:
+            // Een plus tussen zoekerhoekjes, zoals de knoppen onder de grafieken.
+            Image(systemName: "plus")
+                .font(.werk(size: 10, weight: .semibold))
+                .foregroundStyle(ThingsColor.running)
+                .frame(width: 20, height: 20)
+                .overlay(CornerBrackets(length: 4).stroke(ThingsColor.textSecondary, lineWidth: 1))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        case .viertakt:
+            // Een vierkant zwart knopje, zoals PAUSE en de cameraknoppen.
+            Image(systemName: "plus")
+                .font(.werk(size: 9, weight: .heavy))
+                .foregroundStyle(ThingsColor.window)
+                .frame(width: 20, height: 20)
+                .background(Rectangle().fill(ThingsColor.textPrimary))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
         default:
             Image(systemName: "plus")
                 .font(.werk(size: 11, weight: .semibold))
@@ -523,6 +541,15 @@ private struct ColumnSurface: View {
         case .tischsuper:
             Color.clear
         case .principes, .spark:
+            RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
+                .fill(isTarget ? targetColor.opacity(0.10) : Color.clear)
+        case .telemetrie:
+            // Een paneel met een afgesneden hoek en een haarlijn erom, zoals de vlakken van een besturingsscherm.
+            let panel = ChamferedRect(cut: 14)
+            panel.fill(fill)
+                .overlay(panel.strokeBorder(isTarget ? ThingsColor.running : ThingsColor.separator, lineWidth: 1))
+        case .viertakt:
+            // Geen vlak: de witte kaarten liggen los op het studiogrijs.
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
                 .fill(isTarget ? targetColor.opacity(0.10) : Color.clear)
         case .drukproef, .karmijn:

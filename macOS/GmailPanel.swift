@@ -121,6 +121,8 @@ struct GmailPanel: View {
         case .drukproef: 112
         case .wandklok: 62
         case .karmijn: 72
+        case .telemetrie: 62
+        case .viertakt: 74
         default: 46
         }
     }
@@ -226,7 +228,7 @@ struct GmailPanel: View {
                     selection.selectedID = nil
                     Task { await gmail.showCombined() }
                 }
-                if look == .standaard || look == .principes || look == .drukproef || look == .karmijn { Spacer(minLength: 0) }
+                if [.standaard, .principes, .drukproef, .karmijn, .telemetrie, .viertakt].contains(look) { Spacer(minLength: 0) }
             }
             .padding(3)
             .background {
@@ -564,6 +566,24 @@ private struct GmailRow: View {
             } else if isHovering {
                 Rectangle().fill(Color.primary.opacity(0.05))
             }
+        case .telemetrie:
+            // De gekozen rij getint, met links een oranje streep.
+            if isSelected {
+                Rectangle().fill(ThingsColor.selection)
+                    .overlay(alignment: .leading) { Rectangle().fill(ThingsColor.running).frame(width: 2) }
+            } else if isHovering {
+                Rectangle().fill(Color.primary.opacity(0.04))
+            }
+        case .viertakt:
+            // De gekozen rij als wit kaartje met een zachte schaduw.
+            let card = RoundedRectangle(cornerRadius: 3, style: .continuous)
+            if isSelected {
+                card.fill(ThingsColor.cardBackground)
+                    .shadow(color: ThingsColor.cardShadow, radius: 1, y: 1)
+                    .shadow(color: ThingsColor.cardShadow, radius: 8, y: 3)
+            } else if isHovering {
+                card.fill(Color.primary.opacity(0.04))
+            }
         }
     }
 
@@ -585,6 +605,8 @@ private struct GmailRow: View {
                         KarmijnStar()
                             .fill(message.isUnread ? ThingsColor.running : Color.clear)
                             .frame(width: 8, height: 8)
+                    } else if look == .telemetrie {
+                        HUDDiamond(size: 7, color: message.isUnread ? ThingsColor.running : Color.clear)
                     } else {
                         Circle()
                             .fill(message.isUnread ? MailLook.unreadDot : Color.clear)

@@ -108,6 +108,30 @@ struct MailHeaderTitle: View {
                 Text("INBOX").font(.werk(size: 12, weight: .medium)).tracking(0.3)
             }
             .foregroundStyle(ThingsColor.textPrimary)
+        case .telemetrie:
+            // De titel in oranje smalle kapitalen, eronder de mailbox en het aantal ongelezen als uitlezing.
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title.uppercased())
+                    .font(.werkNumbers(size: 22, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(ThingsColor.today)
+                HStack(spacing: 6) {
+                    HUDLabel(text: mailbox)
+                    HUDDiamond(size: 6, color: unread > 0 ? ThingsColor.running : ThingsColor.textTertiary)
+                    HUDLabel(text: "\(unread) ongelezen", color: unread > 0 ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+                }
+            }
+        case .viertakt:
+            // Zoals "V8 · Four-Stroke": een rood streepje erboven, de titel met een rode punt en het aantal ongelezen.
+            VStack(alignment: .leading, spacing: 5) {
+                Rectangle().fill(ThingsColor.today).frame(width: 26, height: 3)
+                (Text(title) + Text(" · ").foregroundColor(ThingsColor.today) + Text("\(unread)"))
+                    .font(.werk(size: 22, weight: .semibold))
+                    .kerning(-0.6)
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textPrimary)
+                EngineLabel(text: "\(mailbox) · ongelezen")
+            }
         case .sneeuwwitje, .standaard:
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title).font(.werk(size: 15, weight: .semibold)).foregroundStyle(ThingsColor.textPrimary)
@@ -210,6 +234,16 @@ struct MailboxTab: View {
                 .overlay(alignment: .bottom) {
                     if isOn { Rectangle().fill(ThemeParts.karmijn).frame(height: 1) }
                 }
+        case .telemetrie:
+            // Kapitalen; de gekozen mailbox oranje tussen zoekerhoekjes.
+            HUDLabel(text: title, color: isOn ? ThingsColor.running : ThingsColor.textSecondary, size: 10.5)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .overlay {
+                    if isOn { CornerBrackets(length: 5).stroke(ThingsColor.running, lineWidth: 1) }
+                }
+        case .viertakt:
+            EngineChip(text: title, style: isOn ? .selected : .plain)
         case .standaard:
             Text(title)
                 .font(.werk(size: 11.5, weight: isOn ? .semibold : .regular))
@@ -268,7 +302,7 @@ enum MailLook {
     /// Rijen als losse kaartjes (gekozen rij als witte kaart) in plaats van rijen met haarlijnen.
     static var cardRows: Bool {
         switch ThemeStore.shared.look {
-        case .wandklok, .tischsuper, .sneeuwwitje, .rekenmachine: true
+        case .wandklok, .tischsuper, .sneeuwwitje, .rekenmachine, .viertakt: true
         default: false
         }
     }
