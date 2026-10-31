@@ -198,6 +198,13 @@ public enum ClientActivity {
         /// Mails per week, oudste eerst (vier weken).
         public var weeks: [Int]
         public var lastContact: Date
+
+        public init(name: String, count: Int, weeks: [Int], lastContact: Date) {
+            self.name = name
+            self.count = count
+            self.weeks = weeks
+            self.lastContact = lastContact
+        }
     }
 
     /// De klant bij een adres via de klantenlijst (volledig domein, dan registreerbaar domein); `nil` als onbekend.
