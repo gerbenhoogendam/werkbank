@@ -323,7 +323,7 @@ enum Persistence {
 
     static let container: ModelContainer = {
         let schema = Schema([TodoCard.self, TimeEntry.self, ClientMapping.self, ColumnRecord.self, Subtask.self,
-                             Client.self])
+                             Client.self, FeatureRequest.self])
 
         #if ICLOUD
         if isSyncing {

@@ -29,9 +29,13 @@ final class Dictation {
         case failed(String)
     }
 
+    /// Waarvoor de opname is: een tijdregel (F17) of een verbetering voor een volgende build (F18).
+    enum Purpose { case timeEntry, feedback }
+
     private(set) var phase: Phase = .off
     /// Geluidsniveau tijdens opnemen (0…1), voor de pil.
     private(set) var level: Double = 0
+    private(set) var purpose: Purpose = .timeEntry
 
     var isActive: Bool { phase == .listening || phase == .transcribing }
 
@@ -45,8 +49,10 @@ final class Dictation {
 
     /// Bij het starten van de app.
     func start() {
-        KeyboardShortcuts.onKeyDown(for: .dictate) { Task { @MainActor in Dictation.shared.keyDown() } }
-        KeyboardShortcuts.onKeyUp(for: .dictate) { Task { @MainActor in Dictation.shared.keyUp() } }
+        KeyboardShortcuts.onKeyDown(for: .dictate) { Task { @MainActor in Dictation.shared.keyDown(.timeEntry) } }
+        KeyboardShortcuts.onKeyUp(for: .dictate) { Task { @MainActor in Dictation.shared.keyUp(.timeEntry) } }
+        KeyboardShortcuts.onKeyDown(for: .dictateFeedback) { Task { @MainActor in Dictation.shared.keyDown(.feedback) } }
+        KeyboardShortcuts.onKeyUp(for: .dictateFeedback) { Task { @MainActor in Dictation.shared.keyUp(.feedback) } }
         // Het model pas laden als de app er staat.
         apply(enabled: Self.isEnabled, delay: .seconds(3))
     }
@@ -110,11 +116,11 @@ final class Dictation {
 
     // MARK: Opnemen
 
-    private func keyDown() {
-        holding = true
+    private func keyDown(_ kind: Purpose) {
         switch phase {
         case .ready:
-            break
+            holding = true
+            purpose = kind
         case .downloading(let fraction):
             let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
             AppState.shared.announce("Spraakmodel downloaden: \(percent)")
@@ -148,7 +154,8 @@ final class Dictation {
         }
     }
 
-    private func keyUp() {
+    private func keyUp(_ kind: Purpose) {
+        guard kind == purpose else { return }
         holding = false
         guard phase == .listening else { return }
         let samples = recorder.stop()
@@ -165,6 +172,10 @@ final class Dictation {
     private func finish(_ samples: [Float]) async {
         defer { if phase == .transcribing { phase = .ready } }
         guard let whisper else { return }
+        if purpose == .feedback {
+            await finishFeedback(samples, with: whisper)
+            return
+        }
         let names = WhisperModel.knownClients()
         // Klantnamen en de trefwoorden als hint, de trefwoorden achteraan.
         let hint = names.isEmpty ? nil : names.prefix(25).joined(separator: ", ") + ". Klant, case, uitgevoerd."
@@ -182,6 +193,26 @@ final class Dictation {
             result.client = WhisperModel.matchClient(result.client, known: names)
             phase = .ready
             QuickEntryController.shared.show(dictation: result)
+        } catch {
+            AppState.shared.announce("Omzetten mislukt: \(error.localizedDescription)", seconds: 4)
+        }
+    }
+}
+
+extension Dictation {
+    /// Een verbetering (of meerdere achter elkaar) bewaren in Voorkeuren › Verbeteringen.
+    fileprivate func finishFeedback(_ samples: [Float], with whisper: WhisperKit) async {
+        let hint = "Werkbank, mailmodus, board, agenda, Tijd schrijven, iPhone, Mac."
+        do {
+            var text = try await WhisperModel.transcribe(samples, with: whisper, hint: hint)
+            if text.isEmpty { text = try await WhisperModel.transcribe(samples, with: whisper, hint: nil) }
+            guard !text.isEmpty else {
+                AppState.shared.announce("Niets verstaan")
+                return
+            }
+            let added = FeatureRequests.add(FeatureRequestSplitter.split(text), in: Persistence.container.mainContext)
+            AppState.shared.announce(added.count == 1 ? "Verbetering bewaard" : "\(added.count) verbeteringen bewaard",
+                                     seconds: 3)
         } catch {
             AppState.shared.announce("Omzetten mislukt: \(error.localizedDescription)", seconds: 4)
         }
@@ -307,6 +338,7 @@ struct DictationPreferences: View {
             .onChange(of: enabled) { _, on in dictation.apply(enabled: on) }
         if enabled {
             KeyboardShortcuts.Recorder("Sneltoets", name: .dictate)
+            KeyboardShortcuts.Recorder("Sneltoets verbetering", name: .dictateFeedback)
             LabeledContent("Spraakmodel") { status }
         }
     }

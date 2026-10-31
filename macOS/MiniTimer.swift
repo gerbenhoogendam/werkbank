@@ -431,7 +431,7 @@ struct MiniTimerView: View {
 
     private func dictationContent(listening: Bool) -> some View {
         HStack(spacing: size.gap) {
-            Image(systemName: listening ? "mic.fill" : "waveform")
+            Image(systemName: listening ? (dictation.purpose == .feedback ? "lightbulb.fill" : "mic.fill") : "waveform")
                 .font(.werk(size: size.titleFont + 3, weight: .semibold))
                 .foregroundStyle(listening ? Color(hex: 0xFF453A) : Color.white)
             if listening {

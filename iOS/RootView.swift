@@ -17,6 +17,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showArchive = false
     @State private var isImporting = false
+    @State private var showsFeedback = false
 
     var body: some View {
         @Bindable var state = appState
@@ -26,7 +27,7 @@ struct RootView: View {
                 NavigationStack {
                     BoardListView()
                         .toolbar { boardToolbar }
-                        .tabChrome(running: running, plus: enterTime)
+                        .tabChrome(running: running, plus: enterTime, feedback: { showsFeedback = true })
                 }
                 .tabItem { Label("Board", systemImage: "square.grid.2x2") }
                 .tag(Tab.board)
@@ -34,7 +35,7 @@ struct RootView: View {
                 NavigationStack {
                     TimeListView()
                         .toolbar { settingsToolbar }
-                        .tabChrome(running: [], plus: enterTime)
+                        .tabChrome(running: [], plus: enterTime, feedback: { showsFeedback = true })
                 }
                 .tabItem { Label("Tijd", systemImage: "clock") }
                 .tag(Tab.time)
@@ -46,6 +47,10 @@ struct RootView: View {
         .scrollIndicators(.never)
         .sheet(item: $state.timeEntry) { start in
             TimeEntrySheet(start: start) { appState.timeEntry = nil }
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showsFeedback) {
+            FeedbackDictationSheet()
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showArchive) {
@@ -176,8 +181,9 @@ struct QuickAddSheet: View {
 }
 
 private extension View {
-    /// Lopende-timerbalk en Magic Plus (tijd schrijven) binnen een tab, zodat ze boven de tabbalk staan.
-    func tabChrome(running: [TimeEntry], plus: @escaping () -> Void) -> some View {
+    /// Lopende-timerbalk, Magic Plus (tijd schrijven) en de knop Verbetering binnen een tab, zodat ze boven de
+    /// tabbalk staan.
+    func tabChrome(running: [TimeEntry], plus: @escaping () -> Void, feedback: @escaping () -> Void) -> some View {
         self
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !running.isEmpty {
@@ -192,6 +198,11 @@ private extension View {
             .overlay(alignment: .bottomTrailing) {
                 MagicPlusButton(title: "Tijd schrijven", action: plus)
                     .padding(ThingsMetrics.magicPlusInset)
+            }
+            .overlay(alignment: .bottomLeading) {
+                FeedbackButton(action: feedback)
+                    .padding(.leading, ThingsMetrics.magicPlusInset)
+                    .padding(.bottom, ThingsMetrics.magicPlusInset + (ThingsMetrics.magicPlusSize - 44) / 2)
             }
     }
 }

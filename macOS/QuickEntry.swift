@@ -11,6 +11,8 @@ extension KeyboardShortcuts.Name {
     static let quickEntryAlt = Self("quickEntryAlt", default: .init(.f16))
     /// Inspreken: ingedrukt houden, loslaten is klaar (standaard F17).
     static let dictate = Self("dictate", default: .init(.f17))
+    /// Een verbetering voor een volgende build inspreken: ingedrukt houden, loslaten is klaar (standaard F18).
+    static let dictateFeedback = Self("dictateFeedback", default: .init(.f18))
 }
 
 /// Zwevend invoerpaneel in Spotlight-stijl, boven alle apps.

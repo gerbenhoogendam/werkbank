@@ -241,6 +241,22 @@ genodigden toevoegen), dus een acceptatie van de ontvanger werkt je afspraak nie
 schatting op `multipart/mixed`. Klantenranglijst en aanvullen kijken de eerste keer een maand terug (hooguit 400 mails
 per mailbox) en groeien daarna aan.
 
+## Verbeteringen inspreken (gebouwd 31 okt, nog niet in de app gezien)
+
+Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude geven.
+- **Mac**: F18 ingedrukt houden (aan te passen in Voorkeuren › Verbeteringen of › Overig), inspreken, loslaten. Het
+  lokale Whisper-model van Inspreken (WhisperKit) zet het om; de pil toont een lampje. Meerdere verbeteringen in één
+  keer worden gesplitst (`FeatureRequestSplitter` in WerkbankCore: zinnen met "daarnaast", "ook", "ten tweede",
+  "punt twee", "1." … beginnen een nieuwe). Meteen bewaard, ⌘Z haalt ze weg (`macOS/Dictation.swift`, `Purpose`).
+- **iPhone**: knop Verbetering linksonder (`iOS/FeedbackDictation.swift`): neemt meteen op, toont de herkende
+  verbeteringen om na te lopen (tekst, desktop/mobiel, weg) en bewaart ze.
+- **Opslag**: SwiftData-model `FeatureRequest` (`Shared/Models/FeatureRequest.swift`), via iCloud gesynchroniseerd.
+  Desktop of mobiel: wat de tekst zegt (iPhone, iOS, Mac …), anders het apparaat waarop je het insprak.
+- **Voorkeuren › Verbeteringen** (`Shared/Views/FeatureRequestsView.swift`, Mac en iPhone): verzameld (aanpassen,
+  toevoegen, weg), de prompt (desktop en mobiel apart, `FeaturePrompt`) kopiëren, markeren als doorgegeven, en
+  terugzetten uit Doorgegeven.
+- Nieuw model: het CloudKit-schema moet naar Production voordat een TestFlight-build het synchroniseert.
+
 ## Open punten
 
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in

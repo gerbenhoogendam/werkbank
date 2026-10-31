@@ -6,7 +6,7 @@ import AppKit
 import KeyboardShortcuts
 #endif
 
-/// Voorkeuren met tabs: (Agenda's), Weergave, Thema, Kolommen, (Mail, Claude) en Overig.
+/// Voorkeuren met tabs: (Agenda's), Weergave, Thema, Kolommen, (Mail, Claude), Verbeteringen en Overig.
 /// macOS: eigen venster (⌘,). iOS: als blad vanuit het tandwiel, zonder agenda.
 struct PreferencesView: View {
     var body: some View {
@@ -27,6 +27,8 @@ struct PreferencesView: View {
             ClaudePreferences()
                 .tabItem { Label("Claude", systemImage: "sparkles") }
             #endif
+            FeatureRequestsPreferences()
+                .tabItem { Label("Verbeteringen", systemImage: "lightbulb") }
             OtherPreferences()
                 .tabItem { Label("Overig", systemImage: "gearshape") }
         }
