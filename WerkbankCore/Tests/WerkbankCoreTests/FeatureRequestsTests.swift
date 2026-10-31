@@ -30,15 +30,28 @@ final class FeatureRequestsTests: XCTestCase {
         XCTAssertNil(FeatureRequestSplitter.platform(of: "Op de Mac en de iPhone hetzelfde menu"))
     }
 
-    func testPromptSeparatesDesktopAndMobile() {
-        let prompt = FeaturePrompt.build([
-            .init(text: "Knop groter", platform: .desktop),
-            .init(text: "Archief op de iPhone", platform: .mobile),
+    func testPromptSeparatesDesktopAndMobileWithStamps() {
+        let amsterdam = TimeZone(identifier: "Europe/Amsterdam")!
+        let first = Date(timeIntervalSince1970: 1_793_451_900)    // 31-10-2026 14:05 in Amsterdam
+        let second = Date(timeIntervalSince1970: 1_793_608_200)   // 02-11-2026 09:30
+        let items: [FeaturePrompt.Item] = [
+            .init(text: "Knop groter", platform: .desktop, date: first, device: "Mac", hasScreenshot: true),
+            .init(text: "Archief op de iPhone", platform: .mobile, date: second, device: "iPhone", hasScreenshot: true),
             .init(text: " Menu weg \n", platform: .desktop),
-        ])
-        XCTAssertTrue(prompt.contains("(2 desktop, 1 mobiel)"))
-        XCTAssertTrue(prompt.contains("## Desktop (macOS)\n1. Knop groter\n2. Menu weg\n"))
-        XCTAssertTrue(prompt.contains("## Mobiel (iOS)\n1. Archief op de iPhone\n"))
+        ]
+        XCTAssertEqual(FeaturePrompt.numbered(items).map(\.reference), ["D1", "D2", "M1"])
+        XCTAssertEqual(FeaturePrompt.numbered(items).map(\.index), [0, 2, 1])
+
+        let plain = FeaturePrompt.build(items, timeZone: amsterdam)
+        XCTAssertTrue(plain.contains("(2 desktop, 1 mobiel)"))
+        XCTAssertTrue(plain.contains("## Desktop (macOS)\nD1 (31-10-2026 14:05, Mac): Knop groter\nD2: Menu weg\n"))
+        XCTAssertTrue(plain.contains("## Mobiel (iOS)\nM1 (02-11-2026 09:30, iPhone): Archief op de iPhone\n"))
+        XCTAssertFalse(plain.contains("screenshot"))
+
+        let document = FeaturePrompt.build(items, screenshotsInDocument: true, timeZone: amsterdam)
+        XCTAssertTrue(document.contains("D1 (31-10-2026 14:05, Mac, screenshot): Knop groter"))
+        XCTAssertTrue(document.contains("eigen pagina met hetzelfde nummer"))
         XCTAssertFalse(FeaturePrompt.build([.init(text: "A", platform: .desktop)]).contains("## Mobiel"))
+        XCTAssertEqual(FeaturePrompt.stamp(first, timeZone: amsterdam, seconds: true), "31-10-2026 14:05:00")
     }
 }

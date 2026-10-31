@@ -44,6 +44,8 @@ final class Dictation {
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     /// De toets is (nog) ingedrukt; laat je los voordat de opname loopt (toestemmingsvraag), dan geen opname.
     @ObservationIgnored private var holding = false
+    /// Bij een verbetering: het scherm op het moment dat de toets werd ingedrukt.
+    @ObservationIgnored private var pendingScreenshot: Task<CapturedScreen, Never>?
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
@@ -121,6 +123,7 @@ final class Dictation {
         case .ready:
             holding = true
             purpose = kind
+            if kind == .feedback { pendingScreenshot = Task { await FeedbackScreenshot.capture() } }
         case .downloading(let fraction):
             let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
             AppState.shared.announce("Spraakmodel downloaden: \(percent)")
@@ -210,7 +213,10 @@ extension Dictation {
                 AppState.shared.announce("Niets verstaan")
                 return
             }
-            let added = FeatureRequests.add(FeatureRequestSplitter.split(text), in: Persistence.container.mainContext)
+            let screenshot = await pendingScreenshot?.value
+            pendingScreenshot = nil
+            let added = FeatureRequests.add(FeatureRequestSplitter.split(text), screenshot: screenshot,
+                                            in: Persistence.container.mainContext)
             AppState.shared.announce(added.count == 1 ? "Verbetering bewaard" : "\(added.count) verbeteringen bewaard",
                                      seconds: 3)
         } catch {

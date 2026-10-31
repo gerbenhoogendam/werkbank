@@ -17,7 +17,8 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showArchive = false
     @State private var isImporting = false
-    @State private var showsFeedback = false
+    /// Verbetering: eerst het scherm vastleggen, dan het blad.
+    @State private var feedback: FeedbackStart?
 
     var body: some View {
         @Bindable var state = appState
@@ -27,7 +28,7 @@ struct RootView: View {
                 NavigationStack {
                     BoardListView()
                         .toolbar { boardToolbar }
-                        .tabChrome(running: running, plus: enterTime, feedback: { showsFeedback = true })
+                        .tabChrome(running: running, plus: enterTime, feedback: startFeedback)
                 }
                 .tabItem { Label("Board", systemImage: "square.grid.2x2") }
                 .tag(Tab.board)
@@ -35,7 +36,7 @@ struct RootView: View {
                 NavigationStack {
                     TimeListView()
                         .toolbar { settingsToolbar }
-                        .tabChrome(running: [], plus: enterTime, feedback: { showsFeedback = true })
+                        .tabChrome(running: [], plus: enterTime, feedback: startFeedback)
                 }
                 .tabItem { Label("Tijd", systemImage: "clock") }
                 .tag(Tab.time)
@@ -49,8 +50,8 @@ struct RootView: View {
             TimeEntrySheet(start: start) { appState.timeEntry = nil }
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showsFeedback) {
-            FeedbackDictationSheet()
+        .sheet(item: $feedback) { start in
+            FeedbackDictationSheet(screenshot: start.screenshot)
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showArchive) {
@@ -109,6 +110,10 @@ struct RootView: View {
             default: break
             }
         }
+    }
+
+    private func startFeedback() {
+        Task { feedback = FeedbackStart(screenshot: await FeedbackScreenshot.capture()) }
     }
 
     private func enterTime() {
@@ -205,4 +210,10 @@ private extension View {
                     .padding(.bottom, ThingsMetrics.magicPlusInset + (ThingsMetrics.magicPlusSize - 44) / 2)
             }
     }
+}
+
+/// Het blad Verbetering met de screenshot van het moment dat je erop tikte.
+struct FeedbackStart: Identifiable {
+    let id = UUID()
+    let screenshot: CapturedScreen
 }

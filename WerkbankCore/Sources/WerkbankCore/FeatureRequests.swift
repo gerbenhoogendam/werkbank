@@ -121,37 +121,83 @@ public enum FeatureRequestSplitter {
     }
 }
 
-/// De prompt voor Claude met alle verzamelde verbeteringen, desktop en mobiel apart.
+/// De prompt voor Claude met alle verzamelde verbeteringen, desktop en mobiel apart. Elke verbetering heeft een nummer
+/// (D1, D2 … en M1, M2 …), het tijdstip waarop hij is vastgelegd en het apparaat; in de PDF staat bij hetzelfde nummer
+/// de screenshot van dat moment.
 public enum FeaturePrompt {
     public struct Item: Equatable {
         public var text: String
         public var platform: FeaturePlatform
+        /// Wanneer vastgelegd (het moment van de screenshot).
+        public var date: Date?
+        /// "Mac" of "iPhone".
+        public var device: String?
+        public var hasScreenshot: Bool
 
-        public init(text: String, platform: FeaturePlatform) {
+        public init(text: String, platform: FeaturePlatform, date: Date? = nil, device: String? = nil,
+                    hasScreenshot: Bool = false) {
             self.text = text
             self.platform = platform
+            self.date = date
+            self.device = device
+            self.hasScreenshot = hasScreenshot
         }
     }
 
-    public static func build(_ items: [Item]) -> String {
-        let desktop = items.filter { $0.platform == .desktop }
-        let mobile = items.filter { $0.platform == .mobile }
-        var lines = [
-            "Hieronder staan verbeteringen voor Werkbank die ik tijdens het gebruik heb verzameld "
-                + "(\(desktop.count) desktop, \(mobile.count) mobiel). Voer ze door in de volgende build.",
-            "Werk volgens CLAUDE.md en OVERDRACHT.md in de repo. Is een punt onduidelijk of strijdig met een eerdere "
-                + "afspraak, vraag het dan eerst. Meld per punt wat je gedaan hebt en wat (nog) niet.",
-        ]
-        func section(_ title: String, _ list: [Item]) {
-            guard !list.isEmpty else { return }
-            lines.append("")
-            lines.append("## \(title)")
-            for (index, item) in list.enumerated() {
-                lines.append("\(index + 1). \(item.text.trimmingCharacters(in: .whitespacesAndNewlines))")
+    /// De volgorde in de prompt en de PDF: eerst desktop, dan mobiel, elk in de volgorde van `items`; met het nummer
+    /// en de plaats in `items`.
+    public static func numbered(_ items: [Item]) -> [(reference: String, index: Int)] {
+        var result: [(reference: String, index: Int)] = []
+        for platform in FeaturePlatform.allCases {
+            let prefix = platform == .desktop ? "D" : "M"
+            var number = 0
+            for (index, item) in items.enumerated() where item.platform == platform {
+                number += 1
+                result.append(("\(prefix)\(number)", index))
             }
         }
-        section("Desktop (macOS)", desktop)
-        section("Mobiel (iOS)", mobile)
+        return result
+    }
+
+    /// "31-10-2026 14:05".
+    public static func stamp(_ date: Date, timeZone: TimeZone = .current, seconds: Bool = false) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "nl_NL")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = seconds ? "dd-MM-yyyy HH:mm:ss" : "dd-MM-yyyy HH:mm"
+        return formatter.string(from: date)
+    }
+
+    /// `screenshotsInDocument`: de prompt staat in de PDF, met per verbetering een pagina met de screenshot.
+    public static func build(_ items: [Item], screenshotsInDocument: Bool = false, timeZone: TimeZone = .current) -> String {
+        let desktop = items.filter { $0.platform == .desktop }.count
+        let mobile = items.filter { $0.platform == .mobile }.count
+        var lines = [
+            "Hieronder staan verbeteringen voor Werkbank die ik tijdens het gebruik heb verzameld "
+                + "(\(desktop) desktop, \(mobile) mobiel). Voer ze door in de volgende build.",
+            "Werk volgens CLAUDE.md en OVERDRACHT.md in de repo. Is een punt onduidelijk of strijdig met een eerdere "
+                + "afspraak, vraag het dan eerst. Meld per punt (met het nummer) wat je gedaan hebt en wat (nog) niet.",
+        ]
+        if screenshotsInDocument, items.contains(where: \.hasScreenshot) {
+            lines.append("Na deze lijst heeft elke verbetering een eigen pagina met hetzelfde nummer, de datum en tijd en "
+                         + "een screenshot van het scherm op het moment dat ik hem insprak of typte. Gebruik die als "
+                         + "context: welk scherm, welk thema, wat er te zien was.")
+        }
+        var currentPlatform: FeaturePlatform?
+        for (reference, index) in numbered(items) {
+            let item = items[index]
+            if item.platform != currentPlatform {
+                currentPlatform = item.platform
+                lines.append("")
+                lines.append(item.platform == .desktop ? "## Desktop (macOS)" : "## Mobiel (iOS)")
+            }
+            var details: [String] = []
+            if let date = item.date { details.append(stamp(date, timeZone: timeZone)) }
+            if let device = item.device { details.append(device) }
+            if screenshotsInDocument, item.hasScreenshot { details.append("screenshot") }
+            let label = details.isEmpty ? reference : "\(reference) (\(details.joined(separator: ", ")))"
+            lines.append("\(label): \(item.text.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
         return lines.joined(separator: "\n") + "\n"
     }
 }

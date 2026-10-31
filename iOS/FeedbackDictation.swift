@@ -5,6 +5,8 @@ import WerkbankCore
 /// De knop Verbetering op de iPhone: inspreken (op het toestel omgezet met WhisperKit), losse verbeteringen herkennen,
 /// nalopen en bewaren in Voorkeuren › Verbeteringen.
 struct FeedbackDictationSheet: View {
+    /// Het scherm op het moment dat je op Verbetering tikte.
+    let screenshot: CapturedScreen?
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
@@ -26,6 +28,15 @@ struct FeedbackDictationSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
+                    if let data = screenshot?.data, let image = ScreenshotEncoding.thumbnail(data, maxPixels: 600) {
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
+                            .accessibilityLabel("Screenshot")
+                    }
                     recordButton
                     if transcribing > 0 {
                         ProgressView().frame(maxWidth: .infinity)
@@ -177,7 +188,8 @@ struct FeedbackDictationSheet: View {
     }
 
     private func save() {
-        let added = FeatureRequests.add(drafts.map { FeaturePrompt.Item(text: $0.text, platform: $0.platform) }, in: context)
+        let added = FeatureRequests.add(drafts.map { FeaturePrompt.Item(text: $0.text, platform: $0.platform) },
+                                        screenshot: screenshot, in: context)
         appState.announce(added.count == 1 ? "Verbetering bewaard" : "\(added.count) verbeteringen bewaard")
         close()
     }

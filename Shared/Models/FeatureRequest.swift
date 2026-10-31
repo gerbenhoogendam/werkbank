@@ -15,6 +15,10 @@ final class FeatureRequest {
     var source: String = ""
     /// Wanneer hij in een prompt aan Claude is meegegeven; nil = nog verzameld.
     var sentAt: Date?
+    /// Het scherm op het moment van inspreken of typen (JPEG); via iCloud als los bestand.
+    @Attribute(.externalStorage) var screenshot: Data?
+    /// Wanneer de screenshot is gemaakt (het label in de prompt).
+    var capturedAt: Date?
 
     init(text: String, platform: FeaturePlatform, source: String) {
         self.text = text
@@ -27,6 +31,19 @@ final class FeatureRequest {
         get { FeaturePlatform(rawValue: platformRaw) ?? .desktop }
         set { platformRaw = newValue.rawValue }
     }
+
+    var device: String { source == "iphone" ? "iPhone" : "Mac" }
+    var moment: Date { capturedAt ?? createdAt }
+
+    var promptItem: FeaturePrompt.Item {
+        FeaturePrompt.Item(text: text, platform: platform, date: moment, device: device, hasScreenshot: screenshot != nil)
+    }
+}
+
+/// Een screenshot met het moment waarop hij is gemaakt.
+struct CapturedScreen {
+    var data: Data?
+    var date: Date
 }
 
 @MainActor
@@ -44,17 +61,22 @@ enum FeatureRequests {
     }
 
     /// Bewaart de verbeteringen; zonder hint in de tekst gelden ze voor dit apparaat. ⌘Z haalt ze weer weg.
+    /// `screenshot`: het scherm op het moment van vastleggen; alle verbeteringen uit één keer inspreken krijgen dezelfde.
     @discardableResult
-    static func add(_ texts: [String], in context: ModelContext) -> [FeatureRequest] {
+    static func add(_ texts: [String], screenshot: CapturedScreen?, in context: ModelContext) -> [FeatureRequest] {
         add(texts.map { FeaturePrompt.Item(text: $0, platform: FeatureRequestSplitter.platform(of: $0) ?? defaultPlatform) },
-            in: context)
+            screenshot: screenshot, in: context)
     }
 
     @discardableResult
-    static func add(_ items: [FeaturePrompt.Item], in context: ModelContext) -> [FeatureRequest] {
+    static func add(_ items: [FeaturePrompt.Item], screenshot: CapturedScreen?, in context: ModelContext) -> [FeatureRequest] {
         let added = items.compactMap { item -> FeatureRequest? in
             let text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? nil : FeatureRequest(text: text, platform: item.platform, source: source)
+            guard !text.isEmpty else { return nil }
+            let request = FeatureRequest(text: text, platform: item.platform, source: source)
+            request.screenshot = screenshot?.data
+            request.capturedAt = screenshot?.date
+            return request
         }
         guard !added.isEmpty else { return [] }
         for request in added { context.insert(request) }
@@ -72,9 +94,9 @@ enum FeatureRequests {
         try? context.save()
     }
 
-    /// De prompt met wat nog verzameld is.
+    /// De prompt met wat nog verzameld is (als tekst, zonder de screenshots).
     static func prompt(_ requests: [FeatureRequest]) -> String {
-        FeaturePrompt.build(requests.map { FeaturePrompt.Item(text: $0.text, platform: $0.platform) })
+        FeaturePrompt.build(requests.map(\.promptItem))
     }
 
     /// Na het kopiëren van de prompt: doorgegeven (blijft zichtbaar onder Doorgegeven, terug te zetten).

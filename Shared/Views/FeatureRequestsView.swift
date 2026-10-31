@@ -17,10 +17,13 @@ struct FeatureRequestsPreferences: View {
     @State private var newText = ""
     @State private var newPlatform = FeatureRequests.defaultPlatform
     @State private var showsPrompt = false
+    @State private var exportURL: URL?
+    @State private var exportError: String?
     #if os(macOS)
     @AppStorage(Dictation.enabledKey) private var dictationEnabled = false
+    @State private var screenPermission = FeedbackScreenshot.hasPermission
     #else
-    @State private var dictating = false
+    @State private var dictating: FeedbackStart?
     #endif
 
     private var collected: [FeatureRequest] { all.filter { $0.sentAt == nil } }
@@ -42,7 +45,11 @@ struct FeatureRequestsPreferences: View {
                         .disabled(newText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 #if os(iOS)
-                Button { dictating = true } label: { Label("Inspreken", systemImage: "mic") }
+                Button {
+                    Task { dictating = FeedbackStart(screenshot: await FeedbackScreenshot.capture()) }
+                } label: {
+                    Label("Inspreken", systemImage: "mic")
+                }
                 #endif
             } header: {
                 Text("Verzameld · \(collected.count)")
@@ -58,6 +65,7 @@ struct FeatureRequestsPreferences: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack {
+                    Button("PDF voor Claude", action: export)
                     Button("Kopieer prompt", action: copy)
                     Button("Markeer als doorgegeven") {
                         let count = collected.count
@@ -66,6 +74,21 @@ struct FeatureRequestsPreferences: View {
                     }
                 }
                 .disabled(collected.isEmpty)
+                if let exportURL {
+                    HStack {
+                        Text(exportURL.lastPathComponent)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        ShareLink(item: exportURL) { Label("Delen", systemImage: "square.and.arrow.up") }
+                        #if os(macOS)
+                        Button("Toon in Finder") { NSWorkspace.shared.activateFileViewerSelecting([exportURL]) }
+                        #endif
+                    }
+                }
+                if let exportError {
+                    Text(exportError).foregroundStyle(ThingsColor.error)
+                }
             }
 
             #if os(macOS)
@@ -76,7 +99,15 @@ struct FeatureRequestsPreferences: View {
                     LabeledContent("Inspreken", value: "Uit")
                     Button("Aanzetten") { Dictation.shared.apply(enabled: true) }
                 }
+                LabeledContent("Schermopname") {
+                    if screenPermission {
+                        Text("Toegestaan").foregroundStyle(ThingsColor.textSecondary)
+                    } else {
+                        Button("Toestaan") { FeedbackScreenshot.requestPermission() }
+                    }
+                }
             }
+            .onAppear { screenPermission = FeedbackScreenshot.hasPermission }
             #endif
 
             if !sent.isEmpty {
@@ -101,15 +132,30 @@ struct FeatureRequestsPreferences: View {
         }
         .formStyle(.grouped)
         #if os(iOS)
-        .sheet(isPresented: $dictating) { FeedbackDictationSheet() }
+        .sheet(item: $dictating) { start in FeedbackDictationSheet(screenshot: start.screenshot) }
         #endif
     }
 
+    /// Getypt: met een screenshot van het hoofdvenster (Mac) of het scherm (iPhone) van dit moment.
     private func add() {
         let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        FeatureRequests.add([FeaturePrompt.Item(text: text, platform: newPlatform)], in: context)
         newText = ""
+        let platform = newPlatform
+        Task {
+            let screenshot = await FeedbackScreenshot.capture()
+            FeatureRequests.add([FeaturePrompt.Item(text: text, platform: platform)], screenshot: screenshot, in: context)
+        }
+    }
+
+    private func export() {
+        do {
+            exportURL = try FeatureExport.pdf(collected)
+            exportError = nil
+        } catch {
+            exportURL = nil
+            exportError = error.localizedDescription
+        }
     }
 
     private func copy() {
@@ -143,16 +189,35 @@ private struct FeatureRequestRow: View {
     @Bindable var request: FeatureRequest
     let onDelete: () -> Void
 
+    @State private var thumbnail: CGImage?
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            TextField("", text: $request.text, axis: .vertical)
-                .labelsHidden()
+        HStack(alignment: .top, spacing: 8) {
+            if let thumbnail {
+                Image(decorative: thumbnail, scale: 1)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(ThingsColor.separator))
+                    .accessibilityLabel("Screenshot")
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                TextField("", text: $request.text, axis: .vertical)
+                    .labelsHidden()
+                Text("\(FeaturePrompt.stamp(request.moment)) · \(request.device)")
+                    .font(.werk(size: 11))
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
             PlatformPicker(selection: $request.platform)
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("Verwijderen")
+        }
+        .task(id: request.screenshot?.count) {
+            thumbnail = request.screenshot.flatMap { ScreenshotEncoding.thumbnail($0, maxPixels: 160) }
         }
     }
 }
