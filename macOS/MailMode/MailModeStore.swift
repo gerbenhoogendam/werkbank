@@ -450,7 +450,10 @@ final class MailModeStore {
     func refreshTasks() { refreshTaskThreads() }
 
     private func refreshTaskThreads() {
-        taskThreadIDs = Set(BoardService.allCards(in: Persistence.container.mainContext).compactMap(\.mailThreadID))
+        // Alleen kaarten uit een mail (niet het hele archief; dit gebeurt na elke verversing).
+        let fromMail = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.mailThreadID != nil })
+        let ids = Set(((try? Persistence.container.mainContext.fetch(fromMail)) ?? []).compactMap(\.mailThreadID))
+        if ids != taskThreadIDs { taskThreadIDs = ids }
     }
 
     private func clientDomains(_ name: String) -> [String] {

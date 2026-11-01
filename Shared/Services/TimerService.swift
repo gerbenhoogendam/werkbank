@@ -16,7 +16,8 @@ enum TimerService {
     }
 
     static func runningEntries(in context: ModelContext) -> [TimeEntry] {
-        allEntries(in: context).filter { $0.status == .running }
+        let running = FetchDescriptor<TimeEntry>(predicate: #Predicate { $0.statusRaw == "running" })
+        return (try? context.fetch(running)) ?? []
     }
 
     // MARK: Start / pauze / hervat

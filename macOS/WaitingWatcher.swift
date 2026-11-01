@@ -54,9 +54,10 @@ final class WaitingWatcher {
     }
 
     private func linkedCards(threadID: String, includeDone: Bool = false) -> [TodoCard] {
-        BoardService.allCards(in: context).filter {
-            $0.mailThreadID == threadID && (includeDone || $0.columnRaw != BoardColumn.doneID)
-        }
+        let id: String? = threadID
+        let linked = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.mailThreadID == id },
+                                               sortBy: [SortDescriptor(\.sortOrder)])
+        return ((try? context.fetch(linked)) ?? []).filter { includeDone || $0.columnRaw != BoardColumn.doneID }
     }
 
     private func column(_ key: String) -> BoardColumn? {
@@ -76,7 +77,11 @@ final class WaitingWatcher {
         guard gmail.state == .signedIn, let waiting = column(Self.waitingKey) else { return }
 
         // Uit Wacht op klant gehaald: wacht nergens meer op. Met de hand erheen gesleept: wacht vanaf nu.
-        let all = BoardService.allCards(in: context)
+        // Alleen wat wacht of in Wacht op klant staat (elke drie minuten; niet het hele archief).
+        let waitingID = waiting.id
+        let relevant = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.waitingSince != nil || $0.columnRaw == waitingID },
+                                                 sortBy: [SortDescriptor(\.sortOrder)])
+        let all = (try? context.fetch(relevant)) ?? []
         for card in all where card.waitingSince != nil && card.columnRaw != waiting.id { card.waitingSince = nil }
         let cards = all.filter { $0.columnRaw == waiting.id && $0.mailThreadID != nil }
         for card in cards where card.waitingSince == nil { card.waitingSince = .now }

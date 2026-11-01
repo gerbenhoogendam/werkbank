@@ -161,7 +161,10 @@ final class ClientDirectory {
     private func rebuildLogoDomains() {
         let context = Persistence.container.mainContext
         var map: [String: String] = [:]
-        for card in BoardService.allCards(in: context) {
+        // Alleen kaarten met een logo (niet het hele archief inlezen; dit gebeurt bij elk openen van de mailmodus).
+        let withLogo = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.logoDomain != nil && $0.clientLabel != nil },
+                                                 sortBy: [SortDescriptor(\.sortOrder)])
+        for card in (try? context.fetch(withLogo)) ?? [] {
             if let label = card.clientLabel, let domain = card.logoDomain { map[label.lowercased()] = domain }
         }
         for mapping in (try? context.fetch(FetchDescriptor<ClientMapping>())) ?? []
