@@ -101,41 +101,46 @@ struct MainView: View {
 
         ZStack {
             // De mailmodus neemt het hele venster over (dubbelklik op Mail); terug met Werkbank of Esc. Tijdens het slepen
-            // van een mail schuift hij snel naar beneden weg en staat de werkbank erachter; Esc schuift hem terug. Een
-            // verschuiving neemt ook de mail zelf (een webweergave) mee, en kost weinig.
+            // van een mail zwiept hij naar beneden weg en staat de werkbank erachter; Esc haalt hem terug. De werkbank
+            // blijft daarvoor achter de mail bestaan (onbereikbaar), zodat er bij het wegzwiepen niets opgebouwd hoeft
+            // te worden: alleen verschuiven, en dat neemt ook de mail zelf (een webweergave) mee.
             GeometryReader { proxy in
                 ZStack {
-                    if !mailMode.isActive || mailMode.isReceded {
-                        workbench
-                            // Pas weg als de mail er weer helemaal voor staat.
-                            .transition(.asymmetric(insertion: .identity,
-                                                    removal: .opacity.animation(.linear(duration: 0.01).delay(0.3))))
-                    }
+                    workbench
+                        .overlay {
+                            mailShade
+                                .allowsHitTesting(false)
+                                .animation(Self.swoop(receded: mailMode.isReceded), value: mailMode.isReceded)
+                        }
+                        .disabled(!workbenchLive)
+                        .accessibilityHidden(!workbenchLive)
                     if mailMode.isActive {
                         MailModeView()
                             .themePanel()
-                            .offset(y: mailMode.isReceded ? proxy.size.height + 30 : 0)
-                            .shadow(color: .black.opacity(mailMode.isReceded ? 0.3 : 0), radius: 24, y: -6)
+                            .background(alignment: .top) { swoopShadow }
+                            .offset(y: mailMode.isReceded ? proxy.size.height + 48 : 0)
+                            .animation(Self.swoop(receded: mailMode.isReceded), value: mailMode.isReceded)
                             .allowsHitTesting(!mailMode.isReceded)
                     }
                 }
-                .animation(mailMode.isReceded ? .easeIn(duration: 0.2) : .spring(duration: 0.3, bounce: 0.08),
-                           value: mailMode.isReceded)
                 .clipped()
             }
             .overlay(alignment: .top) {
-                if mailMode.isActive && mailMode.isReceded {
-                    Button { mailMode.restore() } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "envelope.fill")
-                            Text("Mail")
-                            KeyCap(key: "esc", inverted: true)
+                ZStack {
+                    if mailMode.isActive && mailMode.isReceded {
+                        Button { mailMode.restore() } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "envelope.fill")
+                                Text("Mail")
+                                KeyCap(key: "esc", inverted: true)
+                            }
                         }
+                        .buttonStyle(MailModeButtonStyle(prominent: true))
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    .buttonStyle(MailModeButtonStyle(prominent: true))
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
+                .animation(.easeOut(duration: 0.22), value: mailMode.isReceded)
             }
             // Drukproef: losse vlakken met de vensterkleur eromheen.
             .padding(ThemeStore.shared.look.panelGap)
@@ -168,13 +173,17 @@ struct MainView: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
 
-            // Esc: annuleert een lopend concept op de agenda.
-            Button("") { drag.draft = nil }
+            // Esc: haalt de weggezwiepte mail terug, of annuleert een lopend concept op de agenda.
+            Button("") {
+                if mailMode.isReceded { mailMode.restore() } else { drag.draft = nil }
+            }
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
+        // De mail komt terug: een half ingepland concept op de agenda verdwijnt, alsof er niets is gebeurd.
+        .onChange(of: mailMode.isReceded) { _, receded in if !receded { drag.draft = nil } }
         .providingSubtasks()
         .coordinateSpace(.named("main"))
         // Openen en sluiten met de Duo-vouw.
@@ -269,6 +278,33 @@ struct MainView: View {
                 .help("Nieuwe kaart in de Inbox (werkt ook vanuit andere apps met de sneltoets)")
             }
         }
+    }
+
+    /// De werkbank is te gebruiken: geen mailmodus, of de mail is weg (of komt nog terug).
+    private var workbenchLive: Bool { !mailMode.isActive || mailMode.isReceded || mailMode.isReturning }
+
+    /// Wegzwiepen: na een klein optillen versnellend naar beneden. Terug: veerkrachtig omhoog, licht doorschietend.
+    private static func swoop(receded: Bool) -> Animation {
+        receded ? .timingCurve(0.4, -0.12, 0.75, 0.3, duration: 0.32) : .spring(duration: 0.42, bounce: 0.12)
+    }
+
+    /// De werkbank achter de mail iets donkerder, in de vorm van het paneel; trekt weg terwijl de mail wegzwiept.
+    @ViewBuilder private var mailShade: some View {
+        let shade = Color.black.opacity(mailMode.isActive && !mailMode.isReceded ? 0.22 : 0)
+        let look = ThemeStore.shared.look
+        if look == .telemetrie {
+            shade.clipShape(ChamferedRect(cut: 16))
+        } else {
+            shade.clipShape(RoundedRectangle(cornerRadius: look.panelRadius, style: .continuous))
+        }
+    }
+
+    /// Schaduw boven de bovenrand van de mail terwijl hij wegzwiept; in rust valt hij buiten beeld.
+    private var swoopShadow: some View {
+        LinearGradient(colors: [.clear, .black.opacity(0.28)], startPoint: .top, endPoint: .bottom)
+            .frame(height: 36)
+            .offset(y: -36)
+            .allowsHitTesting(false)
     }
 
     /// Blur en "klik ernaast om te sluiten" zolang er een mail- of Claude-paneel open is (niet tijdens slepen).

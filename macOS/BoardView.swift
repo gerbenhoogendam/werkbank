@@ -97,6 +97,8 @@ struct BoardView: View {
         }
         .padding(look == .drukproef || look == .karmijn ? 6 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Slepen van een mail afgebroken (Esc): geen kolom meer opgelicht.
+        .onChange(of: MailDragState.shared.isDragging) { _, dragging in if !dragging { dropTargetColumn = nil } }
         // Tischsuper: één balk notenhoutfineer achter alle kolomkoppen, met een oranje rand eronder (de kast en de
         // schaal van de RT 20). Karmijn: een rode gloed linksboven.
         .background(alignment: .top) {

@@ -303,11 +303,22 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   zet terug. De mail in het midden neemt de rest (minstens 320 pt).
 - `MailboxTab(fitsContent:)`: in de werkbalk van de mailmodus zo breed als de naam met ruimte ernaast (Calculator,
   Wandklok, Sneeuwwitje en Tischsuper deelden anders de breedte en kwamen tegen de tekst aan).
-- **Slepen uit de mailmodus**: zodra je een mail sleept schuift de mailmodus snel naar beneden weg
-  (`MailModeStore.recede`, een `offset` in `MainView`) en staat de werkbank erachter (board, agenda, Tijd schrijven).
-  Esc (ook als er een paneel open staat) of de knop Mail bovenin schuift hem terug (`restore`). Eerst was het
-  wegklappen met schalen, kantelen en vervagen, maar die effecten werken niet op de webweergave van de mail. De mailmodus blijft er onzichtbaar onder, zodat het slepen doorloopt; een
-  gesleepte mail draagt alleen het eigen type (`UTType.gmailMessage`), dus de webweergave eronder vangt niets op.
+- **Slepen uit de mailmodus**: zodra je een mail sleept (uit de lijst of uit een mailvenster) zwiept de mailmodus naar
+  beneden weg en staat de werkbank erachter (board, agenda, Tijd schrijven). `MailDragState.begin` start het, één
+  runloop later (`MailModeStore.recede`), zodat het niet midden in het opbouwen van de sleepactie gebeurt.
+  - Animatie (`MainView.swoop`): klein optillen, dan versnellend omlaag (0,32 s); terug een veer (0,42 s). Een
+    schaduw boven de bovenrand van de mail en de werkbank die oplicht (`mailShade`). Alleen verschuiven: schalen,
+    kantelen en vervagen werken niet op de webweergave van de mail.
+  - De werkbank blijft daarom ook in de mailmodus bestaan, achter de mail (`disabled`, verborgen voor VoiceOver);
+    eerst werd hij pas bij het slepen opgebouwd, en dat at de hele animatie op.
+  - Esc: een eigen toetsmonitor van `MailModeStore` zolang de mail weg is (elk venster; een blad en de aanwijsmodus
+    gaan voor), plus de verborgen Esc-knop in `MainView`. Een half ingepland concept op de agenda vervalt dan.
+  - Afgebroken slepen: Esc tijdens het slepen komt niet bij de app aan (macOS breekt het slepen af), dus
+    `MailDragState` leest de toets zelf (`CGEventSource.keyState`) en haalt de mail meteen terug. Loslaten zonder dat
+    een doel de mail aannam (buiten het venster, op het Gmail-paneel) doet hetzelfde; doelen melden een drop met
+    `MailDragState.noteDropped()` (`GmailDrop.handle`, agenda, Claude/contact, andere mailbox). Opgelichte kolom en
+    plek op de agenda gaan weg. Neergezet: de werkbank blijft tot Esc.
+  - Een gesleepte mail draagt alleen het eigen type (`UTType.gmailMessage`), dus de webweergave vangt niets op.
 - **Tischsuper op het board**: de balk achter de kolomkoppen is notenhoutfineer met een oranje rand eronder (was
   oranje), de kolomnamen licht.
 - **Tischsuper in de mailmodus**: kop van notenhoutfineer (`Veneer` in `ThemeParts.swift`) met lichte tekst, houten

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import SwiftData
@@ -36,9 +37,11 @@ final class MailModeStore {
     }
 
     private(set) var isActive = false
-    /// Tijdens het slepen van een mail: de mailmodus is naar achteren weggeklapt en de werkbank staat ervoor (board,
+    /// Tijdens het slepen van een mail: de mailmodus is naar beneden weggezwiept en de werkbank staat ervoor (board,
     /// agenda, Tijd schrijven). Esc haalt de mail terug.
     private(set) var isReceded = false
+    /// De mail komt terug omhoog: de werkbank blijft bruikbaar tot hij er weer helemaal voor staat.
+    private(set) var isReturning = false
     private(set) var scope: Scope = .all
     /// De map uit de kolom links (Postvak IN, Verstuurd, een label …); een klant gaat erboven.
     private(set) var folder: MailFolder = .inbox
@@ -74,6 +77,8 @@ final class MailModeStore {
     static let bulkRulesKey = "mailMode.bulkRules"
 
     @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var returnTask: Task<Void, Never>?
+    @ObservationIgnored private var escapeMonitor: Any?
     @ObservationIgnored private var loadToken = 0
     private let gmail = GmailSession.shared
 
@@ -94,6 +99,8 @@ final class MailModeStore {
         folder = .inbox
         selectedID = message?.id
         isReceded = false
+        isReturning = false
+        watchEscape(false)
         isActive = true
         Task {
             await reload()
@@ -105,6 +112,8 @@ final class MailModeStore {
     func close() {
         isActive = false
         isReceded = false
+        isReturning = false
+        watchEscape(false)
         sheet = nil
         searchTask?.cancel()
     }
@@ -112,13 +121,53 @@ final class MailModeStore {
     /// Een mail wordt gesleept: de werkbank naar voren, zodat je hem op een kolom, de agenda of Tijd schrijven kunt
     /// laten vallen.
     func recede() {
-        guard isActive else { return }
+        guard isActive, !isReceded else { return }
         sheet = nil
+        returnTask?.cancel()
+        isReturning = false
         isReceded = true
+        watchEscape(true)
     }
 
     func restore() {
+        guard isReceded else { return }
         isReceded = false
+        isReturning = true
+        watchEscape(false)
+        returnTask?.cancel()
+        returnTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            self?.isReturning = false
+        }
+    }
+
+    /// Zolang de mail weg is haalt Esc hem terug, in elk venster van de app en wat er ook de focus heeft; alleen een
+    /// blad of de aanwijsmodus gaat voor. Tijdens het slepen breekt dezelfde Esc ook het slepen af.
+    private func watchEscape(_ on: Bool) {
+        guard on else {
+            if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
+            escapeMonitor = nil
+            return
+        }
+        guard escapeMonitor == nil else { return }
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53 else { return event }
+            let consumed = MainActor.assumeIsolated { MailModeStore.shared.escapePressed() }
+            return consumed ? nil : event
+        }
+    }
+
+    /// - Returns: `true` als Esc hier is afgehandeld.
+    private func escapePressed() -> Bool {
+        guard isReceded, NSApp.keyWindow?.attachedSheet == nil, !FeedbackOverlay.shared.isShown else { return false }
+        if MailDragState.shared.isDragging {
+            // Het slepen loopt nog: macOS breekt het af met deze toets, dus die moet er wel door.
+            MailDragState.shared.cancel()
+            return false
+        }
+        restore()
+        return true
     }
 
     // MARK: Bereik, zoeken en filters

@@ -96,13 +96,8 @@ struct MailModeView: View {
     private func handle(_ event: NSEvent) -> Bool {
         guard store.isActive, let window, event.window === window, window.attachedSheet == nil,
               !FeedbackOverlay.shared.isShown else { return false }
-        if store.isReceded {
-            // Weggeschoven voor het slepen: alleen Esc, en die haalt de mail meteen terug (ook als er na het neerzetten
-            // een paneel open staat).
-            guard event.keyCode == 53 else { return false }
-            store.restore()
-            return true
-        }
+        // Weggezwiept voor het slepen: de toetsen zijn van de werkbank; Esc haalt de mail terug (MailModeStore).
+        if store.isReceded { return false }
         guard !PanelStore.shared.hasFocusPanels else { return false }
         if store.sheet != nil {
             // In een blad gaan alle toetsen naar het blad; Esc sluit het.
@@ -354,10 +349,8 @@ private struct MailModeList: View {
                      store.select(item)
                      store.archiveSelected(appState: appState)
                  },
-                 onDragStarted: {
-                     MailDragState.shared.begin(account: gmail.account(for: item.id))
-                     store.recede()
-                 })
+                 // Laat de mailmodus ook wegzwiepen.
+                 onDragStarted: { MailDragState.shared.begin(account: gmail.account(for: item.id)) })
     }
 
     private func tags(for item: GmailMailItem) -> [MailRowTag] {

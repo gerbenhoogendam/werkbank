@@ -302,6 +302,7 @@ struct GmailPanel: View {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }) else {
             return false
         }
+        MailDragState.shared.noteDropped()
         provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
             guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
             Task { @MainActor in

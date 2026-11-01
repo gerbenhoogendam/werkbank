@@ -896,6 +896,8 @@ struct DayColumn: View {
                 if !active { eventDrag?.cancel() }
             }
             .onDrop(of: [.gmailMessage], delegate: MailDropDelegate(hoverY: $mailHoverY, perform: handleMailDrop))
+            // Slepen afgebroken (Esc): de plek op de agenda verdwijnt ook, alsof er niets is gebeurd.
+            .onChange(of: MailDragState.shared.isDragging) { _, dragging in if !dragging { mailHoverY = nil } }
             .background(
                 Color.clear.preference(key: DayFrameKey.self, value: [day: geo.frame(in: .main)])
             )
@@ -1048,6 +1050,7 @@ struct DayColumn: View {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }) else {
             return false
         }
+        MailDragState.shared.noteDropped()
         let start = slotStart(forY: y)
         let end = Scheduling.defaultEnd(start: start, dayEnd: dayEnd)
         let day = day

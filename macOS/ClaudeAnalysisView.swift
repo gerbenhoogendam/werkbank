@@ -79,6 +79,7 @@ struct MailDropTarget<Icon: View>: View {
         .accessibilityLabel(label)
         .onDrop(of: [.gmailMessage], isTargeted: $isTargeted) { providers in
             for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) {
+                MailDragState.shared.noteDropped()
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
                     guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
                     Task { @MainActor in

@@ -1032,6 +1032,7 @@ enum GmailDrop {
                        context: ModelContext, appState: AppState) -> Bool {
         let matching = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier) }
         guard !matching.isEmpty else { return false }
+        MailDragState.shared.noteDropped()
         for provider in matching {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
                 guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
