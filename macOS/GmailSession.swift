@@ -196,12 +196,11 @@ final class GmailSession {
 
     /// Wat het paneel toont: de mailbox zelf, of alle mailboxen op datum.
     private func refreshVisible() {
-        if isCombined {
-            messages = combinedAccounts.flatMap { messageCache[$0] ?? [] }
-                .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
-        } else {
-            messages = messageCache[activeAccount ?? ""] ?? []
-        }
+        let visible = isCombined
+            ? combinedAccounts.flatMap { messageCache[$0] ?? [] }.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+            : messageCache[activeAccount ?? ""] ?? []
+        // Alleen toewijzen als er iets veranderde: verversen (elke twee minuten) tekent anders alle rijen opnieuw.
+        if visible != messages { messages = visible }
     }
 
     private func removeThreadFromLists(_ threadID: String) {
@@ -588,13 +587,14 @@ final class GmailSession {
                 return found.sorted { $0.0 < $1.0 }.map(\.1)
             }
             guard key.isEmpty || accounts.contains(key) else { return }   // intussen losgekoppeld
+            let changed = messageCache[key] != summaries
             messageCache[key] = summaries
             for summary in summaries {
                 messageAccount[summary.id] = key
                 messageAccount[summary.threadID] = key
             }
             refreshVisible()
-            saveInboxLater()
+            if changed { saveInboxLater() }
             lastError = nil
         } catch {
             if state == .signedIn, isCombined || key == (activeAccount ?? "") { lastError = error.localizedDescription }

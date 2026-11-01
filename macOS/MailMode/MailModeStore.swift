@@ -83,6 +83,8 @@ final class MailModeStore {
     @ObservationIgnored private var prefetchTask: Task<Void, Never>?
     @ObservationIgnored private var refreshLoop: Task<Void, Never>?
     @ObservationIgnored private var rankingTask: Task<Void, Never>?
+    /// Bijwerken mislukte en is gemeld: niet bij elke volgende poging opnieuw.
+    @ObservationIgnored private var reportedFailure = false
     /// De klant bij een mail, onthouden per mail (met de grootte van de klantenlijst, om te zien of die veranderde).
     @ObservationIgnored private var clientCache: [String: (mapSize: Int, name: String?)] = [:]
     @ObservationIgnored private var returnTask: Task<Void, Never>?
@@ -234,7 +236,7 @@ final class MailModeStore {
         client = nil
         if let account = folder.account, !accounts(of: newScope).contains(account) { folder = .inbox }
         selectedID = nil
-        Task { await reload() }
+        switchList()
     }
 
     func select(folder newFolder: MailFolder) {
@@ -242,7 +244,7 @@ final class MailModeStore {
         client = nil
         bundleOpen = false
         selectedID = nil
-        Task { await reload() }
+        switchList()
     }
 
     func refreshLabels() async {
@@ -251,7 +253,7 @@ final class MailModeStore {
                 group.addTask { [gmail] in (account, try? await gmail.userLabels(account: account)) }
             }
             for await (account, labels) in group {
-                if let labels { labelsByAccount[account] = labels }
+                if let labels, labelsByAccount[account] != labels { labelsByAccount[account] = labels }
             }
         }
     }
@@ -296,7 +298,24 @@ final class MailModeStore {
     func showClient(_ name: String?) {
         client = client == name ? nil : name
         selectedID = nil
+        switchList()
+    }
+
+    /// Een andere lijst gekozen: meteen de bewaarde lijst en de eerste mail (geen leeg leesvlak tot de taak loopt),
+    /// daarna bijwerken bij Gmail.
+    private func switchList() {
+        showStoredList()
+        if selectedID == nil { selectedID = listed.first?.id }
         Task { await reload() }
+    }
+
+    /// Toont wat er de vorige keer in deze lijst stond, als er een andere lijst gevraagd is dan er nu staat.
+    private func showStoredList() {
+        let key = listKey
+        guard key != shownKey else { return }
+        shownKey = key
+        items = MailListCache.shared.items(for: key) ?? []
+        loadError = nil
     }
 
     var isFiltering: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty || client != nil || !filters.isEmpty }
@@ -310,11 +329,7 @@ final class MailModeStore {
         loadToken += 1
         let token = loadToken
         let key = listKey
-        if key != shownKey {
-            shownKey = key
-            items = MailListCache.shared.items(for: key) ?? []
-            loadError = nil
-        }
+        showStoredList()
         // Meteen een mail open als er al een lijst staat (bij opnieuw openen is dat die van de vorige keer).
         if selectedID == nil { selectedID = listed.first?.id }
         let growsWhileLoading = items.isEmpty
@@ -341,7 +356,16 @@ final class MailModeStore {
             }
         }
         guard token == loadToken else { return }
-        items = result.items
+        if let error = result.error, result.items.isEmpty, !items.isEmpty {
+            // Gmail niet bereikbaar: de lijst die er staat (ook die van de vorige keer) laten staan en het één keer melden.
+            isLoading = false
+            if !reportedFailure { AppState.shared.announce("Mail bijwerken mislukt: \(error)", seconds: 4) }
+            reportedFailure = true
+            return
+        }
+        reportedFailure = false
+        // Alleen toewijzen als er iets veranderde: elke twee minuten verversen tekent anders de hele lijst opnieuw.
+        if items != result.items { items = result.items }
         if result.error == nil { MailListCache.shared.store(result.items, for: key) }
         loadError = items.isEmpty ? result.error : nil
         refreshTaskThreads()

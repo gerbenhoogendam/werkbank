@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Wat de mailmodus nodig heeft alvast buiten de hoofdthread inlezen, zodat hij meteen opent.
         MailActivityStore.shared.preload()
         MailListCache.shared.preload()
+        // WebKit alvast opstarten, zodat de eerste mail niet hoeft te wachten (niet tijdens het starten zelf).
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            WebKitWarmup.start()
+        }
 
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
         KeyboardShortcuts.onKeyUp(for: .quickEntry) {

@@ -707,6 +707,34 @@ private struct ThreadAnalysisView: View {
 
 // MARK: - HTML met meegroeiende hoogte
 
+/// Het eerste webvlak in de app start WebKit op (framework en hulpprocessen); dat kostte bij de eerste mail merkbaar
+/// tijd. Kort na het starten één leeg, verborgen vlak laden, en dat weer loslaten als de mails hun eigen vlakken hebben.
+@MainActor
+enum WebKitWarmup {
+    private static var view: WKWebView?
+    private static var releasing = false
+
+    static func start() {
+        guard view == nil, !releasing else { return }
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        let warm = WKWebView(frame: NSRect(x: 0, y: 0, width: 10, height: 10), configuration: configuration)
+        warm.loadHTMLString("<html><body></body></html>", baseURL: nil)
+        view = warm
+    }
+
+    /// Een mail heeft een eigen vlak: niet meer voorverwarmen, en het lege vlak na even loslaten.
+    static func firstViewCreated() {
+        guard !releasing else { return }
+        releasing = true
+        guard view != nil else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(10))
+            view = nil
+        }
+    }
+}
+
 /// Mail-HTML in een gesprek: zo hoog als de inhoud (gemeten na het laden), scrollen gaat naar het gesprek eromheen.
 struct AutoHeightMailWebView: NSViewRepresentable {
     let html: String
@@ -724,6 +752,7 @@ struct AutoHeightMailWebView: NSViewRepresentable {
         view.navigationDelegate = context.coordinator
         view.postsFrameChangedNotifications = true
         context.coordinator.observe(view)
+        WebKitWarmup.firstViewCreated()
         return view
     }
 
@@ -818,10 +847,10 @@ struct MailWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
-        let document = Self.document(html, allowRemote: allowRemote)
-        guard context.coordinator.lastDocument != document else { return }
-        context.coordinator.lastDocument = document
-        view.loadHTMLString(document, baseURL: nil)
+        // De invoer vergelijken; het document (met bewerkingen over de hele HTML) alleen bouwen als die anders is.
+        if let last = context.coordinator.lastInput, last.html == html, last.allowRemote == allowRemote { return }
+        context.coordinator.lastInput = (html, allowRemote)
+        view.loadHTMLString(Self.document(html, allowRemote: allowRemote), baseURL: nil)
     }
 
     static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
@@ -845,7 +874,7 @@ struct MailWebView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var lastDocument = ""
+        var lastInput: (html: String, allowRemote: Bool)?
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
