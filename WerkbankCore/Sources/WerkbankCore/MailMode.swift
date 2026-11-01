@@ -153,17 +153,20 @@ public struct MailActivityRecord: Codable, Equatable {
     /// Afzender, Aan en Cc, in kleine letters.
     public var addresses: [String]
     public var isSent: Bool
+    /// De mailbox waar de mail in staat (de klanten tellen alleen uit gekozen mailboxen).
+    public var account: String?
 
-    public init(id: String, date: Date, addresses: [String], isSent: Bool) {
+    public init(id: String, date: Date, addresses: [String], isSent: Bool, account: String? = nil) {
         self.id = id
         self.date = date
         self.addresses = addresses
         self.isSent = isSent
+        self.account = account
     }
 
-    public init?(_ item: GmailMailItem) {
+    public init?(_ item: GmailMailItem, account: String? = nil) {
         guard let date = item.date else { return nil }
-        self.init(id: item.id, date: date, addresses: item.addresses, isSent: item.isSent)
+        self.init(id: item.id, date: date, addresses: item.addresses, isSent: item.isSent, account: account)
     }
 }
 
@@ -184,6 +187,25 @@ public enum ClientActivity {
         }
     }
 
+    /// Domeinen van mailproviders: die zijn van iedereen, niet van het eigen bedrijf.
+    private static let publicMailDomains: Set<String> = [
+        "gmail.com", "googlemail.com", "outlook.com", "outlook.nl", "hotmail.com", "hotmail.nl", "live.com", "live.nl",
+        "msn.com", "icloud.com", "me.com", "mac.com", "yahoo.com", "ziggo.nl", "kpnmail.nl", "planet.nl", "xs4all.nl",
+        "proton.me", "protonmail.com",
+    ]
+
+    /// De domeinen van de eigen mailboxen (registreerbaar deel), zonder mailproviders.
+    public static func ownDomains(of addresses: [String]) -> Set<String> {
+        Set(addresses.compactMap { ClientNaming.domain(ofAddress: $0.lowercased()) }
+            .map { ClientNaming.registrableDomain(of: $0) }
+            .filter { !publicMailDomains.contains($0) })
+    }
+
+    private static func isOwnDomain(_ address: String, _ domains: Set<String>) -> Bool {
+        guard !domains.isEmpty, let host = ClientNaming.domain(ofAddress: address) else { return false }
+        return domains.contains(host) || domains.contains(ClientNaming.registrableDomain(of: host))
+    }
+
     /// De klant bij een adres via de klantenlijst (volledig domein, dan registreerbaar domein); `nil` als onbekend.
     public static func client(forAddress address: String, domainMap: [String: String]) -> String? {
         guard let host = ClientNaming.domain(ofAddress: address) else { return nil }
@@ -191,29 +213,34 @@ public enum ClientActivity {
     }
 
     /// Klanten met de meeste mail in de laatste `days` dagen bovenaan; elke mail telt één keer per klant. Eigen
-    /// adressen tellen niet mee.
+    /// adressen tellen niet mee, en ook geen adressen op een eigen domein (collega's: het eigen bedrijf is geen klant).
+    /// `excluded`: namen die je zelf hebt weggezet. `weekCount`: aantal staafjes (weken), oudste eerst.
     public static func ranking(records: [MailActivityRecord], domainMap: [String: String], ownAddresses: Set<String>,
-                               now: Date, days: Int = 30) -> [Rank] {
+                               ownDomains: Set<String> = [], excluded: Set<String> = [], now: Date, days: Int = 30,
+                               weekCount: Int = 4) -> [Rank] {
         let start = now.addingTimeInterval(-Double(days) * 86_400)
+        let bars = max(1, weekCount)
         var counts: [String: Int] = [:]
         var weeks: [String: [Int]] = [:]
         var last: [String: Date] = [:]
         var seen = Set<String>()
         for record in records where record.date >= start && record.date <= now.addingTimeInterval(3600) {
             guard seen.insert(record.id).inserted else { continue }
-            let clients = Set(record.addresses.filter { !ownAddresses.contains($0) }
-                .compactMap { client(forAddress: $0, domainMap: domainMap) })
+            let clients = Set(record.addresses
+                .filter { !ownAddresses.contains($0) && !isOwnDomain($0, ownDomains) }
+                .compactMap { client(forAddress: $0, domainMap: domainMap) }
+                .filter { !excluded.contains($0) })
             let age = max(0, now.timeIntervalSince(record.date))
-            let week = 3 - min(3, Int(age / (7 * 86_400)))
+            let week = bars - 1 - min(bars - 1, Int(age / (7 * 86_400)))
             for name in clients {
                 counts[name, default: 0] += 1
-                var row = weeks[name] ?? [0, 0, 0, 0]
+                var row = weeks[name] ?? Array(repeating: 0, count: bars)
                 row[week] += 1
                 weeks[name] = row
                 last[name] = max(last[name] ?? .distantPast, record.date)
             }
         }
-        return counts.map { Rank(name: $0.key, count: $0.value, weeks: weeks[$0.key] ?? [0, 0, 0, 0],
+        return counts.map { Rank(name: $0.key, count: $0.value, weeks: weeks[$0.key] ?? Array(repeating: 0, count: bars),
                                  lastContact: last[$0.key] ?? .distantPast) }
             .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name.localizedCompare($1.name) == .orderedAscending }
     }

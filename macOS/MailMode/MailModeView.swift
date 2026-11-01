@@ -71,6 +71,12 @@ struct MailModeView: View {
             store.closeSheet()
             return true
         }
+        // ⌘F: uitgebreid zoeken, ook vanuit een tekstveld.
+        if event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            store.openSheet(.search)
+            return true
+        }
         if window.firstResponder is NSText { return false }
         if event.keyCode == 53 {
             store.close()
@@ -191,6 +197,14 @@ private struct MailModeList: View {
                         .focused($searchFocused)
                         .onExitCommand { searchFocused = false }
                     KeyCap(key: MailModeKeys.key(for: .search))
+                    Button { store.openSheet(.search) } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.werk(size: 12, weight: .medium))
+                            .foregroundStyle(ThingsColor.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Uitgebreid zoeken (⌘F)")
+                    .accessibilityLabel("Uitgebreid zoeken")
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 32)
@@ -198,6 +212,16 @@ private struct MailModeList: View {
                 .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).strokeBorder(ThingsColor.separator))
 
                 WrapStack(spacing: 6) {
+                    if let mailboxes = store.searchAccounts {
+                        Button { store.clearSearchAccounts() } label: {
+                            HStack(spacing: 5) {
+                                Text(mailboxes.count == 1 ? GmailSession.shared.displayName(mailboxes[0])
+                                     : "\(mailboxes.count) mailboxen")
+                                Image(systemName: "xmark").font(.werk(size: 8, weight: .bold))
+                            }
+                        }
+                        .buttonStyle(MailFilterChipStyle(isOn: true))
+                    }
                     if let client = store.client {
                         Button { store.showClient(nil) } label: {
                             HStack(spacing: 5) {
@@ -559,7 +583,12 @@ private struct MailModeClients: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
-                ThemedHeading(title: "Klanten", detail: "Meeste mail · 30 dagen")
+                HStack(spacing: 6) {
+                    ThemedHeading(title: "Klanten", detail: updatedDetail)
+                    if MailActivityStore.shared.isSyncing {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .font(.werk(size: 11, weight: .medium))
@@ -592,6 +621,9 @@ private struct MailModeClients: View {
                                               isOn: store.client == rank.name) {
                                 store.showClient(rank.name)
                             }
+                            .contextMenu {
+                                Button("Geen klant") { store.excludeClient(rank.name) }
+                            }
                         }
                     }
                     .padding(8)
@@ -601,9 +633,16 @@ private struct MailModeClients: View {
         .background(ThingsColor.backgroundContent)
         .onChange(of: directory.domainMap) { _, _ in store.refreshRanking() }
     }
+
+    /// "3 maanden · vandaag 08:12": hoe ver terug en wanneer de lijst is bijgewerkt.
+    private var updatedDetail: String {
+        guard let date = MailActivityStore.shared.lastUpdate(for: GmailSession.shared.accounts) else { return "3 maanden" }
+        let day = Calendar.current.isDateInToday(date) ? "vandaag" : DutchDate.short(date)
+        return "3 maanden · \(day) \(DutchDate.time(date))"
+    }
 }
 
-/// Een klant met hoeveel mail er de laatste dertig dagen was, een balk en de vier weken als staafjes.
+/// Een klant met hoeveel mail er de laatste drie maanden was, een balk en de weken als staafjes.
 private struct ClientActivityRow: View {
     let rank: ClientActivity.Rank
     let position: Int
@@ -641,12 +680,12 @@ private struct ClientActivityRow: View {
                             .fixedSize()
                     }
                 }
-                HStack(alignment: .bottom, spacing: 2) {
+                HStack(alignment: .bottom, spacing: 1.5) {
                     let top = max(1, rank.weeks.max() ?? 1)
                     ForEach(Array(rank.weeks.enumerated()), id: \.offset) { index, value in
                         RoundedRectangle(cornerRadius: 1)
                             .fill(index == rank.weeks.count - 1 ? ThingsColor.accent : ThingsColor.accent.opacity(0.35))
-                            .frame(width: 4, height: max(2, 20 * CGFloat(value) / CGFloat(top)))
+                            .frame(width: 3, height: max(2, 20 * CGFloat(value) / CGFloat(top)))
                     }
                 }
                 .frame(height: 20, alignment: .bottom)
@@ -658,7 +697,7 @@ private struct ClientActivityRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(rank.name), \(rank.count) mails in dertig dagen")
+        .accessibilityLabel("\(rank.name), \(rank.count) mails in drie maanden")
     }
 }
 

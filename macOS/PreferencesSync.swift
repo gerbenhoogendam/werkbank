@@ -22,7 +22,7 @@ final class PreferencesSync {
         "gmail.displayNames", ClaudeSettings.modelKey, ClaudeSettings.contextKey,
         FoldSpeed.windowOpen.key, FoldSpeed.windowClose.key, FoldSpeed.mailOpen.key, FoldSpeed.mailClose.key,
         FoldSpeed.send.key, MailModeKeys.storageKey, FollowUpStore.itemsKey, FollowUpStore.returnedKey,
-        MailModeStore.bulkRulesKey,
+        MailModeStore.bulkRulesKey, MailClientSettings.accountsKey, MailClientSettings.excludedKey,
     ]).union(ThemeStore.Key.all)
     private static let calendarColorsKey = "calendar.colors"
     /// Alleen op deze Mac.
@@ -188,6 +188,7 @@ final class PreferencesSync {
         GmailSession.shared.reloadDisplayNames()
         FollowUpStore.shared.reload()
         MailModeStore.shared.reloadBulkRules()
+        MailModeStore.shared.refreshRanking()
         AppearanceSetting.applyStored()
         ThemeStore.shared.reload()
     }

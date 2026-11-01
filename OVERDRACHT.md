@@ -282,6 +282,22 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 - `SplitDivider` (`macOS/MainView.swift`) heeft een greepje in het midden, ook in thema's met losse vlakken waar de lijn
   zelf onzichtbaar is. Het Mail-paneel links mag tot 720 pt breed (was 480).
 
+## Klanten en zoeken in de mailmodus (D2 en ⌘F, 1 nov)
+
+- **Klanten rechts** (`MailModeStore.refreshRanking`, `MailActivityStore`, `ClientActivity` in WerkbankCore): drie
+  maanden, 13 weekstaafjes. Alleen mail uit de gekozen mailboxen (`MailClientSettings`, Voorkeuren › Mail; zolang er
+  niets gekozen is: de mailboxen met de naam GH, Support en Info, anders alle). Adressen op een eigen domein (de
+  domeinen van je mailboxen, behalve gmail.com en dergelijke) tellen niet: het eigen bedrijf is geen klant.
+  Rechtermuisknop "Geen klant" zet een klant weg (terug in Voorkeuren › Mail). De mailactiviteit staat per mailbox in
+  Application Support/Werkbank/MailActivity.json, gaat 92 dagen terug en wordt hooguit één keer per dag bijgewerkt
+  (`syncIfStale`); een oud bestand zonder mailbox per mail wordt één keer opnieuw opgehaald.
+- **Uitgebreid zoeken** (⌘F of het schuifjes-icoon naast het zoekveld; `MailSearchSheet`, `MailSearchForm` in
+  WerkbankCore): woorden, zonder woorden, van, aan/cc (namen of adressen, komma's), onderwerp, periode, bijlage en
+  bestandsnaam, ongelezen, ster, ook spam en prullenbak, en welke mailboxen. De zoekopdracht komt in het zoekveld;
+  een eigen keuze van mailboxen staat als knopje onder het zoekveld.
+- Bladen in de stijl van het concept: titel met grijze toelichting, gegroepeerde lijsten (`SheetList`), Annuleren als
+  tekst en de handeling als donkere knop (`SheetButtonStyle`).
+
 ## Open punten
 
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in

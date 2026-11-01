@@ -108,8 +108,10 @@ public enum MailSearch {
         }
         let wholeMailbox = !domains.isEmpty || (!trimmed.isEmpty && folder == .inbox)
         let labels = wholeMailbox ? [] : [folder.labelID].compactMap { $0 }
+        // "in:anywhere" (uitgebreid zoeken, ook spam en prullenbak) werkt alleen als Gmail die meeneemt.
+        let anywhere = trimmed.range(of: "in:anywhere", options: .caseInsensitive) != nil
         return MailListRequest(query: parts.joined(separator: " "), labelIDs: labels,
-                               includeSpamTrash: !wholeMailbox && folder.includesSpamTrash)
+                               includeSpamTrash: anywhere || (!wholeMailbox && folder.includesSpamTrash))
     }
 }
 
@@ -124,5 +126,106 @@ public enum MailFolders {
             }
             return left.count < right.count
         }
+    }
+}
+
+// MARK: - Uitgebreid zoeken (⌘F in de mailmodus)
+
+/// Het zoekvenster: velden die samen een zoekopdracht in de zoektaal van Gmail worden.
+public struct MailSearchForm: Codable, Equatable {
+    public enum Period: String, Codable, CaseIterable, Identifiable {
+        case any, week, month, quarter, year
+
+        public var id: String { rawValue }
+
+        public var title: String {
+            switch self {
+            case .any: "Altijd"
+            case .week: "7 dagen"
+            case .month: "30 dagen"
+            case .quarter: "3 maanden"
+            case .year: "1 jaar"
+            }
+        }
+
+        var days: Int? {
+            switch self {
+            case .any: nil
+            case .week: 7
+            case .month: 30
+            case .quarter: 91
+            case .year: 365
+            }
+        }
+    }
+
+    /// Woorden die erin moeten staan (Gmail-zoektaal mag ook).
+    public var words = ""
+    /// Woorden die er niet in mogen staan.
+    public var exclude = ""
+    /// Namen of adressen van de afzender, gescheiden door komma's.
+    public var from = ""
+    /// Namen of adressen in Aan of Cc, gescheiden door komma's.
+    public var to = ""
+    public var subject = ""
+    public var hasAttachment = false
+    /// Naam of soort van een bijlage ("offerte", "pdf").
+    public var attachmentName = ""
+    public var unread = false
+    public var starred = false
+    public var period: Period = .any
+    /// Ook spam en prullenbak.
+    public var includeSpamTrash = false
+
+    public init() {}
+
+    public var isEmpty: Bool { self == MailSearchForm() }
+
+    public func query(now: Date = Date(), calendar: Calendar = .current) -> String {
+        var parts: [String] = []
+        let words = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !words.isEmpty { parts.append(words) }
+        parts += Self.tokens(exclude).map { "-" + $0 }
+        let senders = Self.people(from)
+        if senders.count == 1 { parts.append("from:" + senders[0]) }
+        if senders.count > 1 { parts.append("{" + senders.map { "from:" + $0 }.joined(separator: " ") + "}") }
+        let receivers = Self.people(to)
+        if !receivers.isEmpty {
+            parts.append("{" + receivers.flatMap { ["to:" + $0, "cc:" + $0] }.joined(separator: " ") + "}")
+        }
+        let subject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !subject.isEmpty { parts.append("subject:(\(subject))") }
+        let file = attachmentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hasAttachment || !file.isEmpty { parts.append("has:attachment") }
+        if !file.isEmpty { parts.append("filename:" + Self.quoted(file)) }
+        if unread { parts.append("is:unread") }
+        if starred { parts.append("is:starred") }
+        if let days = period.days, let start = calendar.date(byAdding: .day, value: -days, to: now) {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = calendar
+            formatter.timeZone = calendar.timeZone
+            formatter.dateFormat = "yyyy/MM/dd"
+            parts.append("after:" + formatter.string(from: start))
+        }
+        if includeSpamTrash { parts.append("in:anywhere") }
+        return parts.joined(separator: " ")
+    }
+
+    /// Losse woorden, of woorden tussen aanhalingstekens als één geheel.
+    static func tokens(_ text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #""[^"]+"|[^\s,]+"#) else { return [] }
+        let ns = text as NSString
+        return regex.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+    }
+
+    /// Namen of adressen, gescheiden door komma's; een naam met spaties tussen aanhalingstekens.
+    static func people(_ text: String) -> [String] {
+        text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.map(quoted)
+    }
+
+    static func quoted(_ text: String) -> String {
+        guard text.contains(" "), !text.hasPrefix("\"") else { return text }
+        return "\"" + text.replacingOccurrences(of: "\"", with: "") + "\""
     }
 }

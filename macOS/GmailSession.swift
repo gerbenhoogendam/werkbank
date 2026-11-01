@@ -559,13 +559,15 @@ final class GmailSession {
         return await mailItems(ids: refs.map(\.id), account: account, headers: GmailAPI.mailItemHeaders)
     }
 
-    /// Alle mail (ook verzonden en gearchiveerd) sinds `since`, met alleen afzender en ontvangers: voor de klanten op
-    /// volgorde van contact en het aanvullen van adressen. Hooguit `limit` mails.
-    func activityItems(since: Date, account: String?, limit: Int = 400) async -> [GmailMailItem] {
+    /// Alle mail (ook verzonden en gearchiveerd) sinds `since` (en vóór `until`), met alleen afzender en ontvangers:
+    /// voor de klanten op volgorde van contact en het aanvullen van adressen. Hooguit `limit` mails.
+    func activityItems(since: Date, until: Date? = nil, account: String?, limit: Int = 400) async -> [GmailMailItem] {
         var refs: [GmailAPI.MessageRef] = []
         var pageToken: String?
+        var search = "after:\(Int(since.timeIntervalSince1970))"
+        if let until { search += " before:\(Int(until.timeIntervalSince1970))" }
         repeat {
-            var query = [URLQueryItem(name: "q", value: "after:\(Int(since.timeIntervalSince1970))"),
+            var query = [URLQueryItem(name: "q", value: search),
                          URLQueryItem(name: "maxResults", value: "200")]
             if let pageToken { query.append(URLQueryItem(name: "pageToken", value: pageToken)) }
             guard let data = try? await api("messages", query: query, account: account) else { break }

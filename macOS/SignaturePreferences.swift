@@ -54,6 +54,8 @@ struct SignaturePreferences: View {
 
             DefaultMailAppSection()
 
+            MailClientsSection()
+
             MailModeKeysSection()
 
             if !MailModeStore.shared.bulkRules.isEmpty {
@@ -215,5 +217,46 @@ private struct MailModeKeysSection: View {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         recording = nil
+    }
+}
+
+/// Voorkeuren › Mail: uit welke mailboxen de klanten rechts in de mailmodus komen, en wie geen klant is.
+private struct MailClientsSection: View {
+    private let gmail = GmailSession.shared
+    @State private var counted: Set<String> = []
+    @State private var excluded: [String] = []
+
+    var body: some View {
+        Section("Klanten in de mailmodus") {
+            ForEach(gmail.accounts, id: \.self) { account in
+                Toggle(isOn: Binding(get: { counted.contains(account) }, set: { set(account, $0) })) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(gmail.displayName(account))
+                        Text(account).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+            ForEach(excluded, id: \.self) { name in
+                LabeledContent(name) {
+                    Button("Weer als klant") {
+                        MailClientSettings.setExcluded(name, false)
+                        refresh()
+                    }
+                }
+            }
+        }
+        .onAppear(perform: refresh)
+    }
+
+    private func set(_ account: String, _ on: Bool) {
+        MailClientSettings.setCounts(account, on)
+        refresh()
+    }
+
+    private func refresh() {
+        counted = Set(MailClientSettings.accounts)
+        excluded = MailClientSettings.excluded
+        MailModeStore.shared.refreshRanking()
     }
 }

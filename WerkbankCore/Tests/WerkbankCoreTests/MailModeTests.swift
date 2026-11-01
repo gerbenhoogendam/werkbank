@@ -69,4 +69,29 @@ final class MailModeTests: XCTestCase {
         XCTAssertEqual(ranking[1].weeks, [0, 1, 0, 0])
         XCTAssertEqual(ClientActivity.client(forAddress: "ruud@mail.vandijk.nl", domainMap: map), "Van Dijk")
     }
+
+    func testRankingOverThreeMonthsWithoutOwnCompanyAndExcluded() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let day = 86_400.0
+        let map = ["vandijk.nl": "Van Dijk", "itgsolutions.nl": "ITG Solutions BV", "bakkerijsmit.nl": "Bakkerij Smit"]
+        let accounts = ["support@itgsolutions.nl", "gerben@gmail.com"]
+        let own = Set(accounts)
+        let domains = ClientActivity.ownDomains(of: accounts)
+        XCTAssertEqual(domains, ["itgsolutions.nl"])
+        let records = [
+            // Een collega in de cc: het eigen bedrijf telt niet als klant.
+            MailActivityRecord(id: "1", date: now.addingTimeInterval(-2 * day),
+                               addresses: ["eva@vandijk.nl", "collega@itgsolutions.nl", "support@itgsolutions.nl"], isSent: false),
+            MailActivityRecord(id: "2", date: now.addingTimeInterval(-80 * day), addresses: ["eva@vandijk.nl"], isSent: false),
+            MailActivityRecord(id: "3", date: now.addingTimeInterval(-10 * day), addresses: ["jan@bakkerijsmit.nl"], isSent: false),
+            MailActivityRecord(id: "4", date: now.addingTimeInterval(-100 * day), addresses: ["jan@bakkerijsmit.nl"], isSent: false),
+        ]
+        let ranking = ClientActivity.ranking(records: records, domainMap: map, ownAddresses: own, ownDomains: domains,
+                                             excluded: ["Bakkerij Smit"], now: now, days: 90, weekCount: 13)
+        XCTAssertEqual(ranking.map(\.name), ["Van Dijk"])
+        XCTAssertEqual(ranking.first?.count, 2)
+        XCTAssertEqual(ranking.first?.weeks.count, 13)
+        XCTAssertEqual(ranking.first?.weeks.last, 1)
+        XCTAssertEqual(ranking.first?.weeks[1], 1)   // 80 dagen geleden: week 11 terug
+    }
 }

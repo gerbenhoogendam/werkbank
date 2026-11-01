@@ -62,6 +62,10 @@ final class MailModeStore {
     private(set) var sheet: MailModeSheet?
     /// Datums en tijden in een mail (zonder het geciteerde deel), per mail.
     private(set) var proposalsByID: [String: [DateProposal]] = [:]
+    /// Het laatste uitgebreide zoeken (⌘F), om het zoekvenster weer mee te openen.
+    private(set) var searchForm = MailSearchForm()
+    /// Uitgebreid zoeken in een eigen keuze van mailboxen (nil: het gekozen bereik).
+    private(set) var searchAccounts: [String]?
     /// Afzenders, domeinen en soorten mail die nooit mee gaan bij archiveren in één keer (gaat mee naar je andere Macs).
     private(set) var bulkRules: [BulkRule] = MailBulk.decode(UserDefaults.standard.data(forKey: MailModeStore.bulkRulesKey))
     static let bulkRulesKey = "mailMode.bulkRules"
@@ -174,6 +178,7 @@ final class MailModeStore {
 
     func setQuery(_ text: String) {
         query = text
+        if text.trimmingCharacters(in: .whitespaces).isEmpty { searchAccounts = nil }
         searchTask?.cancel()
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(450))
@@ -215,15 +220,19 @@ final class MailModeStore {
         }
         var found: [GmailMailItem] = []
         var failure: String?
+        var activityChanged = false
         if filters.contains(.waiting) {
             found = await waitingItems()
         } else {
             let request = MailSearch.request(text: query, folder: folder, attachment: filters.contains(.attachment),
                                              unread: filters.contains(.unread), clientDomains: domains)
-            let targets: [String?] = client != nil ? accounts(of: .all) : (folder.account.map { [$0] } ?? accounts(of: scope))
+            var targets: [String?] = client != nil ? accounts(of: .all) : (folder.account.map { [$0] } ?? accounts(of: scope))
+            if let searchAccounts, client == nil { targets = searchAccounts.map { $0 } }
             for account in targets {
                 do {
-                    found += try await gmail.mailItems(request, account: account)
+                    let items = try await gmail.mailItems(request, account: account)
+                    found += items
+                    if MailActivityStore.shared.add(items, account: account) { activityChanged = true }
                 } catch {
                     failure = failure ?? error.localizedDescription
                 }
@@ -237,7 +246,7 @@ final class MailModeStore {
         refreshTaskThreads()
         isLoading = false
         if selected == nil { selectedID = listed.first?.id }
-        if MailActivityStore.shared.add(found) { refreshRanking() }
+        if activityChanged { refreshRanking() }
     }
 
     /// De gesprekken waarop een antwoord wordt verwacht (opvolgen), met de nieuwste mail van elk.
@@ -455,7 +464,7 @@ final class MailModeStore {
     // MARK: Bladen
 
     func openSheet(_ kind: MailModeSheet) {
-        guard selected != nil || kind == .bulk else { return }
+        guard selected != nil || !kind.needsMail else { return }
         sheet = kind
     }
 
@@ -477,26 +486,75 @@ final class MailModeStore {
 
     // MARK: Klanten
 
+    /// Aantal weken (staafjes) in de klantenlijst: drie maanden.
+    static let clientWeeks = 13
+
     /// De klanten in de lijst rechts: op volgorde van contact; met een zoekterm alle klanten uit de klantenlijst die
-    /// erbij passen, ook zonder mail in de laatste dertig dagen.
+    /// erbij passen, ook zonder mail in de laatste drie maanden.
     var clientRows: [ClientActivity.Rank] {
         let term = clientQuery.trimmingCharacters(in: .whitespaces)
         guard !term.isEmpty else { return ranking }
         let byName = Dictionary(ranking.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
-        return ClientList.search(term, in: ClientDirectory.shared.records, limit: 40).map { record in
-            byName[record.name] ?? ClientActivity.Rank(name: record.name, count: 0, weeks: [0, 0, 0, 0], lastContact: .distantPast)
-        }
+        let excluded = Set(MailClientSettings.excluded)
+        return ClientList.search(term, in: ClientDirectory.shared.records, limit: 40)
+            .filter { !excluded.contains($0.name) }
+            .map { record in
+                byName[record.name] ?? ClientActivity.Rank(name: record.name, count: 0,
+                                                           weeks: Array(repeating: 0, count: Self.clientWeeks),
+                                                           lastContact: .distantPast)
+            }
     }
 
+    /// De klantenlijst uit wat er bewaard is; bijwerken bij Gmail hooguit één keer per dag.
     func refreshClients() async {
         await ClientDirectory.shared.refresh()
         refreshRanking()
-        if await MailActivityStore.shared.sync() { refreshRanking() }
+        if await MailActivityStore.shared.syncIfStale() { refreshRanking() }
     }
 
+    /// Drie maanden, alleen uit de gekozen mailboxen; het eigen bedrijf (de domeinen van je mailboxen) en klanten die je
+    /// hebt weggezet tellen niet.
     func refreshRanking() {
-        ranking = ClientActivity.ranking(records: MailActivityStore.shared.records, domainMap: ClientDirectory.shared.domainMap,
-                                         ownAddresses: gmail.ownAddresses, now: .now)
+        MailActivityStore.shared.loadIfNeeded()
+        let counted = Set(MailClientSettings.accounts)
+        let records = MailActivityStore.shared.records.filter { record in record.account.map { counted.contains($0) } ?? false }
+        ranking = ClientActivity.ranking(records: records, domainMap: ClientDirectory.shared.domainMap,
+                                         ownAddresses: gmail.ownAddresses,
+                                         ownDomains: ClientActivity.ownDomains(of: gmail.accounts),
+                                         excluded: Set(MailClientSettings.excluded), now: .now,
+                                         days: Int(MailActivityStore.historyDays) - 1, weekCount: Self.clientWeeks)
+    }
+
+    /// Rechtermuisknop op een klant: geen klant (bijvoorbeeld een leverancier).
+    func excludeClient(_ name: String) {
+        MailClientSettings.setExcluded(name, true)
+        if client == name { showClient(nil) }
+        refreshRanking()
+    }
+
+    // MARK: Uitgebreid zoeken
+
+    /// Zoeken uit het zoekvenster (⌘F): de zoekopdracht komt in het zoekveld, in alle mail van de gekozen mailboxen.
+    func applySearch(_ form: MailSearchForm, mailboxes: [String]) {
+        searchForm = form
+        let inScope = accounts(of: scope).compactMap { $0 }
+        searchAccounts = Set(mailboxes) == Set(inScope) ? nil : mailboxes
+        folder = .inbox
+        client = nil
+        bundleOpen = false
+        query = form.query()
+        searchTask?.cancel()
+        selectedID = nil
+        sheet = nil
+        Task { await reload() }
+    }
+
+    /// De mailboxen waarin nu wordt gezocht (voor het zoekvenster).
+    var searchAccountChoice: [String] { searchAccounts ?? accounts(of: scope).compactMap { $0 } }
+
+    func clearSearchAccounts() {
+        searchAccounts = nil
+        Task { await reload() }
     }
 }
 
@@ -517,5 +575,38 @@ final class MailReplyTrigger {
 
     func reply(_ mode: ComposeRef.Mode = .replyAll, text: String? = nil, attachments: [MailAttachment] = []) {
         request = Request(mode: mode, text: text, attachments: attachments)
+    }
+}
+
+/// Welke mailboxen meetellen voor de klanten rechts in de mailmodus, en welke klanten geen klant zijn. Gaat mee naar je
+/// andere Macs.
+@MainActor
+enum MailClientSettings {
+    static let accountsKey = "mailMode.clientAccounts"
+    static let excludedKey = "mailMode.excludedClients"
+
+    /// De gekozen mailboxen. Zolang je niets kiest: GH, Support en Info als die er zijn, anders alle.
+    static var accounts: [String] {
+        let gmail = GmailSession.shared
+        if let stored = UserDefaults.standard.stringArray(forKey: accountsKey) {
+            return gmail.accounts.filter { stored.contains($0) }
+        }
+        let named = gmail.accounts.filter { ["gh", "support", "info"].contains(gmail.displayName($0).lowercased()) }
+        return named.isEmpty ? gmail.accounts : named
+    }
+
+    static func setCounts(_ account: String, _ counts: Bool) {
+        var list = accounts
+        list.removeAll { $0 == account }
+        if counts { list.append(account) }
+        UserDefaults.standard.set(list, forKey: accountsKey)
+    }
+
+    static var excluded: [String] { UserDefaults.standard.stringArray(forKey: excludedKey) ?? [] }
+
+    static func setExcluded(_ name: String, _ isExcluded: Bool) {
+        var list = excluded.filter { $0 != name }
+        if isExcluded { list.append(name) }
+        UserDefaults.standard.set(list, forKey: excludedKey)
     }
 }

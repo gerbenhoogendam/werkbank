@@ -9,8 +9,10 @@ enum MailModeSheet: Equatable {
     case task, time, plan, follow, concept
     /// Nieuwsbrieven en meldingen in één keer archiveren.
     case bulk
+    /// Uitgebreid zoeken (⌘F).
+    case search
 
-    var needsMail: Bool { self != .bulk }
+    var needsMail: Bool { self != .bulk && self != .search }
 }
 
 struct MailModeSheetHost: View {
@@ -25,13 +27,15 @@ struct MailModeSheetHost: View {
             Group {
                 if sheet == .bulk {
                     MailBulkSheet()
+                } else if sheet == .search {
+                    MailSearchSheet()
                 } else if let item {
                     switch sheet {
                     case .task: MailTaskSheet(item: item)
                     case .time: MailTimeSheet(item: item)
                     case .plan: MailPlanSheet(item: item)
                     case .follow: MailFollowSheet(item: item)
-                    case .concept, .bulk: MailConceptSheet(item: item)
+                    case .concept, .bulk, .search: MailConceptSheet(item: item)
                     }
                 }
             }
@@ -46,32 +50,80 @@ struct MailModeSheetHost: View {
 private struct SheetFrame<Content: View, Buttons: View>: View {
     let title: String
     let systemImage: String
+    /// Grijs naast de titel ("Alle mail").
+    var detail: String? = nil
     var width: CGFloat = 520
     @ViewBuilder let content: Content
     @ViewBuilder let buttons: Buttons
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: systemImage)
                     .font(.werk(size: 15, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
                 Text(title)
-                    .font(.werk(size: 16, weight: .semibold))
+                    .font(.werk(size: 18, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                if let detail {
+                    Text(detail)
+                        .font(.werk(size: 13))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                }
             }
-            .foregroundStyle(ThingsColor.textPrimary)
             content
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 buttons
             }
-            .padding(.top, 2)
+            .padding(.top, 4)
         }
-        .padding(20)
+        .padding(22)
         .frame(width: width)
         .background(RoundedRectangle(cornerRadius: max(4, MailModeMetrics.radius + 4), style: .continuous)
             .fill(ThingsColor.backgroundContent)
             .shadow(color: .black.opacity(0.25), radius: 30, y: 12))
         .overlay(RoundedRectangle(cornerRadius: max(4, MailModeMetrics.radius + 4), style: .continuous)
             .strokeBorder(ThingsColor.separator))
+    }
+}
+
+/// De knoppen onder een blad: de handeling als donker vlak, Annuleren als tekst, andere keuzes met een rand.
+struct SheetButtonStyle: ButtonStyle {
+    enum Kind { case primary, secondary, plain }
+    var kind: Kind = .secondary
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: max(6, MailModeMetrics.radius + 2), style: .continuous)
+        return configuration.label
+            .font(.werk(size: 13.5, weight: kind == .primary ? .semibold : .medium))
+            .foregroundStyle(kind == .primary ? ThingsColor.backgroundContent : ThingsColor.textPrimary)
+            .padding(.horizontal, kind == .plain ? 10 : 16)
+            .frame(height: 34)
+            .background(shape.fill(kind == .primary ? ThingsColor.textPrimary
+                                   : (kind == .secondary ? ThingsColor.cardBackground : Color.clear)))
+            .overlay(shape.strokeBorder(kind == .secondary ? ThingsColor.separator : Color.clear))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
+            .contentShape(shape)
+    }
+}
+
+/// Een lijst in een blad: rijen onder elkaar met een lijntje ertussen, in een vlak met een rand.
+private struct SheetList<Item, Row: View>: View {
+    let items: [Item]
+    @ViewBuilder let row: (Item) -> Row
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: max(6, MailModeMetrics.radius + 2), style: .continuous)
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                if index > 0 { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+                row(item)
+            }
+        }
+        .background(shape.fill(ThingsColor.backgroundContent))
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(ThingsColor.separator))
     }
 }
 
@@ -146,11 +198,11 @@ private struct MailTaskSheet: View {
         } buttons: {
             Spacer(minLength: 0)
             Button("Annuleren") { store.closeSheet() }
-                .buttonStyle(MailModeButtonStyle())
+                .buttonStyle(SheetButtonStyle(kind: .plain))
             Button("Alleen taak") { make(archive: false) }
-                .buttonStyle(MailModeButtonStyle())
+                .buttonStyle(SheetButtonStyle())
             Button("Taak maken en archiveren") { make(archive: true) }
-                .buttonStyle(MailModeButtonStyle(prominent: true))
+                .buttonStyle(SheetButtonStyle(kind: .primary))
                 .keyboardShortcut(.defaultAction)
         }
         .onAppear {
@@ -219,9 +271,9 @@ private struct MailTimeSheet: View {
         } buttons: {
             Spacer(minLength: 0)
             Button("Annuleren") { store.closeSheet() }
-                .buttonStyle(MailModeButtonStyle())
+                .buttonStyle(SheetButtonStyle(kind: .plain))
             Button("Schrijven en archiveren", action: write)
-                .buttonStyle(MailModeButtonStyle(prominent: true))
+                .buttonStyle(SheetButtonStyle(kind: .primary))
         }
         .onAppear {
             client = store.clientName(for: item) ?? ""
@@ -341,12 +393,12 @@ private struct MailPlanSheet: View {
             }
         } buttons: {
             Button("Vrije momenten in antwoord", action: freeInReply)
-                .buttonStyle(MailModeButtonStyle())
+                .buttonStyle(SheetButtonStyle())
             Spacer(minLength: 8)
             Button("Annuleren") { store.closeSheet() }
-                .buttonStyle(MailModeButtonStyle())
+                .buttonStyle(SheetButtonStyle(kind: .plain))
             Button(invite && guest != nil ? "Inplannen en antwoorden" : "Inplannen en archiveren", action: plan)
-                .buttonStyle(MailModeButtonStyle(prominent: true))
+                .buttonStyle(SheetButtonStyle(kind: .primary))
                 .keyboardShortcut(.defaultAction)
         }
         .task { await load() }
@@ -602,9 +654,9 @@ private struct MailFollowSheet: View {
         } buttons: {
             Spacer(minLength: 0)
             Button("Annuleren") { store.closeSheet() }
-                .buttonStyle(MailModeButtonStyle())
+                .buttonStyle(SheetButtonStyle(kind: .plain))
             Button(snooze == nil ? "Archiveren en opvolgen" : "Archiveren tot \(Self.when(snooze ?? .now))", action: confirm)
-                .buttonStyle(MailModeButtonStyle(prominent: true))
+                .buttonStyle(SheetButtonStyle(kind: .primary))
                 .keyboardShortcut(.defaultAction)
         }
     }
@@ -729,14 +781,14 @@ private struct MailConceptSheet: View {
                 concept.cancel()
                 store.closeSheet()
             }
-            .buttonStyle(MailModeButtonStyle())
+            .buttonStyle(SheetButtonStyle(kind: .plain))
             Button("In antwoord zetten") {
                 let text = edited ?? concept.text
                 concept.cancel()
                 store.closeSheet()
                 store.replyTrigger.reply(text: text)
             }
-            .buttonStyle(MailModeButtonStyle(prominent: true))
+            .buttonStyle(SheetButtonStyle(kind: .primary))
             .disabled((edited ?? concept.text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .onAppear { restart(.normal) }
@@ -766,39 +818,49 @@ private struct MailBulkSheet: View {
     var body: some View {
         let groups = MailBulk.groups(store.bundle).map(SenderGroup.init)
         let chosen = groups.filter { !skipped.contains($0.id) }.flatMap(\.items)
-        SheetFrame(title: "Nieuwsbrieven en meldingen archiveren", systemImage: "tray.full", width: 620) {
+        SheetFrame(title: "Nieuwsbrieven en meldingen", systemImage: "tray.full", detail: store.title(of: store.scope),
+                   width: 640) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(groups) { group in row(group) }
-                }
+                SheetList(items: groups) { group in row(group) }
             }
-            .frame(maxHeight: 380)
-            .fixedSize(horizontal: false, vertical: groups.count < 7)
+            .frame(maxHeight: 360)
+            .fixedSize(horizontal: false, vertical: groups.count < 6)
             if !store.bulkRules.isEmpty {
-                SheetField(label: "Nooit in één keer") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(store.bulkRules) { rule in
-                            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Nooit in één keer", systemImage: "lock")
+                        .font(.werk(size: 12.5, weight: .semibold))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                    ForEach(store.bulkRules) { rule in
+                        HStack(spacing: 12) {
+                            Initials(text: rule.title)
+                            VStack(alignment: .leading, spacing: 1) {
                                 Text(rule.title)
-                                    .font(.werk(size: 12.5))
+                                    .font(.werk(size: 13.5, weight: .semibold))
                                     .foregroundStyle(ThingsColor.textPrimary)
-                                Spacer(minLength: 8)
-                                Button("Weer meenemen") { store.removeBulkRule(rule) }
-                                    .buttonStyle(MailModeButtonStyle())
+                                Text(rule.field == .sender ? "Afzender" : (rule.field == .domain ? "Domein" : "Soort"))
+                                    .font(.werk(size: 12))
+                                    .foregroundStyle(ThingsColor.textSecondary)
                             }
+                            Spacer(minLength: 8)
+                            Button("Weer meenemen") { store.removeBulkRule(rule) }
+                                .buttonStyle(SheetButtonStyle())
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: max(6, MailModeMetrics.radius + 2), style: .continuous)
+                            .fill(ThingsColor.backgroundSidebar))
                     }
                 }
             }
         } buttons: {
             Spacer(minLength: 0)
             Button("Annuleren") { store.closeSheet() }
-                .buttonStyle(MailModeButtonStyle())
-            Button(chosen.count == 1 ? "1 mail archiveren" : "\(chosen.count) mails archiveren") {
+                .buttonStyle(SheetButtonStyle(kind: .plain))
+            Button(chosen.count == 1 ? "Archiveer 1 mail" : "Archiveer \(chosen.count) mails") {
                 store.closeSheet()
                 store.archiveBulk(chosen, appState: appState)
             }
-            .buttonStyle(MailModeButtonStyle(prominent: true))
+            .buttonStyle(SheetButtonStyle(kind: .primary))
             .keyboardShortcut(.defaultAction)
             .disabled(chosen.isEmpty)
         }
@@ -811,21 +873,16 @@ private struct MailBulkSheet: View {
     private func row(_ group: SenderGroup) -> some View {
         let isOn = !skipped.contains(group.id)
         let kind = store.kind(of: group.first)
-        return HStack(alignment: .top, spacing: 10) {
+        return HStack(alignment: .center, spacing: 12) {
             Toggle("", isOn: Binding(get: { isOn }, set: { _ in toggle(group.id) }))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
+            Initials(text: group.first.senderDisplay)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(group.first.senderDisplay)
-                        .font(.werk(size: 13, weight: .semibold))
+                        .font(.werk(size: 13.5, weight: .semibold))
                         .foregroundStyle(ThingsColor.textPrimary)
-                    if group.items.count > 1 {
-                        Text("\(group.items.count)")
-                            .font(.werk(size: 11, weight: .semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(ThingsColor.textSecondary)
-                    }
                     Text(kind.title)
                         .font(.werk(size: 10.5, weight: .medium))
                         .foregroundStyle(ThingsColor.tagText)
@@ -839,8 +896,12 @@ private struct MailBulkSheet: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
+            Text(group.items.count == 1 ? "1 mail" : "\(group.items.count) mails")
+                .font(.werk(size: 12.5))
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textSecondary)
             Menu { menu(group, kind: kind) } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
                     .font(.werk(size: 13))
                     .foregroundStyle(ThingsColor.textSecondary)
             }
@@ -849,11 +910,10 @@ private struct MailBulkSheet: View {
             .fixedSize()
             .accessibilityLabel("Meer")
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
         .opacity(isOn ? 1 : 0.55)
-        .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-            .fill(isOn ? Color.clear : ThingsColor.backgroundSidebar))
+        .background(isOn ? Color.clear : ThingsColor.backgroundSidebar)
         .contentShape(Rectangle())
         .onTapGesture { toggle(group.id) }
         .contextMenu { menu(group, kind: kind) }
@@ -872,5 +932,139 @@ private struct MailBulkSheet: View {
         Button(kind == .newsletter ? "Nieuwsbrieven nooit in één keer" : "Meldingen nooit in één keer") {
             store.addBulkRule(.kind(kind))
         }
+    }
+}
+
+/// Beginletters in een grijs vlak (een afzender of mailbox in een blad).
+private struct Initials: View {
+    let text: String
+
+    private var letters: String {
+        let words = text.split { !$0.isLetter && !$0.isNumber }.prefix(2)
+        let result = words.compactMap(\.first).map { String($0).uppercased() }.joined()
+        return result.isEmpty ? "?" : result
+    }
+
+    var body: some View {
+        Text(letters)
+            .font(.werk(size: 12, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .frame(width: 34, height: 34)
+            .background(RoundedRectangle(cornerRadius: max(6, MailModeMetrics.radius + 2), style: .continuous)
+                .fill(ThingsColor.textTertiary))
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Uitgebreid zoeken (⌘F)
+
+private struct MailSearchSheet: View {
+    @State private var form = MailModeStore.shared.searchForm
+    @State private var mailboxes = Set(MailModeStore.shared.searchAccountChoice)
+    @FocusState private var focused: Bool
+    private let store = MailModeStore.shared
+    private let gmail = GmailSession.shared
+
+    var body: some View {
+        SheetFrame(title: "Zoeken", systemImage: "magnifyingglass", detail: detail, width: 680) {
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SheetField(label: "Met de woorden") {
+                        TextField("", text: $form.words).sheetInput().focused($focused).onSubmit(search)
+                    }
+                    SheetField(label: "Zonder de woorden") {
+                        TextField("", text: $form.exclude).sheetInput().onSubmit(search)
+                    }
+                    SheetField(label: "Van (naam of adres)") {
+                        TextField("", text: $form.from).sheetInput().onSubmit(search)
+                    }
+                    SheetField(label: "Aan of cc (naam of adres)") {
+                        TextField("", text: $form.to).sheetInput().onSubmit(search)
+                    }
+                    SheetField(label: "Onderwerp") {
+                        TextField("", text: $form.subject).sheetInput().onSubmit(search)
+                    }
+                }
+                .frame(width: 330)
+                VStack(alignment: .leading, spacing: 14) {
+                    SheetField(label: "Periode") {
+                        WrapStack(spacing: 6) {
+                            ForEach(MailSearchForm.Period.allCases) { period in
+                                Button(period.title) { form.period = period }
+                                    .buttonStyle(MailFilterChipStyle(isOn: form.period == period))
+                            }
+                        }
+                    }
+                    SheetField(label: "Bijlage") {
+                        Toggle("Met bijlage", isOn: $form.hasAttachment)
+                    }
+                    SheetField(label: "Naam of soort bijlage") {
+                        TextField("", text: $form.attachmentName)
+                            .sheetInput()
+                            .onSubmit(search)
+                    }
+                    SheetField(label: "Alleen") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Toggle("Ongelezen", isOn: $form.unread)
+                            Toggle("Met ster", isOn: $form.starred)
+                            Toggle("Ook spam en prullenbak", isOn: $form.includeSpamTrash)
+                        }
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .font(.werk(size: 13))
+            }
+            SheetField(label: "Mailboxen") {
+                SheetList(items: gmail.accounts) { account in
+                    HStack(spacing: 12) {
+                        Toggle("", isOn: Binding(get: { mailboxes.contains(account) },
+                                                 set: { on in if on { mailboxes.insert(account) } else { mailboxes.remove(account) } }))
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+                        Initials(text: gmail.displayName(account))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(gmail.displayName(account))
+                                .font(.werk(size: 13.5, weight: .semibold))
+                                .foregroundStyle(ThingsColor.textPrimary)
+                            Text(account)
+                                .font(.werk(size: 12))
+                                .foregroundStyle(ThingsColor.textSecondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if mailboxes.contains(account) { mailboxes.remove(account) } else { mailboxes.insert(account) }
+                    }
+                }
+            }
+        } buttons: {
+            Button("Wissen") {
+                form = MailSearchForm()
+                mailboxes = Set(gmail.accounts)
+            }
+            .buttonStyle(SheetButtonStyle(kind: .plain))
+            .disabled(form.isEmpty && mailboxes == Set(gmail.accounts))
+            Spacer(minLength: 0)
+            Button("Annuleren") { store.closeSheet() }
+                .buttonStyle(SheetButtonStyle(kind: .plain))
+            Button("Zoeken", action: search)
+                .buttonStyle(SheetButtonStyle(kind: .primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(form.isEmpty || mailboxes.isEmpty)
+        }
+        .onAppear { focused = true }
+    }
+
+    private var detail: String {
+        mailboxes.count == gmail.accounts.count ? "Alle mail"
+            : (mailboxes.count == 1 ? "1 mailbox" : "\(mailboxes.count) mailboxen")
+    }
+
+    private func search() {
+        guard !form.isEmpty, !mailboxes.isEmpty else { return }
+        store.applySearch(form, mailboxes: gmail.accounts.filter { mailboxes.contains($0) })
     }
 }

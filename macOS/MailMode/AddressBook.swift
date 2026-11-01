@@ -62,7 +62,7 @@ final class AddressBook {
         guard !syncing else { return }
         syncing = true
         defer { syncing = false }
-        if await MailActivityStore.shared.sync() { cached = nil }
+        if await MailActivityStore.shared.syncIfStale() { cached = nil }
     }
 
     private nonisolated static func loadContacts() async -> [Contact] {

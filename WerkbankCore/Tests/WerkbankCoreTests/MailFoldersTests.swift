@@ -52,4 +52,30 @@ final class MailFoldersTests: XCTestCase {
         XCTAssertEqual(MailtoLink.parse("mailto:%22Eva%22%20%3Ceva@vandijk.nl%3E")?.to, "\"Eva\" <eva@vandijk.nl>")
         XCTAssertNil(MailtoLink.parse("https://voorbeeld.nl"))
     }
+
+    func testSearchFormBuildsGmailQuery() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 12))!
+        var form = MailSearchForm()
+        XCTAssertTrue(form.isEmpty)
+        XCTAssertEqual(form.query(now: now, calendar: calendar), "")
+        form.words = "offerte dak"
+        form.exclude = "nieuwsbrief, \"tot ziens\""
+        form.from = "eva@vandijk.nl, Jan Smit"
+        form.to = "planning@vandijk.nl"
+        form.subject = "voorraad"
+        form.attachmentName = "pdf"
+        form.unread = true
+        form.period = .month
+        form.includeSpamTrash = true
+        XCTAssertEqual(form.query(now: now, calendar: calendar),
+                       "offerte dak -nieuwsbrief -\"tot ziens\" {from:eva@vandijk.nl from:\"Jan Smit\"} "
+                       + "{to:planning@vandijk.nl cc:planning@vandijk.nl} subject:(voorraad) has:attachment filename:pdf "
+                       + "is:unread after:2026/10/02 in:anywhere")
+        XCTAssertFalse(form.isEmpty)
+        // Ook spam en prullenbak: Gmail moet ze meenemen.
+        XCTAssertTrue(MailSearch.request(text: "factuur in:anywhere", folder: .inbox).includeSpamTrash)
+        XCTAssertFalse(MailSearch.request(text: "factuur", folder: .inbox).includeSpamTrash)
+    }
 }
