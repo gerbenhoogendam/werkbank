@@ -547,7 +547,6 @@ final class MailModeStore {
         }
     }
 
-
     /// `listed` in groepen naar dag (Vandaag, Gisteren, Deze week, Eerder).
     func sections(of listed: [GmailMailItem]) -> [Section] {
         let calendar = Calendar.current

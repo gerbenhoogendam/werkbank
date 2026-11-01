@@ -305,10 +305,7 @@ private struct OtherPreferences: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \ClientMapping.domain) private var mappings: [ClientMapping]
-    @Query private var allCards: [TodoCard]
     @Query(sort: \ColumnRecord.sortOrder) private var allColumns: [ColumnRecord]
-    @Query private var allSubtasks: [Subtask]
-    @Query private var allEntries: [TimeEntry]
     @State private var newDomain = ""
     @State private var newClient = ""
     @State private var managingClients = false
@@ -466,11 +463,13 @@ extension OtherPreferences {
         syncRow("Laatste export (wegschrijven)", monitor.exported)
         if let setup = monitor.setup, !setup.succeeded { syncRow("Start van de koppeling", setup) }
 
-        let done = allCards.filter { $0.columnRaw == BoardColumn.doneID }.count
-        LabeledContent("Taken op het board", value: "\(allCards.count - done)")
+        // Tellingen in de database (niet alle rijen inlezen); ververst bij elke import of export hierboven.
+        let cards = (try? context.fetchCount(FetchDescriptor<TodoCard>())) ?? 0
+        let done = (try? context.fetchCount(FetchDescriptor<TodoCard>(predicate: #Predicate { $0.columnRaw == "done" }))) ?? 0
+        LabeledContent("Taken op het board", value: "\(cards - done)")
         LabeledContent("Afgeronde taken", value: "\(done)")
-        LabeledContent("Subtaken", value: "\(allSubtasks.count)")
-        LabeledContent("Tijdregels", value: "\(allEntries.count)")
+        LabeledContent("Subtaken", value: "\((try? context.fetchCount(FetchDescriptor<Subtask>())) ?? 0)")
+        LabeledContent("Tijdregels", value: "\((try? context.fetchCount(FetchDescriptor<TimeEntry>())) ?? 0)")
         LabeledContent("Kolommen", value: "\(allColumns.count)")
         Text(allColumns.map { "\($0.title) (\($0.key.prefix(8)))" }.joined(separator: ", "))
             .font(.caption)
