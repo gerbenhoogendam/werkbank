@@ -535,7 +535,8 @@ final class MailModeStore {
     // MARK: Uitgebreid zoeken
 
     /// Zoeken uit het zoekvenster (⌘F): de zoekopdracht komt in het zoekveld, in alle mail van de gekozen mailboxen.
-    func applySearch(_ form: MailSearchForm, mailboxes: [String]) {
+    /// `selecting`: een resultaat uit het zoekvenster dat meteen open moet.
+    func applySearch(_ form: MailSearchForm, mailboxes: [String], selecting: String? = nil) {
         searchForm = form
         let inScope = accounts(of: scope).compactMap { $0 }
         searchAccounts = Set(mailboxes) == Set(inScope) ? nil : mailboxes
@@ -544,13 +545,34 @@ final class MailModeStore {
         bundleOpen = false
         query = form.query()
         searchTask?.cancel()
-        selectedID = nil
+        selectedID = selecting
         sheet = nil
-        Task { await reload() }
+        Task {
+            await reload()
+            if let selecting, items.contains(where: { $0.id == selecting }) { selectedID = selecting }
+        }
     }
 
-    /// De mailboxen waarin nu wordt gezocht (voor het zoekvenster).
-    var searchAccountChoice: [String] { searchAccounts ?? accounts(of: scope).compactMap { $0 } }
+    /// De mailboxen voor het zoekvenster: de laatst gekozen, anders info@, support@ en gh@ (als die er zijn).
+    var searchAccountChoice: [String] { searchAccounts ?? MailClientSettings.preferred }
+
+    /// De resultaten in het zoekvenster zelf, zonder de lijst te veranderen: nieuwste eerst, één per gesprek.
+    func searchPreview(_ form: MailSearchForm, mailboxes: [String]) async -> (items: [GmailMailItem], error: String?) {
+        let request = MailSearch.request(text: form.query(), folder: .inbox)
+        var found: [GmailMailItem] = []
+        var failure: String?
+        for account in mailboxes {
+            do {
+                found += try await gmail.mailItems(request, account: account, maxResults: 40)
+            } catch {
+                failure = failure ?? error.localizedDescription
+            }
+        }
+        var seen = Set<String>()
+        let items = found.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+            .filter { seen.insert($0.threadID).inserted }
+        return (items, items.isEmpty ? failure : nil)
+    }
 
     func clearSearchAccounts() {
         searchAccounts = nil
@@ -585,14 +607,25 @@ enum MailClientSettings {
     static let accountsKey = "mailMode.clientAccounts"
     static let excludedKey = "mailMode.excludedClients"
 
-    /// De gekozen mailboxen. Zolang je niets kiest: GH, Support en Info als die er zijn, anders alle.
+    /// De gekozen mailboxen. Zolang je niets kiest: `preferred`.
     static var accounts: [String] {
         let gmail = GmailSession.shared
         if let stored = UserDefaults.standard.stringArray(forKey: accountsKey) {
             return gmail.accounts.filter { stored.contains($0) }
         }
-        let named = gmail.accounts.filter { ["gh", "support", "info"].contains(gmail.displayName($0).lowercased()) }
-        return named.isEmpty ? gmail.accounts : named
+        return preferred
+    }
+
+    /// De werkmailboxen gh@, support@ en info@ (op het deel voor de @ of de naam van de tab), als die er zijn;
+    /// anders alle.
+    static var preferred: [String] {
+        let gmail = GmailSession.shared
+        let names: Set<String> = ["gh", "support", "info"]
+        let found = gmail.accounts.filter { account in
+            let local = account.lowercased().split(separator: "@").first.map(String.init) ?? ""
+            return names.contains(local) || names.contains(gmail.displayName(account).lowercased())
+        }
+        return found.isEmpty ? gmail.accounts : found
     }
 
     static func setCounts(_ account: String, _ counts: Bool) {

@@ -292,9 +292,12 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   Application Support/Werkbank/MailActivity.json, gaat 92 dagen terug en wordt hooguit één keer per dag bijgewerkt
   (`syncIfStale`); een oud bestand zonder mailbox per mail wordt één keer opnieuw opgehaald.
 - **Uitgebreid zoeken** (⌘F of het schuifjes-icoon naast het zoekveld; `MailSearchSheet`, `MailSearchForm` in
-  WerkbankCore): woorden, zonder woorden, van, aan/cc (namen of adressen, komma's), onderwerp, periode, bijlage en
-  bestandsnaam, ongelezen, ster, ook spam en prullenbak, en welke mailboxen. De zoekopdracht komt in het zoekveld;
-  een eigen keuze van mailboxen staat als knopje onder het zoekveld.
+  WerkbankCore): woorden, zonder woorden, van, aan/cc (namen of adressen, komma's), onderwerp, bijlage en
+  bestandsnaam, ongelezen, ster, ook spam en prullenbak, periode en mailboxen (kleine vinkjes, standaard gh@,
+  support@ en info@: `MailClientSettings.preferred`). De resultaten staan onderaan in het venster
+  (`searchPreview`, verandert de lijst niet): vinkjes, periode en mailboxen zoeken meteen opnieuw, tekstvelden bij
+  Enter. Een klik op een resultaat zet de zoekopdracht in de lijst en opent die mail; "Toon in de lijst" doet hetzelfde
+  zonder mail te kiezen. Een eigen keuze van mailboxen staat als knopje onder het zoekveld.
 - Bladen in de stijl van het concept: titel met grijze toelichting, gegroepeerde lijsten (`SheetList`), Annuleren als
   tekst en de handeling als donkere knop (`SheetButtonStyle`).
 

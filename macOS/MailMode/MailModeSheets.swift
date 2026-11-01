@@ -961,101 +961,163 @@ private struct Initials: View {
 private struct MailSearchSheet: View {
     @State private var form = MailModeStore.shared.searchForm
     @State private var mailboxes = Set(MailModeStore.shared.searchAccountChoice)
+    @State private var results: [GmailMailItem] = []
+    @State private var searched = false
+    @State private var isSearching = false
+    @State private var error: String?
+    @State private var run = 0
     @FocusState private var focused: Bool
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
 
     var body: some View {
-        SheetFrame(title: "Zoeken", systemImage: "magnifyingglass", detail: detail, width: 680) {
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 12) {
-                    SheetField(label: "Met de woorden") {
-                        TextField("", text: $form.words).sheetInput().focused($focused).onSubmit(search)
-                    }
-                    SheetField(label: "Zonder de woorden") {
-                        TextField("", text: $form.exclude).sheetInput().onSubmit(search)
-                    }
-                    SheetField(label: "Van (naam of adres)") {
-                        TextField("", text: $form.from).sheetInput().onSubmit(search)
-                    }
-                    SheetField(label: "Aan of cc (naam of adres)") {
-                        TextField("", text: $form.to).sheetInput().onSubmit(search)
-                    }
-                    SheetField(label: "Onderwerp") {
-                        TextField("", text: $form.subject).sheetInput().onSubmit(search)
+        SheetFrame(title: "Zoeken", systemImage: "magnifyingglass", detail: detail, width: 780) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                GridRow {
+                    field("Met de woorden", $form.words, focus: true)
+                    field("Zonder de woorden", $form.exclude)
+                }
+                GridRow {
+                    field("Van (naam of adres)", $form.from)
+                    field("Aan of cc (naam of adres)", $form.to)
+                }
+                GridRow {
+                    field("Onderwerp", $form.subject)
+                    field("Naam of soort bijlage", $form.attachmentName)
+                }
+            }
+            HStack(spacing: 16) {
+                Toggle("Met bijlage", isOn: $form.hasAttachment)
+                Toggle("Ongelezen", isOn: $form.unread)
+                Toggle("Met ster", isOn: $form.starred)
+                Toggle("Ook spam en prullenbak", isOn: $form.includeSpamTrash)
+            }
+            .toggleStyle(.checkbox)
+            .font(.werk(size: 12.5))
+            SheetField(label: "Periode") {
+                HStack(spacing: 6) {
+                    ForEach(MailSearchForm.Period.allCases) { period in
+                        Button(period.title) { form.period = period }
+                            .buttonStyle(MailFilterChipStyle(isOn: form.period == period))
                     }
                 }
-                .frame(width: 330)
-                VStack(alignment: .leading, spacing: 14) {
-                    SheetField(label: "Periode") {
-                        WrapStack(spacing: 6) {
-                            ForEach(MailSearchForm.Period.allCases) { period in
-                                Button(period.title) { form.period = period }
-                                    .buttonStyle(MailFilterChipStyle(isOn: form.period == period))
-                            }
-                        }
-                    }
-                    SheetField(label: "Bijlage") {
-                        Toggle("Met bijlage", isOn: $form.hasAttachment)
-                    }
-                    SheetField(label: "Naam of soort bijlage") {
-                        TextField("", text: $form.attachmentName)
-                            .sheetInput()
-                            .onSubmit(search)
-                    }
-                    SheetField(label: "Alleen") {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Toggle("Ongelezen", isOn: $form.unread)
-                            Toggle("Met ster", isOn: $form.starred)
-                            Toggle("Ook spam en prullenbak", isOn: $form.includeSpamTrash)
-                        }
-                    }
-                }
-                .toggleStyle(.checkbox)
-                .font(.werk(size: 13))
             }
             SheetField(label: "Mailboxen") {
-                SheetList(items: gmail.accounts) { account in
-                    HStack(spacing: 12) {
-                        Toggle("", isOn: Binding(get: { mailboxes.contains(account) },
-                                                 set: { on in if on { mailboxes.insert(account) } else { mailboxes.remove(account) } }))
+                WrapStack(spacing: 14) {
+                    ForEach(gmail.accounts, id: \.self) { account in
+                        Toggle(gmail.displayName(account), isOn: Binding(
+                            get: { mailboxes.contains(account) },
+                            set: { on in if on { mailboxes.insert(account) } else { mailboxes.remove(account) } }))
                             .toggleStyle(.checkbox)
-                            .labelsHidden()
-                        Initials(text: gmail.displayName(account))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(gmail.displayName(account))
-                                .font(.werk(size: 13.5, weight: .semibold))
-                                .foregroundStyle(ThingsColor.textPrimary)
-                            Text(account)
-                                .font(.werk(size: 12))
-                                .foregroundStyle(ThingsColor.textSecondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if mailboxes.contains(account) { mailboxes.remove(account) } else { mailboxes.insert(account) }
+                            .font(.werk(size: 12.5))
+                            .help(account)
                     }
                 }
             }
+            resultList
         } buttons: {
             Button("Wissen") {
                 form = MailSearchForm()
-                mailboxes = Set(gmail.accounts)
+                mailboxes = Set(MailClientSettings.preferred)
             }
             .buttonStyle(SheetButtonStyle(kind: .plain))
-            .disabled(form.isEmpty && mailboxes == Set(gmail.accounts))
+            .disabled(form.isEmpty)
             Spacer(minLength: 0)
             Button("Annuleren") { store.closeSheet() }
                 .buttonStyle(SheetButtonStyle(kind: .plain))
-            Button("Zoeken", action: search)
+            Button("Toon in de lijst") { show(selecting: nil) }
                 .buttonStyle(SheetButtonStyle(kind: .primary))
-                .keyboardShortcut(.defaultAction)
                 .disabled(form.isEmpty || mailboxes.isEmpty)
         }
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            refresh()
+        }
+        // Vinkjes, periode en mailboxen: meteen; tekst: bij Enter.
+        .onChange(of: form.period) { _, _ in refresh() }
+        .onChange(of: form.hasAttachment) { _, _ in refresh() }
+        .onChange(of: form.unread) { _, _ in refresh() }
+        .onChange(of: form.starred) { _, _ in refresh() }
+        .onChange(of: form.includeSpamTrash) { _, _ in refresh() }
+        .onChange(of: mailboxes) { _, _ in refresh() }
+    }
+
+    /// Een tekstveld; Enter zoekt opnieuw. Het eerste veld krijgt de cursor.
+    private func field(_ label: String, _ text: Binding<String>, focus: Bool = false) -> some View {
+        SheetField(label: label) {
+            if focus {
+                TextField("", text: text).sheetInput().focused($focused).onSubmit(refresh)
+            } else {
+                TextField("", text: text).sheetInput().onSubmit(refresh)
+            }
+        }
+    }
+
+    @ViewBuilder private var resultList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(searched && !isSearching ? (results.count == 1 ? "1 resultaat" : "\(results.count) resultaten") : "Resultaten")
+                    .font(.werk(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.fieldLabel)
+                if isSearching { ProgressView().controlSize(.mini) }
+            }
+            if let error {
+                Text(error).font(.werk(size: 12)).foregroundStyle(ThingsColor.deadline)
+            }
+            ScrollView {
+                if results.isEmpty {
+                    Color.clear.frame(height: 1)
+                } else {
+                    SheetList(items: results) { item in resultRow(item) }
+                }
+            }
+            .frame(height: 250)
+        }
+    }
+
+    private func resultRow(_ item: GmailMailItem) -> some View {
+        Button { show(selecting: item.id) } label: {
+            HStack(spacing: 10) {
+                Text(item.senderDisplay)
+                    .font(.werk(size: 12.5, weight: item.isUnread ? .semibold : .medium))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                    .frame(width: 150, alignment: .leading)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.subject.isEmpty ? "(geen onderwerp)" : item.subject)
+                        .font(.werk(size: 12.5, weight: item.isUnread ? .semibold : .regular))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                    Text(item.snippet)
+                        .font(.werk(size: 11.5))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                if item.mayHaveAttachment {
+                    Image(systemName: "paperclip")
+                        .font(.werk(size: 11))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                }
+                if mailboxes.count > 1, let account = gmail.account(for: item.id) {
+                    Text(gmail.displayName(account))
+                        .font(.werk(size: 10.5, weight: .medium))
+                        .foregroundStyle(ThingsColor.tagText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(ThingsColor.tagBackground))
+                }
+                Text(item.date.map { Calendar.current.isDateInToday($0) ? DutchDate.time($0) : DutchDate.short($0) } ?? "")
+                    .font(.werk(size: 11.5))
+                    .monospacedDigit()
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .frame(width: 52, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var detail: String {
@@ -1063,8 +1125,32 @@ private struct MailSearchSheet: View {
             : (mailboxes.count == 1 ? "1 mailbox" : "\(mailboxes.count) mailboxen")
     }
 
-    private func search() {
+    /// Opnieuw zoeken met wat er nu staat; een eerdere zoekopdracht die later klaar is telt niet meer.
+    private func refresh() {
+        guard !form.isEmpty, !mailboxes.isEmpty else {
+            results = []
+            searched = false
+            error = nil
+            return
+        }
+        run += 1
+        let current = run
+        let snapshot = form
+        let chosen = gmail.accounts.filter { mailboxes.contains($0) }
+        isSearching = true
+        Task {
+            let found = await store.searchPreview(snapshot, mailboxes: chosen)
+            guard current == run else { return }
+            results = found.items
+            error = found.error
+            searched = true
+            isSearching = false
+        }
+    }
+
+    /// Naar de lijst (en eventueel meteen een resultaat open).
+    private func show(selecting id: String?) {
         guard !form.isEmpty, !mailboxes.isEmpty else { return }
-        store.applySearch(form, mailboxes: gmail.accounts.filter { mailboxes.contains($0) })
+        store.applySearch(form, mailboxes: gmail.accounts.filter { mailboxes.contains($0) }, selecting: id)
     }
 }
