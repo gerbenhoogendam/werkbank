@@ -19,6 +19,7 @@ enum DutchDate {
     }
 
     private static let day = formatter("d MMM")
+    private static let dayYear = formatter("d MMM ''yy")
     private static let weekday = formatter("EEE")
     private static let weekdayDay = formatter("EEE d MMM")
     private static let hourMinute = formatter("HH:mm")
@@ -28,6 +29,8 @@ enum DutchDate {
 
     /// "28 sep"
     static func short(_ d: Date) -> String { clean(day.string(from: d)) }
+    /// "28 sep '24"
+    static func shortWithYear(_ d: Date) -> String { clean(dayYear.string(from: d)) }
     /// "ma"
     static func weekdayShort(_ d: Date) -> String { clean(weekday.string(from: d)) }
     /// "di 29 sep"

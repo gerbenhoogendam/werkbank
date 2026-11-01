@@ -1107,11 +1107,12 @@ private struct MailSearchSheet: View {
                         .padding(.vertical, 1)
                         .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(ThingsColor.tagBackground))
                 }
-                Text(item.date.map { Calendar.current.isDateInToday($0) ? DutchDate.time($0) : DutchDate.short($0) } ?? "")
+                // Vandaag de tijd, anders de datum met het jaar ("28 sep '24").
+                Text(item.date.map { Calendar.current.isDateInToday($0) ? DutchDate.time($0) : DutchDate.shortWithYear($0) } ?? "")
                     .font(.werk(size: 11.5))
                     .monospacedDigit()
                     .foregroundStyle(ThingsColor.textSecondary)
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(width: 78, alignment: .trailing)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
