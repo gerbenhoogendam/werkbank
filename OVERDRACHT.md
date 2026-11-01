@@ -343,8 +343,10 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 - **Klanten in de mailmodus** (alle thema's): de weekstaafjes en de balk naar aantal zijn vervangen door één balkje van
   de afgelopen dertig dagen, oud links en vandaag rechts: gevuld op een dag met mail, leeg bij stilte
   (`ClientActivity.Rank.recentDays`, `PulsMonthStrip`). Het aantal mails over drie maanden staat ernaast.
-- **Knop Mail op de werkbank**: in de werkbalk naast het mailpaneelknopje, in dezelfde stijl als de knop Werkbank in
-  de mailmodus (`MailModeButtonStyle`); verdwijnt zolang de mailmodus open staat.
+- **Knoppen Mail en Werkbank**: in de werkbalk van het venster, direct naast de vensterknopjes (eerste item van
+  `.navigation` in `MainView`): op de werkbank "Mail ›", in de mailmodus "‹ Werkbank" (`MailModeButtonStyle`). De
+  knop Werkbank staat niet meer in de eigen werkbalk van de mailmodus; het knopje voor het Mail-paneel is weg zolang de
+  mailmodus open staat (het paneel hoort bij de werkbank).
 
 ## Open punten
 

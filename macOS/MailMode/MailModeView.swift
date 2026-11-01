@@ -162,12 +162,7 @@ private struct MailModeToolbar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Button { store.close() } label: {
-                Label("Werkbank", systemImage: "chevron.left")
-            }
-            .buttonStyle(MailModeButtonStyle())
-            .help("Terug naar Werkbank (Esc)")
-
+            // Terug naar de werkbank staat in de werkbalk van het venster, naast de vensterknopjes (MainView).
             Button { showsFolders.toggle() } label: {
                 Image(systemName: "sidebar.left")
             }

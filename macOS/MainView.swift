@@ -208,17 +208,17 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) { gmailVisible.toggle() }
-                } label: {
-                    Label("Gmail", systemImage: "sidebar.left")
-                }
-                .keyboardShortcut("l", modifiers: [.command, .shift])
-                .help("Mailpaneel tonen of verbergen (⇧⌘L)")
-            }
-            ToolbarItem(placement: .navigation) {
-                // Naar de mailmodus, net zo duidelijk als de knop Werkbank daar terug gaat.
-                if !mailMode.isActive {
+                // Wisselen tussen werkbank en mailmodus, direct naast de vensterknopjes.
+                if mailMode.isActive {
+                    Button { mailMode.close() } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left").font(.werk(size: 10, weight: .semibold))
+                            Text("Werkbank")
+                        }
+                    }
+                    .buttonStyle(MailModeButtonStyle())
+                    .help("Terug naar de werkbank (Esc)")
+                } else {
                     Button { mailMode.open() } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "envelope")
@@ -228,6 +228,18 @@ struct MainView: View {
                     }
                     .buttonStyle(MailModeButtonStyle())
                     .help("Mailmodus")
+                }
+            }
+            ToolbarItem(placement: .navigation) {
+                // Het Mail-paneel hoort bij de werkbank; in de mailmodus doet dit knopje niets zichtbaars.
+                if !mailMode.isActive {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { gmailVisible.toggle() }
+                    } label: {
+                        Label("Gmail", systemImage: "sidebar.left")
+                    }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                    .help("Mailpaneel tonen of verbergen (⇧⌘L)")
                 }
             }
             ToolbarItem(placement: .primaryAction) {
