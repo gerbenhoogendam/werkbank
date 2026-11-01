@@ -189,13 +189,19 @@ struct PulsMonthStrip: View {
     var height: CGFloat = 8
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(days.enumerated()), id: \.offset) { _, on in
-                RoundedRectangle(cornerRadius: min(2, height / 3), style: .continuous)
-                    .fill(on ? filled : empty)
-                    .frame(height: height)
+        // Eén tekenvlak in plaats van dertig vlakjes per rij (de klantenkolom heeft er tientallen).
+        Canvas { context, size in
+            guard !days.isEmpty else { return }
+            let spacing: CGFloat = 2
+            let width = max(0, (size.width - spacing * CGFloat(days.count - 1)) / CGFloat(days.count))
+            let radius = min(2, height / 3)
+            for (index, on) in days.enumerated() {
+                let rect = CGRect(x: CGFloat(index) * (width + spacing), y: 0, width: width, height: size.height)
+                context.fill(Path(roundedRect: rect, cornerRadius: radius, style: .continuous),
+                             with: .color(on ? filled : empty))
             }
         }
+        .frame(height: height)
         .accessibilityElement()
         .accessibilityLabel("\(days.filter { $0 }.count) van de laatste \(days.count) dagen contact")
     }

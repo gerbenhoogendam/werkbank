@@ -500,7 +500,8 @@ final class GmailSession {
     // MARK: Gmail API
 
     private func api(_ path: String, query: [URLQueryItem] = [], method: String = "GET",
-                     body: Data? = nil, account: String? = nil, isRetry: Bool = false) async throws -> Data {
+                     body: Data? = nil, account: String? = nil, isRetry: Bool = false,
+                     attempt: Int = 0) async throws -> Data {
         let account = account ?? activeAccount
         let token = try await validAccessToken(account: account)
         var components = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/\(path)")!
@@ -518,12 +519,28 @@ final class GmailSession {
             tokenCache[account ?? ""] = nil   // verlopen of ingetrokken: één keer opnieuw met een verse token
             return try await api(path, query: query, method: method, body: body, account: account, isRetry: true)
         }
+        // Te veel tegelijk of per seconde (Gmail telt per mailbox): even wachten, oplopend en wat gespreid, en opnieuw.
+        // Anders valt zo'n mail stil uit de lijst.
+        if attempt < 3, Self.isRateLimited(status: http.statusCode, data: data) {
+            try await Task.sleep(for: .seconds(0.6 * Double(1 << attempt) + Double.random(in: 0...0.3)))
+            return try await api(path, query: query, method: method, body: body, account: account, isRetry: isRetry,
+                                 attempt: attempt + 1)
+        }
         guard (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
                 .flatMap { ($0["error"] as? [String: Any])?["message"] as? String }
             throw GmailError.http(http.statusCode, message)
         }
         return data
+    }
+
+    /// 429, of 403 met als reden een snelheidslimiet (de andere 403's, zoals geen toegang, niet opnieuw proberen).
+    private nonisolated static func isRateLimited(status: Int, data: Data) -> Bool {
+        if status == 429 { return true }
+        guard status == 403,
+              let error = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? [String: Any],
+              let errors = error["errors"] as? [[String: Any]] else { return false }
+        return errors.contains { ["rateLimitExceeded", "userRateLimitExceeded"].contains($0["reason"] as? String ?? "") }
     }
 
     /// Het e-mailadres bij een access-token (rechtstreeks, los van het actieve account).

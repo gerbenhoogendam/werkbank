@@ -363,6 +363,16 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 - Klant per mail en de eigen adressen worden onthouden (werden per mail per weergave opnieuw bepaald).
 - Mailboxknoppen: de naam reserveert de vette breedte (kiezen verschuift niets); in Puls zijn ze zo breed als hun
   naam met vaste marge (`SegmentRow` in `MailTheme.swift`).
+- Ook tegelijk in plaats van na elkaar: dagafsluiting (`sentMails`), Wacht op klant (`waitingItems`), het
+  concept-antwoord (`MailConcept.loadThread`), ⌘Z na bulk-archiveren (`restoreBulk`) en het bijwerken van
+  klantcontact per mailbox (`MailActivityStore.sync`).
+- Gmail-limiet: een 429 of een 403 met `rateLimitExceeded`/`userRateLimitExceeded` wordt tot drie keer opnieuw
+  geprobeerd met oplopende wachttijd (`GmailSession.api`); eerder viel zo'n mail stil uit de lijst.
+- Hertekenen: de maillijst rekent lijst, bundel en groepen één keer per weergave uit; het bord verdeelt de kaarten in
+  één doorgang over de kolommen; bewaarde analyses per gesprek staan in het geheugen (`ThreadAnalysisStore`); de
+  klantenlijst wijst alleen toe als er iets veranderde; de klantenkolom wordt buiten de hoofdthread uitgerekend.
+- Logo's: eenmaal ontleed bewaard in `DecodedLogos` (`LogoService.swift`), zodat een rij die terug in beeld komt
+  meteen het logo toont.
 - Na te gaan op de Mac: of de lijst echt direct staat, of Gmail geen "rate limit" geeft bij vijf mailboxen tegelijk
   (dan `8` in `mailItems(ids:)` verlagen), en of de bewaarde lijst na archiveren niet even de oude mail toont.
 
