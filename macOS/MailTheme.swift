@@ -182,11 +182,21 @@ struct MailboxTab: View {
                     }
                 }
         case .tischsuper:
-            // Een pianotoets van de platenspeler met het label eronder; de gekozen mailbox is oranje.
-            PianoKey(title: title, fill: isOn ? ThemeParts.orange : Color(hex: 0x303030),
-                     ink: isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
-                .tabWidth(fitsContent, padding: 4)
-                .frame(minWidth: fitsContent ? 56 : nil)
+            if fitsContent {
+                // Op het hout van de mailmodus: een leesbaar knopje, gekozen oranje.
+                Text(title)
+                    .font(.werk(size: 12, weight: isOn ? .semibold : .medium))
+                    .foregroundStyle(isOn ? Color(hex: 0x1C1C1C) : ThemeParts.creme)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(isOn ? ThemeParts.orange : Color.black.opacity(0.3)))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(isOn ? 0 : 0.16), lineWidth: 1))
+            } else {
+                // Een pianotoets van de platenspeler met het label eronder; de gekozen mailbox is oranje.
+                PianoKey(title: title, fill: isOn ? ThemeParts.orange : Color(hex: 0x303030),
+                         ink: isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+                    .frame(maxWidth: .infinity)
+            }
         case .principes:
             Text(title)
                 .font(.werk(size: 11, weight: isOn ? .medium : .regular))

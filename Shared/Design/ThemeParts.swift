@@ -900,3 +900,54 @@ enum ThemeParts {
         return Text(String(time[..<split])) + Text(String(time[split...])).foregroundColor(handText)
     }
 }
+
+/// Houtfineer (Tischsuper): de kast van de RT 20, notenhout met een rustige nerf in de lengte. Altijd dezelfde nerf
+/// (vaste startwaarde), zodat hij niet verspringt.
+struct Veneer: View {
+    /// Nerf van boven naar beneden (een zijkant) in plaats van van links naar rechts.
+    var vertical = false
+
+    private static let tones = [Color(hex: 0x5E3A20), Color(hex: 0x7A4C2B), Color(hex: 0x6A4224), Color(hex: 0x86563A),
+                                Color(hex: 0x6E4527), Color(hex: 0x5C381F)]
+
+    var body: some View {
+        Canvas { context, size in
+            let length = vertical ? size.height : size.width
+            let across = vertical ? size.width : size.height
+            let start = CGPoint.zero
+            let end = vertical ? CGPoint(x: size.width * 0.35, y: size.height) : CGPoint(x: size.width, y: size.height * 0.35)
+            context.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .linearGradient(Gradient(colors: Self.tones), startPoint: start, endPoint: end))
+            var seed: UInt64 = 0x9E37_79B9_7F4A_7C15
+            func random() -> Double {
+                seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                return Double(seed >> 33) / Double(UInt64(1) << 31)
+            }
+            var offset = 0.0
+            while offset < across + 4 {
+                let amplitude = 0.4 + random() * 1.6
+                let frequency = 0.004 + random() * 0.012
+                let phase = random() * .pi * 2
+                var path = Path()
+                var t = 0.0
+                while t <= length + 8 {
+                    let wave = offset + amplitude * sin(t * frequency * .pi * 2 + phase)
+                    let point = vertical ? CGPoint(x: wave, y: t) : CGPoint(x: t, y: wave)
+                    if t == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                    t += 8
+                }
+                let light = random() < 0.3
+                context.stroke(path, with: .color(light ? Color.white.opacity(0.05 + random() * 0.05)
+                                                        : Color.black.opacity(0.07 + random() * 0.09)),
+                               lineWidth: 0.5 + random() * 0.9)
+                offset += 1.6 + random() * 2.4
+            }
+            // Een zachte glans, alsof er lak op zit.
+            context.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .linearGradient(Gradient(colors: [Color.white.opacity(0.07), .clear, Color.black.opacity(0.08)]),
+                                               startPoint: .zero,
+                                               endPoint: vertical ? CGPoint(x: size.width, y: 0) : CGPoint(x: 0, y: size.height)))
+        }
+        .accessibilityHidden(true)
+    }
+}

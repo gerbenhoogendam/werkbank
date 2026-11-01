@@ -30,6 +30,7 @@ struct MailModeView: View {
             MailModeToolbar()
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
             HStack(spacing: 0) {
+                if ThemeStore.shared.look == .tischsuper { Veneer(vertical: true).frame(width: 7) }
                 if showsFolders {
                     MailModeFolders()
                         .frame(width: clamp(foldersWidth, Self.foldersRange))
@@ -49,6 +50,7 @@ struct MailModeView: View {
                               onReset: { clientsWidth = Self.defaultClients })
                 MailModeClients()
                     .frame(width: clamp(clientsWidth, Self.clientsRange))
+                if ThemeStore.shared.look == .tischsuper { Veneer(vertical: true).frame(width: 7) }
             }
         }
         .background(ThingsColor.backgroundSidebar)
@@ -94,6 +96,12 @@ struct MailModeView: View {
     private func handle(_ event: NSEvent) -> Bool {
         guard store.isActive, let window, event.window === window, window.attachedSheet == nil,
               !PanelStore.shared.hasFocusPanels, !FeedbackOverlay.shared.isShown else { return false }
+        if store.isReceded {
+            // Weggeklapt voor het slepen: alleen Esc, en die haalt de mail terug.
+            guard event.keyCode == 53 else { return false }
+            store.restore()
+            return true
+        }
         if store.sheet != nil {
             // In een blad gaan alle toetsen naar het blad; Esc sluit het.
             guard event.keyCode == 53 else { return false }
@@ -167,6 +175,8 @@ private struct MailModeToolbar: View {
             MailHeaderTitle(title: "Mail", unread: store.items.filter(\.isUnread).count, total: store.items.count,
                             mailbox: store.title(of: store.scope))
                 .lineLimit(1)
+                // Zo breed als de titel: de mailboxen staan er direct naast, links.
+                .fixedSize(horizontal: true, vertical: false)
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { store.close() }
 
@@ -200,8 +210,13 @@ private struct MailModeToolbar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(minHeight: 52)
-        .background(ThingsColor.mailHeaderBackground)
-        .darkScheme(ThemeStore.shared.theme.darkMailHeader)
+        .background {
+            // Tischsuper: de kop is notenhoutfineer, zoals de kast van de RT 20.
+            if ThemeStore.shared.look == .tischsuper { Veneer() } else { ThingsColor.mailHeaderBackground }
+        }
+        // Lichte tekst op een donkere kop (ook als alleen de mail donker is, zoals bij Tischsuper).
+        .darkScheme(ThemeStore.shared.theme.darkMailHeader || ThemeStore.shared.theme.darkMail
+                    || ThemeStore.shared.look == .tischsuper)
     }
 }
 
@@ -337,7 +352,10 @@ private struct MailModeList: View {
                      store.select(item)
                      store.archiveSelected(appState: appState)
                  },
-                 onDragStarted: { MailDragState.shared.begin(account: gmail.account(for: item.id)) })
+                 onDragStarted: {
+                     MailDragState.shared.begin(account: gmail.account(for: item.id))
+                     store.recede()
+                 })
     }
 
     private func tags(for item: GmailMailItem) -> [MailRowTag] {

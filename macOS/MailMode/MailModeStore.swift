@@ -36,6 +36,9 @@ final class MailModeStore {
     }
 
     private(set) var isActive = false
+    /// Tijdens het slepen van een mail: de mailmodus is naar achteren weggeklapt en de werkbank staat ervoor (board,
+    /// agenda, Tijd schrijven). Esc haalt de mail terug.
+    private(set) var isReceded = false
     private(set) var scope: Scope = .all
     /// De map uit de kolom links (Postvak IN, Verstuurd, een label …); een klant gaat erboven.
     private(set) var folder: MailFolder = .inbox
@@ -90,6 +93,7 @@ final class MailModeStore {
         client = nil
         folder = .inbox
         selectedID = message?.id
+        isReceded = false
         isActive = true
         Task {
             await reload()
@@ -100,8 +104,21 @@ final class MailModeStore {
 
     func close() {
         isActive = false
+        isReceded = false
         sheet = nil
         searchTask?.cancel()
+    }
+
+    /// Een mail wordt gesleept: de werkbank naar voren, zodat je hem op een kolom, de agenda of Tijd schrijven kunt
+    /// laten vallen.
+    func recede() {
+        guard isActive else { return }
+        sheet = nil
+        isReceded = true
+    }
+
+    func restore() {
+        isReceded = false
     }
 
     // MARK: Bereik, zoeken en filters

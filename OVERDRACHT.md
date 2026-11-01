@@ -303,6 +303,13 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   zet terug. De mail in het midden neemt de rest (minstens 320 pt).
 - `MailboxTab(fitsContent:)`: in de werkbalk van de mailmodus zo breed als de naam met ruimte ernaast (Calculator,
   Wandklok, Sneeuwwitje en Tischsuper deelden anders de breedte en kwamen tegen de tekst aan).
+- **Slepen uit de mailmodus**: zodra je een mail sleept klapt de mailmodus naar achteren weg (kleiner, gekanteld,
+  vervaagd; `MailModeStore.recede`) en staat de werkbank ervoor (board, agenda, Tijd schrijven). Esc of de knop Mail
+  bovenin haalt de mail terug (`restore`). De mailmodus blijft er onzichtbaar onder, zodat het slepen doorloopt; een
+  gesleepte mail draagt alleen het eigen type (`UTType.gmailMessage`), dus de webweergave eronder vangt niets op.
+- **Tischsuper in de mailmodus**: kop van notenhoutfineer (`Veneer` in `ThemeParts.swift`) met lichte tekst, houten
+  zijkanten links en rechts, mailboxen als leesbare knopjes (gekozen oranje) direct naast de titel. De kop van de
+  mailmodus volgt nu ook `darkMail` (bij Tischsuper stond donkere tekst op de donkere kop).
 - Bladen in de stijl van het concept: titel met grijze toelichting, gegroepeerde lijsten (`SheetList`), Annuleren als
   tekst en de handeling als donkere knop (`SheetButtonStyle`).
 

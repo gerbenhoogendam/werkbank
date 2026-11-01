@@ -31,75 +31,106 @@ struct MainView: View {
     private static let boardRange = 0.18...0.72
     private static let agendaRange = 0.35...0.85
 
+    private var mailMode: MailModeStore { MailModeStore.shared }
+
+    /// Het board, de agenda en Tijd schrijven, met links het Mail-paneel.
+    @ViewBuilder private var workbench: some View {
+        HStack(spacing: 0) {
+            if gmailVisible {
+                GmailPanel()
+                    .themePanel()
+                    .frame(width: clamp(gmailWidth, Self.gmailRange))
+                SplitDivider(isHorizontalLine: false,
+                             label: "Schuif de breedte van het Gmail-paneel",
+                             fill: dividerFill(ThingsColor.mailBackground),
+                             onChanged: { translation in
+                                 let start = gmailDragStart ?? gmailWidth
+                                 gmailDragStart = start
+                                 gmailWidth = clamp(start + Double(translation), Self.gmailRange)
+                             },
+                             onEnded: { gmailDragStart = nil },
+                             onReset: { gmailWidth = Self.defaultGmailWidth })
+                    .zIndex(1)
+            }
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    BoardView()
+                        .themePanel()
+                        .frame(height: geo.size.height * clamp(boardFraction, Self.boardRange))
+                    SplitDivider(isHorizontalLine: true,
+                                 fill: dividerFill(ThingsColor.agendaBackground),
+                                 onChanged: { translation in
+                                     let start = boardDragStart ?? boardFraction
+                                     boardDragStart = start
+                                     boardFraction = clamp(start + Double(translation / geo.size.height), Self.boardRange)
+                                 },
+                                 onEnded: { boardDragStart = nil },
+                                 onReset: { boardFraction = Self.defaultBoardFraction })
+                        .zIndex(1)
+                    HStack(spacing: 0) {
+                        AgendaView()
+                            .themePanel()
+                            .frame(width: geo.size.width * clamp(agendaFraction, Self.agendaRange))
+                        SplitDivider(isHorizontalLine: false,
+                                     fill: dividerFill(ThingsColor.agendaBackground),
+                                     onChanged: { translation in
+                                         let start = agendaDragStart ?? agendaFraction
+                                         agendaDragStart = start
+                                         agendaFraction = clamp(start + Double(translation / geo.size.width), Self.agendaRange)
+                                     },
+                                     onEnded: { agendaDragStart = nil },
+                                     onReset: { agendaFraction = Self.defaultAgendaFraction })
+                            .zIndex(1)
+                        TimeListView()
+                            .themePanel()
+                    }
+                }
+                // Over het hele venster, behalve het Gmail-paneel.
+                .overlay {
+                    if monthShown {
+                        MonthAgendaView(isOpen: $monthOpen, onClose: closeMonthAgenda)
+                            .transition(.identity)
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         @Bindable var state = appState
 
         ZStack {
-            // De mailmodus neemt het hele venster over (dubbelklik op Mail); terug met Werkbank of Esc.
-            Group {
-                if MailModeStore.shared.isActive {
+            // De mailmodus neemt het hele venster over (dubbelklik op Mail); terug met Werkbank of Esc. Tijdens het slepen
+            // van een mail klapt hij naar achteren weg en staat de werkbank ervoor; Esc haalt hem terug.
+            ZStack {
+                if !mailMode.isActive || mailMode.isReceded {
+                    workbench
+                        .transition(.opacity.combined(with: .scale(scale: 1.02)))
+                }
+                if mailMode.isActive {
                     MailModeView()
                         .themePanel()
-                } else {
-                    HStack(spacing: 0) {
-                        if gmailVisible {
-                            GmailPanel()
-                                .themePanel()
-                                .frame(width: clamp(gmailWidth, Self.gmailRange))
-                            SplitDivider(isHorizontalLine: false,
-                                         label: "Schuif de breedte van het Gmail-paneel",
-                                         fill: dividerFill(ThingsColor.mailBackground),
-                                         onChanged: { translation in
-                                             let start = gmailDragStart ?? gmailWidth
-                                             gmailDragStart = start
-                                             gmailWidth = clamp(start + Double(translation), Self.gmailRange)
-                                         },
-                                         onEnded: { gmailDragStart = nil },
-                                         onReset: { gmailWidth = Self.defaultGmailWidth })
-                                .zIndex(1)
-                        }
-                        GeometryReader { geo in
-                            VStack(spacing: 0) {
-                                BoardView()
-                                    .themePanel()
-                                    .frame(height: geo.size.height * clamp(boardFraction, Self.boardRange))
-                                SplitDivider(isHorizontalLine: true,
-                                             fill: dividerFill(ThingsColor.agendaBackground),
-                                             onChanged: { translation in
-                                                 let start = boardDragStart ?? boardFraction
-                                                 boardDragStart = start
-                                                 boardFraction = clamp(start + Double(translation / geo.size.height), Self.boardRange)
-                                             },
-                                             onEnded: { boardDragStart = nil },
-                                             onReset: { boardFraction = Self.defaultBoardFraction })
-                                    .zIndex(1)
-                                HStack(spacing: 0) {
-                                    AgendaView()
-                                        .themePanel()
-                                        .frame(width: geo.size.width * clamp(agendaFraction, Self.agendaRange))
-                                    SplitDivider(isHorizontalLine: false,
-                                                 fill: dividerFill(ThingsColor.agendaBackground),
-                                                 onChanged: { translation in
-                                                     let start = agendaDragStart ?? agendaFraction
-                                                     agendaDragStart = start
-                                                     agendaFraction = clamp(start + Double(translation / geo.size.width), Self.agendaRange)
-                                                 },
-                                                 onEnded: { agendaDragStart = nil },
-                                                 onReset: { agendaFraction = Self.defaultAgendaFraction })
-                                        .zIndex(1)
-                                    TimeListView()
-                                        .themePanel()
-                                }
-                            }
-                            // Over het hele venster, behalve het Gmail-paneel.
-                            .overlay {
-                                if monthShown {
-                                    MonthAgendaView(isOpen: $monthOpen, onClose: closeMonthAgenda)
-                                        .transition(.identity)
-                                }
-                            }
+                        .scaleEffect(mailMode.isReceded ? 0.86 : 1)
+                        .rotation3DEffect(.degrees(mailMode.isReceded ? 8 : 0), axis: (x: 1, y: 0, z: 0),
+                                          perspective: 0.6)
+                        .blur(radius: mailMode.isReceded ? 10 : 0)
+                        .opacity(mailMode.isReceded ? 0 : 1)
+                        .allowsHitTesting(!mailMode.isReceded)
+                }
+            }
+            .animation(.spring(duration: 0.4, bounce: 0.12), value: mailMode.isReceded)
+            .overlay(alignment: .top) {
+                if mailMode.isActive && mailMode.isReceded {
+                    Button { mailMode.restore() } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "envelope.fill")
+                            Text("Mail")
+                            KeyCap(key: "esc", inverted: true)
                         }
                     }
+                    .buttonStyle(MailModeButtonStyle(prominent: true))
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             // Drukproef: losse vlakken met de vensterkleur eromheen.
