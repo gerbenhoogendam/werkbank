@@ -181,6 +181,7 @@ struct MailboxTab: View {
                 name(size: 11, on: .semibold, off: .regular)
                     .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
             }
+                .padding(.horizontal, fitsContent ? 0 : 8)
                 .tabWidth(fitsContent)
                 .padding(.vertical, 5)
                 .background {
@@ -215,6 +216,7 @@ struct MailboxTab: View {
             Text(title)
                 .font(.werk(size: 11))
                 .foregroundStyle(ThingsColor.textPrimary)
+                .padding(.horizontal, fitsContent ? 0 : 8)
                 .tabWidth(fitsContent)
                 .padding(.vertical, 7)
                 .background {

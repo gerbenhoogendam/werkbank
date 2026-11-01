@@ -252,12 +252,13 @@ struct GmailPanel: View {
         }
     }
 
-    /// De mailboxen naast elkaar. Puls: elk zo breed als de naam met marge, de rest gelijk verdeeld (geen gelijke
-    /// vakjes waarin een lange naam tegen de rand komt).
+    /// De mailboxen naast elkaar. Waar ze samen de breedte vullen: elk zo breed als de naam, de rest gelijk verdeeld
+    /// (geen gelijke vakjes waarin een lange naam tegen de rand komt en een korte verdwaalt).
     private var tabLayout: AnyLayout {
-        if look == .puls { return AnyLayout(SegmentRow()) }
-        let spacing: CGFloat = look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0
+        let spacing: CGFloat = look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje || look == .puls ? 0
             : (look == .standaard ? 4 : (look == .karmijn ? 9 : (look == .tischsuper ? 2 : 6))))
+        // Thema's waar de mailboxen samen de breedte vullen.
+        if [.puls, .wandklok, .sneeuwwitje, .rekenmachine].contains(look) { return AnyLayout(SegmentRow(spacing: spacing)) }
         return AnyLayout(HStackLayout(spacing: spacing))
     }
 
