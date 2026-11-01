@@ -111,6 +111,9 @@ final class MailModeStore {
         isReceded = false
         isReturning = false
         watchEscape(false)
+        // Direct de bewaarde lijst van dit bereik en de eerste mail, al in het eerste beeld.
+        showStoredList()
+        if selectedID == nil { selectedID = listed.first?.id }
         isActive = true
         // De mappen (één aanvraag per mailbox) tegelijk met de lijst; de klanten pas daarna, want die halen soms veel op
         // bij dezelfde mailboxen en Gmail begrenst het aantal aanvragen per seconde.
