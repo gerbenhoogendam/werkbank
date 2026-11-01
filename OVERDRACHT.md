@@ -373,6 +373,19 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   klantenlijst wijst alleen toe als er iets veranderde; de klantenkolom wordt buiten de hoofdthread uitgerekend.
 - Logo's: eenmaal ontleed bewaard in `DecodedLogos` (`LogoService.swift`), zodat een rij die terug in beeld komt
   meteen het logo toont.
+- Wisselen van mailbox, map of klant en het openen van de mailmodus zetten de bewaarde lijst en de eerste mail
+  meteen neer (`MailModeStore.switchList`/`showStoredList`). Mislukt bijwerken helemaal, dan blijft de lijst staan
+  met één melding (`reportedFailure`).
+- WebKit wordt drie seconden na het starten voorverwarmd met een leeg, verborgen vlak (`WebKitWarmup` in
+  `MailWindow.swift`); losgelaten tien seconden nadat een mail een eigen vlak heeft.
+- Agenda: de dagkolom leest in zijn GeometryReader alleen de breedte (de plek komt uit een apart achtergrondje), en
+  `CalendarService` haalt de periode ervoor en erna alvast op (`prefetchNeighbors`).
+- Tijdlijst: de hoofdvraag haalt alleen open regels op; `WrittenTimeEntries` (met eigen `@Query`) alleen als Al
+  geschreven open staat, dicht alleen `fetchCount`.
+- Kaarten per kolom: `BoardService.grouped` (Mac en iPhone). Mailmodus, klantlogo's, Wacht op klant en het menubalk-
+  paneel vragen alleen de kaarten op die ze nodig hebben (niet het archief).
+- Inspreken: `VoiceWave`/`VoiceGlow` krijgen het niveau als functie en lezen het pas in hun animatie;
+  `DictationLevel` leest het zelf.
 - Na te gaan op de Mac: of de lijst echt direct staat, of Gmail geen "rate limit" geeft bij vijf mailboxen tegelijk
   (dan `8` in `mailItems(ids:)` verlagen), en of de bewaarde lijst na archiveren niet even de oude mail toont.
 

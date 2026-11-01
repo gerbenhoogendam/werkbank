@@ -38,7 +38,12 @@ public enum QuoteSplitter {
         if let plain = splitPlain(html) { return plain }
         var cut: String.Index?
         for pattern in markers {
-            if let range = html.range(of: pattern, options: [.regularExpression, .caseInsensitive]),
+            // Het vroegste begin telt: na een eerste vondst alleen nog het stuk ervoor doorzoeken (een mail met
+            // ingesloten afbeeldingen is soms megabytes groot).
+            // (Met wat marge: een vondst die vóór de eerste begint, mag erna nog doorlopen.)
+            let end = cut.flatMap { html.index($0, offsetBy: 4_000, limitedBy: html.endIndex) } ?? html.endIndex
+            let searchRange = html.startIndex..<end
+            if let range = html.range(of: pattern, options: [.regularExpression, .caseInsensitive], range: searchRange),
                cut == nil || range.lowerBound < cut! {
                 cut = range.lowerBound
             }
@@ -78,8 +83,9 @@ public enum QuoteSplitter {
     }
 
     private static func hasVisibleText(_ html: String) -> Bool {
-        let text = MIMEBody.htmlToText(html).trimmingCharacters(in: .whitespacesAndNewlines)
-        return !text.isEmpty || html.range(of: "<img", options: .caseInsensitive) != nil
+        // Eerst het goedkope: een afbeelding telt ook (dan hoeft de hele HTML niet naar tekst).
+        if html.range(of: "<img", options: .caseInsensitive) != nil { return true }
+        return !MIMEBody.htmlToText(html).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Het nieuwe deel van een mail als platte tekst (voor de analyse van een heel gesprek).

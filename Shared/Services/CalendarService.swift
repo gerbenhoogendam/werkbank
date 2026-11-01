@@ -129,17 +129,20 @@ final class CalendarService {
 
     // MARK: Lezen
 
-    func events(from start: Date, to end: Date, hiddenCalendarIDs: Set<String>) -> [AgendaEvent] {
+    /// `prefetchNeighbors`: de periode ervoor en erna alvast ophalen (alleen de agenda zelf, die bladert per week of
+    /// maand; andere vragers hebben willekeurige periodes).
+    func events(from start: Date, to end: Date, hiddenCalendarIDs: Set<String>,
+                prefetchNeighbors: Bool = false) -> [AgendaEvent] {
         guard hasAccess else { return [] }
         let key = EventQuery(start: start, end: end, hidden: hiddenCalendarIDs)
         if let cached = eventCache[key] {
-            prefetchNeighbors(of: key)
+            if prefetchNeighbors { self.prefetchNeighbors(of: key) }
             return cached
         }
         if eventCache.count > 12 { eventCache.removeAll() }
         let result = fetchEvents(from: start, to: end, hiddenCalendarIDs: hiddenCalendarIDs)
         eventCache[key] = result
-        prefetchNeighbors(of: key)
+        if prefetchNeighbors { self.prefetchNeighbors(of: key) }
         return result
     }
 

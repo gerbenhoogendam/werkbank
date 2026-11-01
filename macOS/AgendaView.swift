@@ -159,7 +159,7 @@ struct AgendaView: View {
         _ = service.revision   // live meebewegen met EKEventStoreChanged
         let rangeStart = days.first ?? .now
         let rangeEnd = calendar.date(byAdding: .day, value: 1, to: days.last ?? .now) ?? .now
-        let fetched = service.events(from: rangeStart, to: rangeEnd, hiddenCalendarIDs: hiddenIDs)
+        let fetched = service.events(from: rangeStart, to: rangeEnd, hiddenCalendarIDs: hiddenIDs, prefetchNeighbors: true)
         let allDay = fetched.filter(\.isAllDay)
 
         return VStack(spacing: 0) {

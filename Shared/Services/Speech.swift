@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import SwiftData
 import WerkbankCore
 import WhisperKit
 
@@ -97,8 +98,10 @@ enum WhisperModel {
     /// Klantnamen uit de laatste tijdregels (meest recent eerst), voor de hint en het koppelen.
     static func knownClients() -> [String] {
         var seen = Set<String>()
-        return TimerService.allEntries(in: Persistence.container.mainContext)
-            .sorted { $0.createdAt > $1.createdAt }
+        // De database sorteert (en haalt alleen de klant op), niet alle regels hier.
+        var newestFirst = FetchDescriptor<TimeEntry>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        newestFirst.propertiesToFetch = [\.client, \.createdAt]
+        return ((try? Persistence.container.mainContext.fetch(newestFirst)) ?? [])
             .map(\.client)
             .filter { $0 != TimerService.noClient && !$0.isEmpty && seen.insert($0.lowercased()).inserted }
     }

@@ -318,6 +318,7 @@ struct DayCloseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @State private var model = DayCloseModel()
+    @State private var hasRun = false
     @State private var day = Date()
 
     private var dayKey: Date { Calendar.current.startOfDay(for: day) }
@@ -333,7 +334,16 @@ struct DayCloseView: View {
         }
         .frame(width: 900, height: 580)
         .background(ThingsColor.backgroundContent)
-        .task(id: dayKey) { model.run(day: dayKey, context: context) }
+        .task(id: dayKey) {
+            // Typen in het datumveld: niet bij elk tussenstadium een hele ronde (met een vraag aan Claude); de eerste
+            // keer meteen.
+            if hasRun {
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled else { return }
+            }
+            hasRun = true
+            model.run(day: dayKey, context: context)
+        }
         .onDisappear { model.cancel() }
     }
 

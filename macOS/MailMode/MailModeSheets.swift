@@ -310,6 +310,10 @@ private struct MailPlanSheet: View {
     @State private var calendarID: String?
     @State private var invite = true
     @State private var error: String?
+    /// De afspraken rond het gekozen moment, één keer opgehaald: de overlap en de week ernaast vroegen er bij elke
+    /// weergave (ook bij elk tikje in de titel) om, en elk ander begin was een nieuwe vraag aan EventKit.
+    @State private var window: [AgendaEvent] = []
+    @State private var windowRange: DateInterval?
     private let store = MailModeStore.shared
     private let calendar = CalendarService.shared
 
@@ -392,7 +396,7 @@ private struct MailPlanSheet: View {
                     }
                 }
                 .frame(width: 320)
-                WeekPreview(start: start, end: end, title: title)
+                WeekPreview(start: start, end: end, title: title, events: window)
                     .frame(maxWidth: .infinity)
             }
         } buttons: {
@@ -406,9 +410,30 @@ private struct MailPlanSheet: View {
                 .keyboardShortcut(.defaultAction)
         }
         .task { await load() }
+        .onChange(of: start) { _, new in ensureWindow(around: new) }
+        // Agenda elders gewijzigd: opnieuw ophalen.
+        .onChange(of: calendar.revision) { _, _ in
+            windowRange = nil
+            ensureWindow(around: start)
+        }
     }
 
     private var end: Date { start.addingTimeInterval(Double(minutes) * 60) }
+
+    /// Zorgt dat `window` de werkweek van `date` en een dag eromheen bevat; anders opnieuw ophalen, ruim genoeg om
+    /// daarna weer even mee te kunnen.
+    private func ensureWindow(around date: Date) {
+        var monday = Calendar.current
+        monday.firstWeekday = 2
+        let weekStart = monday.dateInterval(of: .weekOfYear, for: date)?.start ?? Calendar.current.startOfDay(for: date)
+        let needFrom = min(weekStart, date.addingTimeInterval(-86_400))
+        let needTo = max(weekStart.addingTimeInterval(7 * 86_400), date.addingTimeInterval(2 * 86_400))
+        if let range = windowRange, range.start <= needFrom, range.end >= needTo { return }
+        let to = max(needTo, needFrom.addingTimeInterval(63 * 86_400))
+        window = calendar.events(from: needFrom, to: to, hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
+            .filter { !$0.isAllDay }
+        windowRange = DateInterval(start: needFrom, end: to)
+    }
 
     /// Met wie de afspraak is: de afzender, of bij je eigen mail de eerste ontvanger.
     private var guest: MailAddress? {
@@ -427,9 +452,7 @@ private struct MailPlanSheet: View {
     private var conflict: AgendaEvent? { overlap(start, end) }
 
     private func overlap(_ from: Date, _ to: Date) -> AgendaEvent? {
-        calendar.events(from: from.addingTimeInterval(-86_400), to: to.addingTimeInterval(86_400),
-                        hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
-            .first { !$0.isAllDay && $0.start < to && $0.end > from }
+        window.first { $0.start < to && $0.end > from }
     }
 
     /// "dinsdag 3 november van 14:00 tot 15:00", voor in de mail.
@@ -462,8 +485,10 @@ private struct MailPlanSheet: View {
         calendarID = calendar.defaultTargetCalendarID(hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
         let proposals = await store.proposals(for: item)
         let earliest = Date().addingTimeInterval(3600)
-        let busy = calendar.events(from: .now, to: .now.addingTimeInterval(60 * 86_400), hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
-            .filter { !$0.isAllDay }
+        ensureWindow(around: .now)
+        let horizon = Date.now.addingTimeInterval(60 * 86_400)
+        let busy = window
+            .filter { $0.end > .now && $0.start < horizon }
             .map { DateInterval(start: $0.start, end: max($0.end, $0.start)) }
         // Een dag zonder tijd uit de mail: het eerste vrije uur op die dag.
         let fromMail: [PlanOption] = proposals.prefix(2).compactMap { proposal in
@@ -527,7 +552,8 @@ private struct WeekPreview: View {
     let start: Date
     let end: Date
     let title: String
-    private let calendar = CalendarService.shared
+    /// Afspraken (met tijd) rond deze week, opgehaald door het blad.
+    let events: [AgendaEvent]
 
     var body: some View {
         let cal = Calendar.current
@@ -583,8 +609,8 @@ private struct WeekPreview: View {
 
     private func events(on day: Date, _ cal: Calendar) -> [AgendaEvent] {
         let dayStart = cal.startOfDay(for: day)
-        return calendar.events(from: dayStart, to: dayStart.addingTimeInterval(86_400), hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
-            .filter { !$0.isAllDay }
+        let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86_400)
+        return events.filter { $0.start < dayEnd && $0.end > dayStart }
     }
 
     private func block(title: String, from: Date, to: Date, on day: Date, first: Int, hourHeight: CGFloat,

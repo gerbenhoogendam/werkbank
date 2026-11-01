@@ -128,7 +128,7 @@ struct MonthAgendaView: View {
         let rangeStart = mondays[0]
         let rangeEnd = calendar.date(byAdding: .day, value: 28, to: rangeStart) ?? rangeStart
         _ = service.revision   // live meebewegen met EKEventStoreChanged
-        let fetched = service.events(from: rangeStart, to: rangeEnd, hiddenCalendarIDs: hiddenIDs)
+        let fetched = service.events(from: rangeStart, to: rangeEnd, hiddenCalendarIDs: hiddenIDs, prefetchNeighbors: true)
 
         return GeometryReader { geo in
             let gap: CGFloat = 12

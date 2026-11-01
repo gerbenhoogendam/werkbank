@@ -10,6 +10,8 @@ struct SignaturePreferences: View {
     @State private var html = ""
     @State private var senderName = ""
     @State private var logo: Data?
+    @State private var logoImage: NSImage?
+    @State private var preview = ""
     @State private var importing = false
     @State private var importError: String?
     @State private var disconnecting: String?
@@ -84,7 +86,7 @@ struct SignaturePreferences: View {
 
             Section {
                 HStack(spacing: 10) {
-                    if let logo, let image = NSImage(data: logo) {
+                    if logo != nil, let image = logoImage {
                         Image(nsImage: image)
                             .resizable()
                             .scaledToFit()
@@ -104,7 +106,7 @@ struct SignaturePreferences: View {
             }
 
             Section("Voorbeeld") {
-                MailWebView(html: previewHTML, allowRemote: true)
+                MailWebView(html: preview, allowRemote: true)
                     .frame(height: 170)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
@@ -126,6 +128,16 @@ struct SignaturePreferences: View {
         .onChange(of: html) { _, new in MailSignatures.setHTML(new, for: key) }
         .onChange(of: senderName) { _, new in MailSignatures.setSenderName(new, for: key) }
         .onChange(of: logo) { _, new in MailSignatures.setLogo(new, for: key) }
+        // Het logo één keer ontleden, niet bij elke toetsaanslag in de velden.
+        .onChange(of: logo, initial: true) { _, new in logoImage = new.flatMap(NSImage.init(data:)) }
+        // Het voorbeeld (een webvlak dat helemaal opnieuw laadt) pas als het typen even stilstaat.
+        .task(id: PreviewInput(html: html, logo: logo)) {
+            if !preview.isEmpty {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+            }
+            preview = MailSignatures.previewHTML(html, logo: logo)
+        }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.png, .jpeg, .gif]) { result in
             switch result {
             case .success(let url):
@@ -149,7 +161,10 @@ struct SignaturePreferences: View {
         logo = MailSignatures.ownLogo(key)
     }
 
-    private var previewHTML: String { MailSignatures.previewHTML(html, logo: logo) }
+    private struct PreviewInput: Equatable {
+        let html: String
+        let logo: Data?
+    }
 }
 
 /// Voorkeuren › Mail: de toetsen van de mailmodus. Klik op een toets en druk de nieuwe in; Esc laat hem staan.
