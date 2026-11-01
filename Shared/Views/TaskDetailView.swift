@@ -17,7 +17,7 @@ struct SubtaskCheckbox: View {
                     Circle().fill(ThingsColor.accent)
                     Image(systemName: "checkmark")
                         .font(.werk(size: 7, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(ThingsColor.onAccent)
                 }
             }
             .frame(width: 12, height: 12)

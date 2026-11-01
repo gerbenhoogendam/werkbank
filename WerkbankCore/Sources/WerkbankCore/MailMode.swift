@@ -178,12 +178,15 @@ public enum ClientActivity {
         /// Mails per week, oudste eerst (vier weken).
         public var weeks: [Int]
         public var lastContact: Date
+        /// De laatste dagen (standaard dertig), oudste eerst en vandaag als laatste: was er die dag mail met deze klant.
+        public var recentDays: [Bool]
 
-        public init(name: String, count: Int, weeks: [Int], lastContact: Date) {
+        public init(name: String, count: Int, weeks: [Int], lastContact: Date, recentDays: [Bool] = []) {
             self.name = name
             self.count = count
             self.weeks = weeks
             self.lastContact = lastContact
+            self.recentDays = recentDays
         }
     }
 
@@ -217,11 +220,14 @@ public enum ClientActivity {
     /// `excluded`: namen die je zelf hebt weggezet. `weekCount`: aantal staafjes (weken), oudste eerst.
     public static func ranking(records: [MailActivityRecord], domainMap: [String: String], ownAddresses: Set<String>,
                                ownDomains: Set<String> = [], excluded: Set<String> = [], now: Date, days: Int = 30,
-                               weekCount: Int = 4) -> [Rank] {
+                               weekCount: Int = 4, recentDayCount: Int = 30, calendar: Calendar = .current) -> [Rank] {
         let start = now.addingTimeInterval(-Double(days) * 86_400)
         let bars = max(1, weekCount)
+        let recentCount = max(0, recentDayCount)
+        let today = calendar.startOfDay(for: now)
         var counts: [String: Int] = [:]
         var weeks: [String: [Int]] = [:]
+        var recent: [String: [Bool]] = [:]
         var last: [String: Date] = [:]
         var seen = Set<String>()
         for record in records where record.date >= start && record.date <= now.addingTimeInterval(3600) {
@@ -232,16 +238,24 @@ public enum ClientActivity {
                 .filter { !excluded.contains($0) })
             let age = max(0, now.timeIntervalSince(record.date))
             let week = bars - 1 - min(bars - 1, Int(age / (7 * 86_400)))
+            // Hoeveel kalenderdagen geleden (0 = vandaag).
+            let daysAgo = calendar.dateComponents([.day], from: calendar.startOfDay(for: record.date), to: today).day ?? -1
             for name in clients {
                 counts[name, default: 0] += 1
                 var row = weeks[name] ?? Array(repeating: 0, count: bars)
                 row[week] += 1
                 weeks[name] = row
+                if daysAgo >= 0, daysAgo < recentCount {
+                    var marks = recent[name] ?? Array(repeating: false, count: recentCount)
+                    marks[recentCount - 1 - daysAgo] = true
+                    recent[name] = marks
+                }
                 last[name] = max(last[name] ?? .distantPast, record.date)
             }
         }
         return counts.map { Rank(name: $0.key, count: $0.value, weeks: weeks[$0.key] ?? Array(repeating: 0, count: bars),
-                                 lastContact: last[$0.key] ?? .distantPast) }
+                                 lastContact: last[$0.key] ?? .distantPast,
+                                 recentDays: recent[$0.key] ?? Array(repeating: false, count: recentCount)) }
             .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 }

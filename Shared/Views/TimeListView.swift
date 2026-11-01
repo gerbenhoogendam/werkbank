@@ -97,7 +97,8 @@ struct TimeListView: View {
                 }
             }
             if look != .standaard {
-                TimeTotalFooter(hours: parts.outstanding, count: toWrite.count)
+                TimeTotalFooter(hours: parts.outstanding, count: toWrite.count,
+                                perDay: look == .puls ? Self.hoursPerWeekday(toWrite) : [])
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
             }
@@ -152,6 +153,19 @@ struct TimeListView: View {
         .buttonStyle(.plain)
         .padding(.top, 8)
         .accessibilityLabel("Al geschreven, \(count) regels, \(showWritten ? "uitgeklapt" : "ingeklapt")")
+    }
+
+    /// Nog te factureren uren per dag van deze week (maandag tot en met zondag), voor de staven van Puls.
+    private static func hoursPerWeekday(_ entries: [TimeEntry]) -> [Double] {
+        let calendar = Calendar.current
+        var days = Array(repeating: 0.0, count: 7)
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: .now) else { return days }
+        for entry in entries where entry.status == .finished && !entry.isWritten {
+            let date = entry.firstStart ?? entry.createdAt
+            guard week.contains(date) else { continue }
+            days[(calendar.component(.weekday, from: date) + 5) % 7] += TimerService.billedHours(entry)
+        }
+        return days
     }
 
     private func header(outstanding: Double, count: Int) -> some View {
@@ -221,6 +235,14 @@ struct TimeListView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ThemedHeading(title: "Tijd schrijven", count: count)
                     EngineLabel(text: "Nog te factureren")
+                }
+            case .puls:
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Tijd schrijven")
+                        .font(.werk(size: 17, weight: .bold))
+                        .kerning(-0.2)
+                        .foregroundStyle(ThingsColor.textPrimary)
+                    Text("Nog te factureren").font(.werk(size: 12.5)).foregroundStyle(ThingsColor.textSecondary)
                 }
             default:
                 VStack(alignment: .leading, spacing: 2) {
@@ -531,6 +553,11 @@ struct TimeEntryRow: View {
     /// De duur rechts, zoals het thema cijfers toont.
     @ViewBuilder private var trailingTimeView: some View {
         switch ThemeStore.shared.look {
+        case .puls:
+            Text(trailingTime)
+                .font(.werkNumbers(size: 15, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(ThingsColor.textPrimary)
         case .tischsuper:
             Text(trailingTime)
                 .font(.werk(size: 15, weight: .ultraLight))
@@ -985,6 +1012,8 @@ private struct TimeTotalFooter: View {
     let hours: Double
     /// Aantal regels dat nog geschreven moet worden.
     var count = 0
+    /// Uren per dag van deze week, maandag eerst (alleen Puls).
+    var perDay: [Double] = []
 
     private var text: String {
         let minutes = Int((hours * 60).rounded())
@@ -1142,6 +1171,28 @@ private struct TimeTotalFooter: View {
                     .foregroundStyle(ThingsColor.textPrimary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        case .puls:
+            // Het totaal groot en groen tot een werkdag van acht uur, de ring ernaast en de dagen van deze week.
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Totaal").font(.werk(size: 12.5)).foregroundStyle(ThingsColor.textSecondary)
+                        PulsValue(value: text, unit: "/8 U", size: 34, color: Puls.groen.big)
+                    }
+                    Spacer()
+                    PulsRing(fraction: hours / 8, hue: Puls.groen, size: 54, lineWidth: 9, double: true)
+                }
+                if perDay.count == 7 {
+                    PulsDayBars(values: perDay, labels: ["MA", "DI", "WO", "DO", "VR", "ZA", "ZO"], hue: Puls.groen,
+                                today: (Calendar.current.component(.weekday, from: .now) + 5) % 7,
+                                maximum: max(4, perDay.max() ?? 0))
+                }
+            }
+            .padding(.top, 6)
+            .background(alignment: .bottom) {
+                PulsGlow(hue: Puls.groen, width: 320, height: 170, light: 0.2, dark: 0.16).offset(y: 60)
+            }
+            .accessibilityElement(children: .combine)
         case .spark, .standaard:
             VStack(spacing: 10) {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)

@@ -11,6 +11,10 @@ struct ThemedHeading: View {
     var baseSize: CGFloat = 13
     /// Er loopt iets in deze kolom (Drukproef: het telcijfer wordt rood).
     var highlight = false
+    /// Puls: de kleur van het aantal (elke kolom zijn eigen kleur).
+    var tint: Color? = nil
+    /// Puls: de eenheid achter het aantal ("KAARTEN").
+    var unit: String? = nil
 
     private var look: ThemeLook { ThemeStore.shared.look }
 
@@ -144,6 +148,23 @@ struct ThemedHeading: View {
                     } else if let detail {
                         EngineLabel(text: detail)
                     }
+                }
+            }
+        case .puls:
+            // De titel halfvet; het aantal groot en rond in de kleur van de kolom, met de eenheid erachter.
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.werk(size: baseSize + 2, weight: .semibold))
+                    .kerning(-0.1)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                if let count {
+                    PulsValue(value: "\(count)", unit: unit ?? "", size: 22, color: tint ?? Puls.blauw.big)
+                } else if let detail {
+                    Text(detail)
+                        .font(.werk(size: 12))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(1)
                 }
             }
         case .sneeuwwitje:

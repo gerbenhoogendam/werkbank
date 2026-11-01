@@ -132,6 +132,15 @@ struct MailHeaderTitle: View {
                     .foregroundStyle(ThingsColor.textPrimary)
                 EngineLabel(text: "\(mailbox) · ongelezen")
             }
+        case .puls:
+            // Vet, met het aantal ongelezen groot en blauw erachter.
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(title)
+                    .font(.werk(size: 20, weight: .bold))
+                    .kerning(-0.3)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                PulsValue(value: "\(unread)", unit: "ONGELEZEN", size: 18, color: Puls.blauw.big)
+            }
         case .sneeuwwitje, .standaard:
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title).font(.werk(size: 15, weight: .semibold)).foregroundStyle(ThingsColor.textPrimary)
@@ -257,6 +266,20 @@ struct MailboxTab: View {
                 }
         case .viertakt:
             EngineChip(text: title, style: isOn ? .selected : .plain)
+        case .puls:
+            // Een gesegmenteerde keuze: de gekozen mailbox als verhoogd vlakje op het grijze spoor.
+            Text(title)
+                .font(.werk(size: 12, weight: .semibold))
+                .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+                .tabWidth(fitsContent)
+                .padding(.vertical, 5)
+                .background {
+                    if isOn {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Puls.segment)
+                            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.12), radius: 1.5, y: 1)
+                    }
+                }
         case .standaard:
             Text(title)
                 .font(.werk(size: 11.5, weight: isOn ? .semibold : .regular))
@@ -326,7 +349,7 @@ enum MailLook {
     /// Rijen als losse kaartjes (gekozen rij als witte kaart) in plaats van rijen met haarlijnen.
     static var cardRows: Bool {
         switch ThemeStore.shared.look {
-        case .wandklok, .tischsuper, .sneeuwwitje, .rekenmachine, .viertakt: true
+        case .wandklok, .tischsuper, .sneeuwwitje, .rekenmachine, .viertakt, .puls: true
         default: false
         }
     }
@@ -335,6 +358,7 @@ enum MailLook {
         switch ThemeStore.shared.look {
         case .standaard, .principes: ThingsColor.accent
         case .drukproef, .rekenmachine: ThingsColor.today
+        case .puls: Puls.blauw.solid
         default: ThingsColor.running
         }
     }

@@ -510,7 +510,7 @@ private struct CardFont: ViewModifier {
             switch ThemeStore.shared.look {
             case .drukproef: content.font(.werk(size: kind.size + 2, weight: .medium)).tracking(-0.35)
             case .spark: content.font(.werk(size: kind.size, weight: .semibold))
-            case .wandklok, .principes, .sneeuwwitje, .karmijn, .viertakt: content.font(.werk(size: kind.size, weight: .medium))
+            case .wandklok, .principes, .sneeuwwitje, .karmijn, .viertakt, .puls: content.font(.werk(size: kind.size, weight: .medium))
             case .telemetrie: content.font(.werk(size: kind.size + 0.5, weight: .medium))
             default: content.font(.werk(size: kind.size))
             }
@@ -585,6 +585,17 @@ private struct CardSurface: View {
                 .clipShape(shape)
                 .shadow(color: ThingsColor.cardShadow, radius: 1, y: 1)
                 .shadow(color: ThingsColor.cardShadow, radius: 10, y: 4)
+        case .puls:
+            // Een grijze kaart op de tegel, zonder schaduw; een lopende kaart krijgt een gele gloed vanuit linksboven.
+            shape.fill(ThingsColor.cardBackground)
+                .overlay {
+                    if isRunning {
+                        shape.fill(EllipticalGradient(stops: [
+                            .init(color: Puls.geel.opacity(light: 0.3, dark: 0.16), location: 0),
+                            .init(color: Puls.geel.opacity(light: 0, dark: 0), location: 1),
+                        ], center: .topLeading, startRadiusFraction: 0, endRadiusFraction: 1))
+                    }
+                }
         case .standaard:
             shape.fill(ThingsColor.cardBackground)
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
@@ -703,6 +714,19 @@ private struct RunningStrip: View {
                 }
                 RevGauge(fraction: elapsed.truncatingRemainder(dividingBy: 3600) / 3600, height: 4)
             }
+        case .puls:
+            // Een gele ring die elk uur volloopt, de tijd groot en rond ernaast.
+            HStack(spacing: 10) {
+                PulsRing(fraction: elapsed.truncatingRemainder(dividingBy: 3600) / 3600, hue: Puls.geel, size: 34, lineWidth: 5)
+                VStack(alignment: .leading, spacing: 0) {
+                    PulsValue(value: Self.formatHMS(elapsed), size: 22, color: Puls.geel.big)
+                    Text("LOOPT")
+                        .font(.werkNumbers(size: 10.5, weight: .bold))
+                        .tracking(0.2)
+                        .foregroundStyle(Puls.geel.text)
+                }
+                Spacer(minLength: 0)
+            }
         case .standaard:
             HStack {
                 Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)
@@ -761,9 +785,10 @@ struct TimerButton: View {
         Button(action: action) {
             Image(systemName: isRunning ? "waveform" : "play.fill")
                 .font(.werk(size: 10, weight: .bold))
-                .foregroundStyle(isRunning ? Color.white : ThingsColor.accent)
+                .foregroundStyle(isRunning ? ThingsColor.onAccent : ThingsColor.accent)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(isRunning ? ThingsColor.running : ThingsColor.accent.opacity(0.12)))
+                .background(Circle().fill(isRunning ? (ThemeStore.shared.look == .puls ? Puls.geel.solid : ThingsColor.running)
+                                                    : ThingsColor.accent.opacity(0.12)))
                 .frame(width: ThingsMetrics.minTapTarget * 0.6, height: ThingsMetrics.minTapTarget * 0.6)
                 .contentShape(Rectangle())
         }

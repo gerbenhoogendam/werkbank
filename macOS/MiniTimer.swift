@@ -221,6 +221,12 @@ struct MiniTimerView: View {
                 SpeakerGrille(color: Color(hex: 0x5A5856))
             } else if look == .telemetrie {
                 HUDDiamond(size: size.dot + 3, color: isRunning ? pill.dot : ThingsColor.textTertiary)
+            } else if look == .puls {
+                // Een gele ring die elk uur volloopt.
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    PulsRing(fraction: entry.elapsed(at: timeline.date).truncatingRemainder(dividingBy: 3600) / 3600,
+                             hue: isRunning ? Puls.geel : Puls.oranje, size: size.buttonSize * 0.8)
+                }
             } else if look == .principes {
                 // De schuifknop links stopt de timer, zoals op de affiche.
                 Button(action: stop) { ToggleKnob(height: size.buttonSize) }
@@ -303,7 +309,8 @@ struct MiniTimerView: View {
                         .font(Self.timeFont(look, size: size.timeFont))
                         .monospacedDigit()
                         .tracking(look == .drukproef ? -1 : (look == .viertakt ? -0.8 : 0))
-                        .foregroundStyle(look == .drukproef || look == .karmijn || look == .viertakt ? ThingsColor.today : pill.text)
+                        .foregroundStyle(look == .puls ? Puls.geel.big
+                                         : (look == .drukproef || look == .karmijn || look == .viertakt ? ThingsColor.today : pill.text))
                         .fixedSize()
                 }
             }
@@ -352,7 +359,7 @@ struct MiniTimerView: View {
         case .sneeuwwitje: .werk(size: size, weight: .light)
         case .tischsuper: .werk(size: size, weight: .ultraLight)
         case .telemetrie: .werkNumbers(size: size, weight: .semibold)
-        case .viertakt: .werkNumbers(size: size, weight: .bold)
+        case .viertakt, .puls: .werkNumbers(size: size, weight: .bold)
         default: .werk(size: size, weight: .medium)
         }
     }
@@ -558,6 +565,10 @@ private struct PillTheme {
                       text2: ThingsColor.textSecondary, dot: ThingsColor.running, showsDot: false, buttonFill: ThingsColor.tagBackground,
                       buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.running, stopIcon: ThingsColor.cardBackground,
                       radius: 2)
+        case .puls:
+            PillTheme(background: ThingsColor.backgroundContent, border: Color.primary.opacity(0.08), text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: Puls.geel.solid, showsDot: false, buttonFill: ThingsColor.selection,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.selection, stopIcon: Puls.rood.solid)
         case .viertakt:
             PillTheme(background: ThingsColor.cardBackground, border: .clear, text: ThingsColor.textPrimary,
                       text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,

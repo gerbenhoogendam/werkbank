@@ -70,6 +70,28 @@ final class MailModeTests: XCTestCase {
         XCTAssertEqual(ClientActivity.client(forAddress: "ruud@mail.vandijk.nl", domainMap: map), "Van Dijk")
     }
 
+    func testRecentDaysMarkDaysWithMail() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 14, minute: 20))!
+        let map = ["vandijk.nl": "Van Dijk"]
+        func at(_ day: Int, _ hour: Int) -> Date { calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))! }
+        let records = [
+            MailActivityRecord(id: "1", date: at(5, 9), addresses: ["eva@vandijk.nl"], isSent: false),    // vandaag
+            MailActivityRecord(id: "2", date: at(5, 11), addresses: ["eva@vandijk.nl"], isSent: true),    // vandaag, nog een
+            MailActivityRecord(id: "3", date: at(4, 23), addresses: ["eva@vandijk.nl"], isSent: false),   // gisteren laat
+            MailActivityRecord(id: "4", date: at(1, 8), addresses: ["eva@vandijk.nl"], isSent: false),    // 4 dagen terug
+            MailActivityRecord(id: "5", date: calendar.date(byAdding: .day, value: -40, to: now)!,
+                               addresses: ["eva@vandijk.nl"], isSent: false),                            // buiten de 30 dagen
+        ]
+        let ranking = ClientActivity.ranking(records: records, domainMap: map, ownAddresses: [], now: now, days: 91,
+                                             calendar: calendar)
+        XCTAssertEqual(ranking.first?.count, 5)
+        let days = ranking.first?.recentDays ?? []
+        XCTAssertEqual(days.count, 30)
+        XCTAssertEqual(days.indices.filter { days[$0] }, [25, 28, 29])
+    }
+
     func testRankingOverThreeMonthsWithoutOwnCompanyAndExcluded() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let day = 86_400.0

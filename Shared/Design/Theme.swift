@@ -105,11 +105,24 @@ enum ThemeRole: String, CaseIterable, Identifiable {
 /// De vormgeving naast de kleuren (kolomkoppen, kaarten, agenda, mail, tijdlijst, timerpil), zoals in de schetsen.
 enum ThemeLook: String {
     case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn
-    case telemetrie, viertakt
+    case telemetrie, viertakt, puls
 
-    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie).
-    var panelGap: CGFloat { self == .drukproef || self == .telemetrie ? 8 : 0 }
-    var panelRadius: CGFloat { self == .drukproef ? 14 : 0 }
+    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie, Puls).
+    var panelGap: CGFloat {
+        switch self {
+        case .drukproef, .telemetrie: 8
+        case .puls: 10
+        default: 0
+        }
+    }
+
+    var panelRadius: CGFloat {
+        switch self {
+        case .drukproef: 14
+        case .puls: 18
+        default: 0
+        }
+    }
 }
 
 struct WerkbankTheme: Identifiable, Equatable {
@@ -134,7 +147,7 @@ struct WerkbankTheme: Identifiable, Equatable {
     var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
 
     static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark,
-                                       karmijn, telemetrie, viertakt]
+                                       karmijn, telemetrie, viertakt, puls]
 
     static func named(_ id: String) -> WerkbankTheme { all.first { $0.id == id } ?? standaard }
 }
@@ -317,6 +330,23 @@ extension WerkbankTheme {
         .deadline: ThemeColor(0xD9700F, 0xFF9A3C), .tag: ThemeColor(0xE6E6E6, 0x2A2A2A),
         .tagText: ThemeColor(0x4D4D4D, 0xB5B5B5), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0.08, darkOpacity: 0.5),
     ], fontFamily: "Helvetica Neue", cardRadius: 3)
+
+    /// Een sporthorloge: zwart, grijze tegels en felle kleuren die zacht doorschemeren; ronde cijfers met de eenheid
+    /// erachter. Licht: wit op lichtgrijs met dezelfde felle kleuren als vlak (zie `Puls`).
+    static let puls = WerkbankTheme(id: "puls", name: "Puls", colors: [
+        .window: ThemeColor(0xF2F2F7, 0x000000), .mail: ThemeColor(0xFFFFFF, 0x1C1C1E),
+        .mailHeader: ThemeColor(0xFFFFFF, 0x1C1C1E), .board: ThemeColor(0xF2F2F7, 0x000000),
+        .column: ThemeColor(0xFFFFFF, 0x1C1C1E), .card: ThemeColor(0xF2F2F7, 0x2C2C2E),
+        .agenda: ThemeColor(0xFFFFFF, 0x0A0A0B), .timeList: ThemeColor(0xFFFFFF, 0x1C1C1E),
+        .surface: ThemeColor(0xFFFFFF, 0x1C1C1E), .surfaceAlt: ThemeColor(0xF2F2F7, 0x2C2C2E),
+        .text: ThemeColor(0x000000, 0xFFFFFF), .textSecondary: ThemeColor(0x636366, 0xA1A1A6),
+        .textTertiary: ThemeColor(0x6E6E73, 0x8E8E93), .fieldLabel: ThemeColor(0x636366, 0xA1A1A6),
+        .separator: ThemeColor(0xE3E3E8, 0x38383A), .checkbox: ThemeColor(0xAEAEB2, 0x5B5B60),
+        .accent: ThemeColor(0x2E8500, 0xB4FF2A), .selection: ThemeColor(0xE5E5EA, 0x3A3A3C),
+        .running: ThemeColor(0x8C6D00, 0xFFE21F), .today: ThemeColor(0xD70015, 0xFF453A),
+        .deadline: ThemeColor(0xC2410C, 0xFF7A2E), .tag: ThemeColor(0xE5E5EA, 0x3A3A3C),
+        .tagText: ThemeColor(0x4A4A4E, 0xC7C7CC), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0.05, darkOpacity: 0),
+    ], cardRadius: 12)
 }
 
 // MARK: - Opslag en de kleuren die de app gebruikt
@@ -388,6 +418,10 @@ final class ThemeStore: @unchecked Sendable {
     /// Een afwijkend ontwerp (monospaced, rounded) blijft de systeemletter.
     func font(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default, numbers: Bool = false) -> Font {
         let scaled = size * scale
+        // Puls: cijfers rond (SF Pro Rounded), tenzij er in Voorkeuren een eigen cijferletter is gekozen.
+        if numbers, design == .default, numberFamily == nil, theme.look == .puls {
+            return .system(size: scaled, weight: weight, design: .rounded)
+        }
         guard design == .default, let family = numbers ? numberFamily : fontFamily else {
             return .system(size: scaled, weight: weight, design: design)
         }

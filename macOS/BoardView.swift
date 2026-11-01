@@ -95,7 +95,8 @@ struct BoardView: View {
                     }
             }
         }
-        .padding(look == .drukproef || look == .karmijn ? 6 : 12)
+        // Puls: de kolommen zijn zelf tegels, direct op het zwart.
+        .padding(look == .drukproef || look == .karmijn ? 6 : (look == .puls ? 0 : 12))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // Slepen van een mail afgebroken (Esc): geen kolom meer opgelicht.
         .onChange(of: MailDragState.shared.isDragging) { _, dragging in if !dragging { dropTargetColumn = nil } }
@@ -226,7 +227,9 @@ struct BoardView: View {
                     if themed {
                         HStack(spacing: 6) {
                             ThemedHeading(title: column.title, count: columnCards.count,
-                                          highlight: columnCards.contains { runningTodoIDs.contains($0.id) })
+                                          highlight: columnCards.contains { runningTodoIDs.contains($0.id) },
+                                          tint: Puls.columnHue(columns.firstIndex(of: column) ?? 0).big,
+                                          unit: columnCards.count == 1 ? "KAART" : "KAARTEN")
                                 .darkScheme(look == .tischsuper)
                             Spacer(minLength: 0)
                         }
@@ -282,7 +285,7 @@ struct BoardView: View {
                 .accessibilityLabel("Kolomopties voor \(column.title)")
             }
             .padding(.horizontal, look == .principes || look == .drukproef || look == .karmijn ? 4 : 12)
-            .padding(.top, look == .tischsuper ? 4 : 10)
+            .padding(.top, look == .tischsuper ? 4 : (look == .puls ? 14 : 10))
             .padding(.bottom, look == .tischsuper ? 14 : 6)
             .onHover { inside in
                 if inside { hoveredColumn = column.id } else if hoveredColumn == column.id { hoveredColumn = nil }
@@ -386,6 +389,9 @@ struct BoardView: View {
                 .frame(width: 20, height: 20)
                 .overlay(CornerBrackets(length: 4).stroke(ThingsColor.textSecondary, lineWidth: 1))
                 .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        case .puls:
+            PulsCircleIcon(symbol: "plus", size: 22)
                 .contentShape(Rectangle())
         case .viertakt:
             // Een vierkant zwart knopje, zoals PAUSE en de cameraknoppen.
@@ -554,6 +560,9 @@ private struct ColumnSurface: View {
             let panel = ChamferedRect(cut: 14)
             panel.fill(fill)
                 .overlay(panel.strokeBorder(isTarget ? ThingsColor.running : ThingsColor.separator, lineWidth: 1))
+        case .puls:
+            // Een tegel, zoals de vlakken van een dagoverzicht.
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(fill)
         case .viertakt:
             // Geen vlak: de witte kaarten liggen los op het studiogrijs.
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)

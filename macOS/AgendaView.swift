@@ -193,6 +193,11 @@ struct AgendaView: View {
                             }
                             }
                             .background(TimelineWell())
+                            .background {
+                                if ThemeStore.shared.look == .puls {
+                                    PulsAgendaGlow(days: days, startHour: startHour, hourHeight: hourHeight)
+                                }
+                            }
                         }
                         .overlay(alignment: .topLeading) {
                             if ThemeStore.shared.look == .tischsuper, days.contains(where: { calendar.isDateInToday($0) }) {
@@ -1138,6 +1143,7 @@ struct DayColumn: View {
                 let mark = NowMarker.size
                 ZStack(alignment: .leading) {
                     Rectangle().fill(line.color).frame(height: line.thickness)
+                        .shadow(color: ThemeStore.shared.look == .puls ? line.color.opacity(0.6) : .clear, radius: 5)
                     NowMarker(color: line.color).offset(x: -mark / 2)
                 }
                 .frame(width: width)
@@ -1164,9 +1170,15 @@ private struct EventBlock: View {
         let look = ThemeStore.shared.look
         let dark = colorScheme == .dark
         let solid = AgendaLook.solidEvents
-        let text: (primary: Color, secondary: Color) = look == .standaard || solid
-            ? EventStyle.textColors(on: event.color, opacity: solid ? 1 : opacity, dark: dark)
-            : (ThingsColor.textPrimary, ThingsColor.textSecondary)
+        // Puls: wat nu bezig is staat vol in de kleur van de agenda, met zwarte letters; wat voorbij is wordt zachter.
+        let now = Date()
+        let pulsNow = look == .puls && event.start <= now && event.end > now
+        let pulsPast = look == .puls && event.end <= now && !isLifted
+        let text: (primary: Color, secondary: Color) = pulsNow
+            ? (Color.black, Color.black.opacity(0.62))
+            : (look == .standaard || solid
+                ? EventStyle.textColors(on: event.color, opacity: solid ? 1 : opacity, dark: dark)
+                : (ThingsColor.textPrimary, ThingsColor.textSecondary))
         let shape = RoundedRectangle(cornerRadius: AgendaLook.eventRadius, style: .continuous)
         HStack(spacing: 0) {
             if look == .standaard {
@@ -1235,10 +1247,22 @@ private struct EventBlock: View {
                 // Een wit kaartje met een zachte schaduw, zoals de panelen naast de motor.
                 shape.fill(ThingsColor.cardBackground)
                     .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 0.5))
+            case .puls:
+                // Een tint van de agenda met een lichtrandje bovenaan; wat nu bezig is vol, van licht naar vol.
+                if pulsNow {
+                    shape.fill(LinearGradient(colors: [event.color.opacity(0.78), event.color], startPoint: .top, endPoint: .bottom))
+                } else {
+                    shape.fill(event.color.opacity(dark ? 0.22 : 0.16))
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(event.color.opacity(dark ? 0.35 : 0.22)).frame(height: 1)
+                        }
+                }
             }
         }
         .background(isLifted ? ThingsColor.backgroundContent : Color.clear)
         .clipShape(shape)
+        .shadow(color: pulsNow ? event.color.opacity(dark ? 0.5 : 0.35) : .clear, radius: 13, y: 6)
+        .opacity(pulsPast ? (dark ? 0.5 : 0.6) : 1)
         .contentShape(Rectangle())
         .help("\(event.title)\n\(DutchDate.range(event.start, event.end))")
         .accessibilityLabel("\(event.title), \(DutchDate.range(event.start, event.end))")
@@ -1354,5 +1378,31 @@ private struct MailDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         hoverY = nil
         return perform(info.location.y, info.itemProviders(for: [.gmailMessage]))
+    }
+}
+
+// MARK: - Puls
+
+/// Puls: het licht staat waar het nu is, midden in de kolom van vandaag op de lijn van nu, en valt zacht op de dagen
+/// ernaast. Schuift mee met de tijd.
+private struct PulsAgendaGlow: View {
+    let days: [Date]
+    let startHour: Int
+    let hourHeight: CGFloat
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            GeometryReader { geo in
+                let calendar = Calendar.current
+                if let index = days.firstIndex(where: { calendar.isDateInToday($0) }) {
+                    let columnWidth = geo.size.width / CGFloat(max(1, days.count))
+                    let hours = timeline.date.timeIntervalSince(calendar.startOfDay(for: timeline.date)) / 3600 - Double(startHour)
+                    PulsGlow(hue: Puls.cyaan, width: 470, height: 320, light: 0.2, dark: 0.2)
+                        .position(x: columnWidth * (CGFloat(index) + 0.5), y: CGFloat(hours) * hourHeight)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

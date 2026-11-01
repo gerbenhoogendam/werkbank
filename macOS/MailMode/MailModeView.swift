@@ -28,7 +28,9 @@ struct MailModeView: View {
     var body: some View {
         VStack(spacing: 0) {
             MailModeToolbar()
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            if ThemeStore.shared.look != .puls {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+            }
             HStack(spacing: 0) {
                 if ThemeStore.shared.look == .tischsuper { Veneer(vertical: true).frame(width: 7) }
                 if showsFolders {
@@ -39,21 +41,24 @@ struct MailModeView: View {
                                   onReset: { foldersWidth = Self.defaultFolders })
                 }
                 MailModeList()
+                    .pulsTile()
                     .frame(width: clamp(listWidth, Self.listRange))
                 ColumnResizer(onChanged: { listWidth = resized(listWidth, by: $0, Self.listRange) },
                               onEnded: { dragStart = nil },
                               onReset: { listWidth = Self.defaultList })
                 MailModeReader()
+                    .pulsTile()
                     .frame(minWidth: 320, maxWidth: .infinity)
                 ColumnResizer(onChanged: { clientsWidth = resized(clientsWidth, by: -$0, Self.clientsRange) },
                               onEnded: { dragStart = nil },
                               onReset: { clientsWidth = Self.defaultClients })
                 MailModeClients()
+                    .pulsTile()
                     .frame(width: clamp(clientsWidth, Self.clientsRange))
                 if ThemeStore.shared.look == .tischsuper { Veneer(vertical: true).frame(width: 7) }
             }
         }
-        .background(ThingsColor.backgroundSidebar)
+        .background(ThemeStore.shared.look == .puls ? ThingsColor.window : ThingsColor.backgroundSidebar)
         .overlay {
             if let sheet = store.sheet, !sheet.needsMail || store.selected != nil {
                 MailModeSheetHost(sheet: sheet, item: store.selected)
@@ -179,12 +184,21 @@ private struct MailModeToolbar: View {
 
             if store.scopes.count > 1 {
                 HStack(spacing: 6) {
-                    ForEach(store.scopes, id: \.self) { scope in
-                        MailboxTab(title: store.title(of: scope), isOn: store.client == nil && scope == store.scope,
-                                   fitsContent: true) {
-                            store.select(scope: scope)
+                    // Puls: de mailboxen als gesegmenteerde keuze op een grijs spoor.
+                    HStack(spacing: ThemeStore.shared.look == .puls ? 0 : 6) {
+                        ForEach(store.scopes, id: \.self) { scope in
+                            MailboxTab(title: store.title(of: scope), isOn: store.client == nil && scope == store.scope,
+                                       fitsContent: true) {
+                                store.select(scope: scope)
+                            }
+                            .fixedSize()
                         }
-                        .fixedSize()
+                    }
+                    .padding(ThemeStore.shared.look == .puls ? 2 : 0)
+                    .background {
+                        if ThemeStore.shared.look == .puls {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Puls.track)
+                        }
                     }
                     Button { store.cycleScope() } label: {
                         KeyCap(key: MailModeKeys.key(for: .scope))
@@ -209,7 +223,11 @@ private struct MailModeToolbar: View {
         .frame(minHeight: 52)
         .background {
             // Tischsuper: de kop is notenhoutfineer, zoals de kast van de RT 20.
-            if ThemeStore.shared.look == .tischsuper { Veneer() } else { ThingsColor.mailHeaderBackground }
+            if ThemeStore.shared.look == .tischsuper {
+                Veneer()
+            } else {
+                ThemeStore.shared.look == .puls ? ThingsColor.window : ThingsColor.mailHeaderBackground
+            }
         }
         // Lichte tekst op een donkere kop (ook als alleen de mail donker is, zoals bij Tischsuper).
         .darkScheme(ThemeStore.shared.theme.darkMailHeader || ThemeStore.shared.theme.darkMail
@@ -285,7 +303,8 @@ private struct MailModeList: View {
 
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
 
-            ThemedHeading(title: store.listTitle, count: store.listed.count)
+            ThemedHeading(title: store.listTitle, count: store.listed.count,
+                          unit: store.listed.count == 1 ? "MAIL" : "MAILS")
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 6)
@@ -447,7 +466,7 @@ struct MailModeFolders: View {
             .padding(.vertical, 10)
         }
         .scrollIndicators(.never)
-        .background(ThingsColor.backgroundSidebar)
+        .background(ThemeStore.shared.look == .puls ? ThingsColor.window : ThingsColor.backgroundSidebar)
     }
 
     private func row(_ folder: MailFolder, depth: Int) -> some View {
@@ -467,8 +486,10 @@ struct MailModeFolders: View {
             .padding(.leading, 8 + CGFloat(depth) * 14)
             .padding(.trailing, 8)
             .frame(height: 28)
-            .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-                .fill(isOn ? ThingsColor.selection : Color.clear))
+            .background(RoundedRectangle(cornerRadius: ThemeStore.shared.look == .puls ? 12 : MailModeMetrics.radius,
+                                         style: .continuous)
+                // Puls: de gekozen map als tegel op het zwart, met een groen icoon.
+                .fill(isOn ? (ThemeStore.shared.look == .puls ? ThingsColor.backgroundContent : ThingsColor.selection) : Color.clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -589,7 +610,7 @@ private struct MailModeReader: View {
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 12)
-        .background(ThingsColor.backgroundSidebar)
+        .background(ThemeStore.shared.look == .puls ? ThingsColor.mailPaper : ThingsColor.backgroundSidebar)
     }
 
     /// Een datum of tijd uit de mail, met Inplannen ernaast.
@@ -656,12 +677,10 @@ private struct MailModeClients: View {
                     .foregroundStyle(ThingsColor.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let maxCount = max(1, store.ranking.first?.count ?? 1)
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(Array(rows.enumerated()), id: \.element.name) { index, rank in
-                            ClientActivityRow(rank: rank, position: index + 1, maxCount: maxCount,
-                                              isOn: store.client == rank.name) {
+                            ClientActivityRow(rank: rank, position: index + 1, isOn: store.client == rank.name) {
                                 store.showClient(rank.name)
                             }
                             .contextMenu {
@@ -685,15 +704,16 @@ private struct MailModeClients: View {
     }
 }
 
-/// Een klant met hoeveel mail er de laatste drie maanden was, een balk en de weken als staafjes.
+/// Een klant met hoeveel mail er de laatste drie maanden was, en de afgelopen maand als balkje: gevuld op dagen met
+/// mail, leeg bij stilte.
 private struct ClientActivityRow: View {
     let rank: ClientActivity.Rank
     let position: Int
-    let maxCount: Int
     let isOn: Bool
     let action: () -> Void
 
     var body: some View {
+        let puls = ThemeStore.shared.look == .puls
         Button(action: action) {
             HStack(spacing: 10) {
                 Text("\(position)")
@@ -702,37 +722,29 @@ private struct ClientActivityRow: View {
                     .foregroundStyle(ThingsColor.textTertiary)
                     .frame(width: 18, alignment: .trailing)
                 ClientLogo(name: rank.name, size: 24)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(rank.name)
-                        .font(.werk(size: 12.5, weight: .semibold))
-                        .foregroundStyle(ThingsColor.textPrimary)
-                        .lineLimit(1)
-                    HStack(spacing: 8) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(ThingsColor.separator)
-                                Capsule().fill(ThingsColor.accent)
-                                    .frame(width: geo.size.width * CGFloat(rank.count) / CGFloat(maxCount))
-                            }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(rank.name)
+                            .font(.werk(size: 12.5, weight: .semibold))
+                            .foregroundStyle(ThingsColor.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        if puls {
+                            PulsValue(value: "\(rank.count)", unit: rank.count == 1 ? "MAIL" : "MAILS", size: 15,
+                                      color: Puls.paars.big)
+                        } else {
+                            Text(rank.count == 1 ? "1 mail" : "\(rank.count) mails")
+                                .font(.werk(size: 11))
+                                .monospacedDigit()
+                                .foregroundStyle(ThingsColor.textSecondary)
+                                .fixedSize()
                         }
-                        .frame(height: 4)
-                        Text(rank.count == 1 ? "1 mail" : "\(rank.count) mails")
-                            .font(.werk(size: 11))
-                            .monospacedDigit()
-                            .foregroundStyle(ThingsColor.textSecondary)
-                            .fixedSize()
                     }
+                    PulsMonthStrip(days: rank.recentDays.isEmpty ? Array(repeating: false, count: 30) : rank.recentDays,
+                                   filled: puls ? Puls.paars.solid : ThingsColor.accent,
+                                   empty: puls ? Puls.emptyDay : ThingsColor.separator,
+                                   height: 6)
                 }
-                HStack(alignment: .bottom, spacing: 1.5) {
-                    let top = max(1, rank.weeks.max() ?? 1)
-                    ForEach(Array(rank.weeks.enumerated()), id: \.offset) { index, value in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(index == rank.weeks.count - 1 ? ThingsColor.accent : ThingsColor.accent.opacity(0.35))
-                            .frame(width: 3, height: max(2, 20 * CGFloat(value) / CGFloat(top)))
-                    }
-                }
-                .frame(height: 20, alignment: .bottom)
-                .accessibilityHidden(true)
             }
             .padding(8)
             .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
@@ -755,12 +767,13 @@ private struct ColumnResizer: View {
     @State private var hovering = false
 
     var body: some View {
+        let puls = ThemeStore.shared.look == .puls
         Rectangle()
-            .fill(ThingsColor.separator)
-            .frame(width: 1)
+            .fill(puls ? Color.clear : ThingsColor.separator)
+            .frame(width: puls ? 10 : 1)
             .overlay {
                 ZStack {
-                    if hovering {
+                    if hovering && !puls {
                         Rectangle().fill(ThingsColor.accent).frame(width: 2)
                     }
                     Capsule()
@@ -796,15 +809,18 @@ struct KeyCap: View {
     var inverted = false
 
     var body: some View {
+        // Puls: zonder rand, op een grijs vlakje; op de groene knop zwart doorschijnend.
+        let puls = ThemeStore.shared.look == .puls
         Text(key)
             .font(.werk(size: 10, weight: .semibold))
-            .foregroundStyle(inverted ? ThingsColor.backgroundContent : ThingsColor.textSecondary)
+            .foregroundStyle(inverted ? (puls ? Color.black.opacity(0.7) : ThingsColor.backgroundContent) : ThingsColor.textSecondary)
             .padding(.horizontal, 4)
             .frame(minWidth: 18, minHeight: 18)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(inverted ? Color.white.opacity(0.14) : ThingsColor.backgroundContent))
+            .background(RoundedRectangle(cornerRadius: puls ? 5 : 4, style: .continuous)
+                .fill(inverted ? (puls ? Color.black.opacity(0.14) : Color.white.opacity(0.14))
+                      : (puls ? Puls.track : ThingsColor.backgroundContent)))
             .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(inverted ? Color.white.opacity(0.28) : ThingsColor.separator))
+                .strokeBorder(puls ? Color.clear : (inverted ? Color.white.opacity(0.28) : ThingsColor.separator)))
             .accessibilityHidden(true)
     }
 }
@@ -818,20 +834,22 @@ struct MailActionButton: View {
     let perform: () -> Void
 
     var body: some View {
+        let puls = ThemeStore.shared.look == .puls
         Button(action: perform) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage).font(.werk(size: 12, weight: .medium))
                 Text(title).font(.werk(size: 12.5, weight: prominent ? .semibold : .medium))
                 KeyCap(key: MailModeKeys.key(for: action), inverted: prominent)
             }
-            .foregroundStyle(prominent ? ThingsColor.backgroundContent : ThingsColor.textPrimary)
-            .padding(.leading, 10)
+            .foregroundStyle(prominent ? (puls ? Color.black : ThingsColor.backgroundContent) : ThingsColor.textPrimary)
+            .padding(.leading, puls ? 11 : 10)
             .padding(.trailing, 6)
             .frame(height: 30)
-            .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-                .fill(prominent ? ThingsColor.textPrimary : ThingsColor.cardBackground))
+            // Puls: glazen capsules; Archiveren felgroen met zwarte letters.
+            .background(RoundedRectangle(cornerRadius: puls ? 15 : MailModeMetrics.radius, style: .continuous)
+                .fill(prominent ? (puls ? Puls.groen.solid : ThingsColor.textPrimary) : (puls ? Puls.glass : ThingsColor.cardBackground)))
             .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-                .strokeBorder(prominent ? Color.clear : ThingsColor.separator))
+                .strokeBorder(prominent || puls ? Color.clear : ThingsColor.separator))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -844,15 +862,17 @@ struct MailModeButtonStyle: ButtonStyle {
     var prominent = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.werk(size: 12.5, weight: prominent ? .semibold : .medium))
-            .foregroundStyle(prominent ? Color.white : ThingsColor.textPrimary)
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-                .fill(prominent ? ThingsColor.accent : ThingsColor.cardBackground))
+        // Puls: glazen capsules van 32 hoog; de hoofdknop felgroen met zwarte letters.
+        let puls = ThemeStore.shared.look == .puls
+        return configuration.label
+            .font(.werk(size: puls ? 13 : 12.5, weight: prominent || puls ? .semibold : .medium))
+            .foregroundStyle(prominent ? ThingsColor.onAccent : ThingsColor.textPrimary)
+            .padding(.horizontal, puls ? 13 : 10)
+            .frame(height: puls ? 32 : 28)
+            .background(RoundedRectangle(cornerRadius: puls ? 16 : MailModeMetrics.radius, style: .continuous)
+                .fill(prominent ? (puls ? Puls.groen.solid : ThingsColor.accent) : (puls ? Puls.glass : ThingsColor.cardBackground)))
             .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-                .strokeBorder(prominent ? Color.clear : ThingsColor.separator))
+                .strokeBorder(prominent || puls ? Color.clear : ThingsColor.separator))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .contentShape(Rectangle())
     }
@@ -863,15 +883,16 @@ struct MailFilterChipStyle: ButtonStyle {
     let isOn: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.werk(size: 11.5, weight: .medium))
-            .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
-            .padding(.horizontal, 9)
-            .frame(height: 24)
-            .background(RoundedRectangle(cornerRadius: min(6, MailModeMetrics.radius), style: .continuous)
-                .fill(isOn ? ThingsColor.accent : ThingsColor.cardBackground))
+        let puls = ThemeStore.shared.look == .puls
+        return configuration.label
+            .font(.werk(size: 11.5, weight: puls ? .semibold : .medium))
+            .foregroundStyle(isOn ? ThingsColor.onAccent : ThingsColor.textPrimary)
+            .padding(.horizontal, puls ? 11 : 9)
+            .frame(height: puls ? 26 : 24)
+            .background(RoundedRectangle(cornerRadius: puls ? 13 : min(6, MailModeMetrics.radius), style: .continuous)
+                .fill(isOn ? (puls ? Puls.groen.solid : ThingsColor.accent) : (puls ? Puls.track : ThingsColor.cardBackground)))
             .overlay(RoundedRectangle(cornerRadius: min(6, MailModeMetrics.radius), style: .continuous)
-                .strokeBorder(isOn ? Color.clear : ThingsColor.separator))
+                .strokeBorder(isOn || puls ? Color.clear : ThingsColor.separator))
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
@@ -931,6 +952,17 @@ private struct WindowReader: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         if window !== view.window {
             DispatchQueue.main.async { window = view.window }
+        }
+    }
+}
+
+private extension View {
+    /// Puls: een kolom van de mailmodus als losse tegel met ronde hoeken op het zwart; in andere thema's niets.
+    @ViewBuilder func pulsTile() -> some View {
+        if ThemeStore.shared.look == .puls {
+            clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            self
         }
     }
 }

@@ -123,6 +123,7 @@ struct GmailPanel: View {
         case .karmijn: 72
         case .telemetrie: 62
         case .viertakt: 74
+        case .puls: 54
         default: 46
         }
     }
@@ -236,10 +237,12 @@ struct GmailPanel: View {
                 }
                 if [.standaard, .principes, .drukproef, .karmijn, .telemetrie, .viertakt].contains(look) { Spacer(minLength: 0) }
             }
-            .padding(3)
+            .padding(look == .puls ? 2 : 3)
             .background {
                 if look == .wandklok || look == .sneeuwwitje {
                     Capsule().fill(ThingsColor.separator.opacity(0.6))
+                } else if look == .puls {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Puls.track)
                 }
             }
             .padding(.horizontal, look == .standaard ? 5 : 9)
@@ -287,7 +290,7 @@ struct GmailPanel: View {
             }
         }
         .font(.werk(size: 11.5, weight: .semibold))
-        .foregroundStyle(Color.white)
+        .foregroundStyle(ThingsColor.onAccent)
         .padding(.horizontal, 3)
         .padding(.vertical, 4)
         .background(Capsule().fill(ThingsColor.accent))
@@ -585,6 +588,13 @@ struct GmailRow: View {
                     .overlay(alignment: .leading) { Rectangle().fill(ThingsColor.running).frame(width: 2) }
             } else if isHovering {
                 Rectangle().fill(Color.primary.opacity(0.04))
+            }
+        case .puls:
+            // De gekozen rij als grijze kaart op de tegel.
+            if isSelected {
+                shape.fill(ThingsColor.cardBackground)
+            } else if isHovering {
+                shape.fill(Color.primary.opacity(0.04))
             }
         case .viertakt:
             // De gekozen rij als wit kaartje met een zachte schaduw.

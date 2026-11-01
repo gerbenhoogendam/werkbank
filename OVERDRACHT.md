@@ -127,8 +127,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     niet voor afspraken van een hele dag. Alleen testen in een testagenda. Na te gaan: optillen en schaduw, scrollen
     bij de rand, grepen bij korte afspraken, uitnodigingen van anderen (EventKit kan weigeren), Exchange/Google-sync.
 19. **Thema's** (`Shared/Design/Theme.swift`, `Shared/Views/ThemePreferences.swift`). Voorkeuren › Thema: Standaard
-    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef, Spark, Karmijn, Telemetrie en
-    Viertakt. Elk onderdeel
+    (de oude kleuren), Wandklok, Tischsuper, Principes, Sneeuwwitje, Rekenmachine, Drukproef, Spark, Karmijn, Telemetrie,
+    Viertakt en Puls. Elk onderdeel
     heeft een rol (venster, mail, kop van mail, bord, kolom, kaart, agenda, tijdlijst, tekst, accent, …) met een kleur
     voor licht en donker; per thema kun je elke rol zelf kiezen en terugzetten. Lettertype, cijferletter en
     basisgrootte (11–17) gelden overal waar `Font.werk`/`thingsFont` staat. Tischsuper tekent het mailpaneel altijd
@@ -159,6 +159,20 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     rode knopjes (`EngineChip`), rondjes van de ontstekingsvolgorde voor de dagnummers (`FiringDot`), legendastreepjes
     bij agenda's en afspraken (`EngineLabel`), in Helvetica Neue. Na te gaan: of Barlow met de gewichten echt laadt,
     leesbaarheid van de smalle letter in de maillijst, de afgesneden hoeken bij smalle panelen.
+    **Puls** (1 nov, naar screenshots van een fitnessapp; concept in de Claude-canvas "Werkbank thema Puls"): zwart met
+    grijze tegels (#1C1C1E, kaarten #2C2C2E; licht #F2F2F7 met witte tegels en #F2F2F7-kaarten), losse vlakken met 10 pt
+    tussenruimte en hoek 18. Felle kleuren met één betekenis (`Puls` in `Shared/Design/PulsParts.swift`): groen werk en
+    hoofdknop, geel loopt nu, rood nu en vandaag (geen roze), blauw mail, cyaan agenda, paars klanten (licht fuchsia,
+    spaarzaam), oranje te laat. Per kleur een vlak, tekstinkt (4,5:1), inkt voor grote cijfers (3:1) en een label (licht
+    een vol vlak, donker een tint). Cijfers rond (`.system(design: .rounded)` via `werkNumbers`) met de eenheid erachter
+    in hoofdletters (`PulsValue`: "5 KAARTEN", "6:15 /8 U", "7 ONGELEZEN"). Gloed: het licht valt op de achtergrond
+    (`PulsGlow`); in de agenda staat het op de lijn van nu in de kolom van vandaag (`PulsAgendaGlow`), onder Tijd
+    schrijven groen. Onderdelen: `PulsRing` (ring met pijltje), `PulsDayBars` (staven op een stippellijn), kolomkop met
+    het aantal in de kleur van de kolom (`Puls.columnHue`), lopende kaart met gele ring en gloed, afspraak die nu bezig is
+    vol met zwarte letters en een gloed (voorbij op halve kracht), dagnummer van vandaag op een rode cirkel, mailboxen als
+    gesegmenteerde keuze, mailmodus in tegels (`pulsTile`), knoppen als glazen capsules, hoofdknop felgroen met zwarte
+    letters (`ThingsColor.onAccent`). Na te gaan: de ronde cijfers, de gloed in de agenda (valt hij over de dagen links
+    heen?), leesbaarheid van felgroen en geel in licht, en of tekst op het accent overal zwart is.
 20. **Logo's in de maillijst** (`MailSenderIcon` in `MailTheme.swift`, Voorkeuren › Weergave › Mail › "Logo's bij
     afzenders", standaard aan, in elk thema). Het logo komt via `SenderLogoService` van de website achter het domein
     van de afzender; freemail en sites zonder bruikbaar icoon tonen de initialen in de vorm van het thema.
@@ -326,6 +340,11 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   mailmodus volgt nu ook `darkMail` (bij Tischsuper stond donkere tekst op de donkere kop).
 - Bladen in de stijl van het concept: titel met grijze toelichting, gegroepeerde lijsten (`SheetList`), Annuleren als
   tekst en de handeling als donkere knop (`SheetButtonStyle`).
+- **Klanten in de mailmodus** (alle thema's): de weekstaafjes en de balk naar aantal zijn vervangen door één balkje van
+  de afgelopen dertig dagen, oud links en vandaag rechts: gevuld op een dag met mail, leeg bij stilte
+  (`ClientActivity.Rank.recentDays`, `PulsMonthStrip`). Het aantal mails over drie maanden staat ernaast.
+- **Knop Mail op de werkbank**: in de werkbalk naast het mailpaneelknopje, in dezelfde stijl als de knop Werkbank in
+  de mailmodus (`MailModeButtonStyle`); verdwijnt zolang de mailmodus open staat.
 
 ## Open punten
 

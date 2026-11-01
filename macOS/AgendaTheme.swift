@@ -57,6 +57,10 @@ struct AgendaNavButton: View {
                     .frame(width: 32, height: 26)
                     .background(Rectangle().fill(ThingsColor.cardBackground))
                     .overlay(Rectangle().strokeBorder(ThingsColor.separator, lineWidth: 1))
+            case .puls:
+                icon(size: 11, weight: .semibold, color: ThingsColor.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Puls.glass))
             case .standaard:
                 icon(size: 11, weight: .semibold, color: ThingsColor.textSecondary)
                     .frame(width: 22, height: 22)
@@ -134,6 +138,13 @@ struct AgendaTodayButton: View {
                     .overlay(CornerBrackets(length: 5).stroke(ThingsColor.running, lineWidth: 1))
             case .viertakt:
                 EngineChip(text: "Vandaag", style: .selected)
+            case .puls:
+                Text("Vandaag")
+                    .font(.werk(size: 12.5, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .padding(.horizontal, 13)
+                    .frame(height: 30)
+                    .background(Capsule().fill(Puls.glass))
             case .standaard:
                 Text("Vandaag")
                     .thingsFont(.metadata)
@@ -228,6 +239,19 @@ struct AgendaCalendarChip: View {
                 Rectangle().fill(color).frame(width: 14, height: 2).opacity(hidden ? 0.3 : 1)
                 EngineLabel(text: title, color: hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary, size: 10)
             }
+        case .puls:
+            // Een glazen capsule met een stip in de kleur van de agenda (leeg als hij uit staat).
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(hidden ? Color.clear : color)
+                    .overlay(Circle().strokeBorder(color, lineWidth: 1.5))
+                    .frame(width: 8, height: 8)
+                label(hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary, weight: .semibold)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 10)
+            .frame(height: 24)
+            .background(Capsule().fill(Puls.glass))
         }
     }
 
@@ -356,6 +380,21 @@ struct AgendaDayHeader: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 2)
+        case .puls:
+            // Weekdag in kleine kapitalen, het dagnummer rond; vandaag wit op een rode cirkel.
+            HStack(spacing: 8) {
+                Text(weekday.uppercased())
+                    .font(.werk(size: 11, weight: .bold))
+                    .tracking(0.4)
+                    .foregroundStyle(isToday ? Puls.rood.text : ThingsColor.textTertiary)
+                Text(number)
+                    .font(.werkNumbers(size: 16, weight: isToday ? .bold : .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(isToday ? Color.white : ThingsColor.textPrimary)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(isToday ? Puls.redLabel : Color.clear))
+            }
+            .frame(maxWidth: .infinity)
         case .viertakt:
             // Het dagnummer in een rondje van de ontstekingsvolgorde; vandaag rood gevuld.
             HStack(spacing: 7) {
@@ -458,6 +497,7 @@ enum AgendaLook {
         case .karmijn: (ThingsColor.running, 2)
         case .telemetrie: (ThingsColor.running, 1)
         case .viertakt: (ThingsColor.running, 2)
+        case .puls: (Puls.rood.solid, 2)
         case .standaard: (ThingsColor.deadline, 1.5)
         }
     }
@@ -467,7 +507,7 @@ enum AgendaLook {
         switch ThemeStore.shared.look {
         case .principes: 14
         case .rekenmachine, .sneeuwwitje: 10
-        case .wandklok: 8
+        case .wandklok, .puls: 8
         case .tischsuper, .drukproef, .spark: 6
         case .standaard: 4
         case .viertakt: 3
@@ -496,7 +536,7 @@ struct NowMarker: View {
         case .sneeuwwitje: 12
         case .principes, .rekenmachine: 14
         case .telemetrie: 9
-        case .viertakt: 10
+        case .viertakt, .puls: 10
         default: 7
         }
     }
@@ -525,6 +565,10 @@ struct NowMarker: View {
             EmptyView()
         case .telemetrie:
             HUDDiamond(size: 9, color: color)
+        case .puls:
+            // Een rode stip die een beetje gloeit.
+            Circle().fill(color).frame(width: 10, height: 10)
+                .shadow(color: Puls.rood.opacity(light: 0.4, dark: 0.75), radius: 5)
         case .viertakt:
             // Het rode rondje van de cilinder die nu ontsteekt.
             Circle().fill(color).frame(width: 10, height: 10)

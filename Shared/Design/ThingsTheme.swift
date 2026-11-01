@@ -94,6 +94,8 @@ enum ThingsColor {
     // Structuur en interactie
     static var separator: Color { ThemeStore.shared.color(.separator) }
     static var accent: Color { ThemeStore.shared.color(.accent) }
+    /// Tekst en tekens op een vlak in de accent- of loopt-kleur: zwart op de felle kleuren van Puls, anders wit.
+    static var onAccent: Color { ThemeStore.shared.look == .puls ? .black : .white }
     static var selection: Color { ThemeStore.shared.color(.selection) }
     static var checkboxStroke: Color { ThemeStore.shared.color(.checkbox) }
 

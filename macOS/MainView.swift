@@ -216,6 +216,20 @@ struct MainView: View {
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 .help("Mailpaneel tonen of verbergen (⇧⌘L)")
             }
+            ToolbarItem(placement: .navigation) {
+                // Naar de mailmodus, net zo duidelijk als de knop Werkbank daar terug gaat.
+                if !mailMode.isActive {
+                    Button { mailMode.open() } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "envelope")
+                            Text("Mail")
+                            Image(systemName: "chevron.right").font(.werk(size: 10, weight: .semibold))
+                        }
+                    }
+                    .buttonStyle(MailModeButtonStyle())
+                    .help("Mailmodus")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     toggleMonthAgenda()
@@ -356,7 +370,7 @@ extension MainView {
     fileprivate func dividerFill(_ neighbour: Color) -> Color {
         switch ThemeStore.shared.look {
         case .standaard: ThingsColor.backgroundContent
-        case .drukproef, .karmijn, .telemetrie: ThingsColor.window
+        case .drukproef, .karmijn, .telemetrie, .puls: ThingsColor.window
         default: neighbour
         }
     }
