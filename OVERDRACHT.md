@@ -298,6 +298,11 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   (`searchPreview`, verandert de lijst niet): vinkjes, periode en mailboxen zoeken meteen opnieuw, tekstvelden bij
   Enter. Een klik op een resultaat zet de zoekopdracht in de lijst en opent die mail; "Toon in de lijst" doet hetzelfde
   zonder mail te kiezen. Een eigen keuze van mailboxen staat als knopje onder het zoekveld.
+- **Kolommen van de mailmodus** (mappen, lijst, klanten) zijn in de breedte te verslepen aan de lijn ertussen
+  (`ColumnResizer` in `MailModeView.swift`, bewaard in `mailMode.foldersWidth`/`listWidth`/`clientsWidth`); dubbelklik
+  zet terug. De mail in het midden neemt de rest (minstens 320 pt).
+- `MailboxTab(fitsContent:)`: in de werkbalk van de mailmodus zo breed als de naam met ruimte ernaast (Calculator,
+  Wandklok, Sneeuwwitje en Tischsuper deelden anders de breedte en kwamen tegen de tekst aan).
 - Bladen in de stijl van het concept: titel met grijze toelichting, gegroepeerde lijsten (`SheetList`), Annuleren als
   tekst en de handeling als donkere knop (`SheetButtonStyle`).
 

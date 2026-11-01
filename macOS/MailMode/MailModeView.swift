@@ -12,6 +12,18 @@ struct MailModeView: View {
     @State private var window: NSWindow?
     @State private var keyMonitor: Any?
     @AppStorage(MailModeFolders.visibleKey) private var showsFolders = true
+    // De breedte van de kolommen: te verslepen aan de lijn ertussen, dubbelklik zet terug.
+    @AppStorage("mailMode.foldersWidth") private var foldersWidth = Self.defaultFolders
+    @AppStorage("mailMode.listWidth") private var listWidth = Self.defaultList
+    @AppStorage("mailMode.clientsWidth") private var clientsWidth = Self.defaultClients
+    @State private var dragStart: Double?
+
+    private static let defaultFolders = 200.0
+    private static let defaultList = 380.0
+    private static let defaultClients = 290.0
+    private static let foldersRange = 150.0...380.0
+    private static let listRange = 280.0...720.0
+    private static let clientsRange = 220.0...480.0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,17 +32,23 @@ struct MailModeView: View {
             HStack(spacing: 0) {
                 if showsFolders {
                     MailModeFolders()
-                        .frame(width: 200)
-                    Rectangle().fill(ThingsColor.separator).frame(width: 1)
+                        .frame(width: clamp(foldersWidth, Self.foldersRange))
+                    ColumnResizer(onChanged: { foldersWidth = resized(foldersWidth, by: $0, Self.foldersRange) },
+                                  onEnded: { dragStart = nil },
+                                  onReset: { foldersWidth = Self.defaultFolders })
                 }
                 MailModeList()
-                    .frame(width: 380)
-                Rectangle().fill(ThingsColor.separator).frame(width: 1)
+                    .frame(width: clamp(listWidth, Self.listRange))
+                ColumnResizer(onChanged: { listWidth = resized(listWidth, by: $0, Self.listRange) },
+                              onEnded: { dragStart = nil },
+                              onReset: { listWidth = Self.defaultList })
                 MailModeReader()
-                    .frame(maxWidth: .infinity)
-                Rectangle().fill(ThingsColor.separator).frame(width: 1)
+                    .frame(minWidth: 320, maxWidth: .infinity)
+                ColumnResizer(onChanged: { clientsWidth = resized(clientsWidth, by: -$0, Self.clientsRange) },
+                              onEnded: { dragStart = nil },
+                              onReset: { clientsWidth = Self.defaultClients })
                 MailModeClients()
-                    .frame(width: 290)
+                    .frame(width: clamp(clientsWidth, Self.clientsRange))
             }
         }
         .background(ThingsColor.backgroundSidebar)
@@ -44,6 +62,17 @@ struct MailModeView: View {
         .background(WindowReader(window: $window))
         .onAppear(perform: installKeys)
         .onDisappear(perform: removeKeys)
+    }
+
+    private func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    /// De nieuwe breedte tijdens slepen: vanaf de breedte bij het begin van het slepen.
+    private func resized(_ current: Double, by translation: CGFloat, _ range: ClosedRange<Double>) -> Double {
+        let start = dragStart ?? current
+        dragStart = start
+        return clamp(start + Double(translation), range)
     }
 
     // MARK: Toetsen
@@ -144,7 +173,8 @@ private struct MailModeToolbar: View {
             if store.scopes.count > 1 {
                 HStack(spacing: 6) {
                     ForEach(store.scopes, id: \.self) { scope in
-                        MailboxTab(title: store.title(of: scope), isOn: store.client == nil && scope == store.scope) {
+                        MailboxTab(title: store.title(of: scope), isOn: store.client == nil && scope == store.scope,
+                                   fitsContent: true) {
                             store.select(scope: scope)
                         }
                         .fixedSize()
@@ -702,6 +732,45 @@ private struct ClientActivityRow: View {
 }
 
 // MARK: - Onderdelen
+
+/// De lijn tussen twee kolommen van de mailmodus: slepen maakt de kolom breder of smaller, dubbelklik zet terug. Een
+/// greepje in het midden laat zien dat hij schuift.
+private struct ColumnResizer: View {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: () -> Void
+    let onReset: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Rectangle()
+            .fill(ThingsColor.separator)
+            .frame(width: 1)
+            .overlay {
+                ZStack {
+                    if hovering {
+                        Rectangle().fill(ThingsColor.accent).frame(width: 2)
+                    }
+                    Capsule()
+                        .fill(hovering ? ThingsColor.accent : ThingsColor.textTertiary.opacity(0.45))
+                        .frame(width: 3, height: 32)
+                    // Een breder klikvlak dan de lijn zelf.
+                    Color.clear
+                        .frame(width: 9)
+                        .contentShape(Rectangle())
+                        .onHover { inside in
+                            hovering = inside
+                            (inside ? NSCursor.resizeLeftRight : NSCursor.arrow).set()
+                        }
+                        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { onChanged($0.translation.width) }
+                            .onEnded { _ in onEnded() })
+                        .simultaneousGesture(TapGesture(count: 2).onEnded { onReset() })
+                }
+            }
+            .zIndex(1)
+            .accessibilityLabel("Schuif de breedte van de kolom")
+    }
+}
 
 enum MailModeMetrics {
     /// Afronding van velden, knoppen en rijen: volgt het thema (Karmijn recht), hooguit 8.

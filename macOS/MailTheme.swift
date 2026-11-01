@@ -147,6 +147,8 @@ struct MailboxTab: View {
     let isOn: Bool
     var color: Color = .clear
     var count: Int?
+    /// Zo breed als de naam (de werkbalk van de mailmodus) in plaats van de breedte te delen (het Mail-paneel).
+    var fitsContent = false
     let action: () -> Void
     @Environment(\.colorScheme) private var scheme
 
@@ -171,7 +173,7 @@ struct MailboxTab: View {
                     .font(.werk(size: 11, weight: isOn ? .semibold : .regular))
                     .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
             }
-                .frame(maxWidth: .infinity)
+                .tabWidth(fitsContent)
                 .padding(.vertical, 5)
                 .background {
                     if isOn {
@@ -183,7 +185,8 @@ struct MailboxTab: View {
             // Een pianotoets van de platenspeler met het label eronder; de gekozen mailbox is oranje.
             PianoKey(title: title, fill: isOn ? ThemeParts.orange : Color(hex: 0x303030),
                      ink: isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
-                .frame(maxWidth: .infinity)
+                .tabWidth(fitsContent, padding: 4)
+                .frame(minWidth: fitsContent ? 56 : nil)
         case .principes:
             Text(title)
                 .font(.werk(size: 11, weight: isOn ? .medium : .regular))
@@ -196,7 +199,7 @@ struct MailboxTab: View {
             Text(title)
                 .font(.werk(size: 11))
                 .foregroundStyle(ThingsColor.textPrimary)
-                .frame(maxWidth: .infinity)
+                .tabWidth(fitsContent)
                 .padding(.vertical, 7)
                 .background {
                     if isOn {
@@ -251,6 +254,17 @@ struct MailboxTab: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(isOn ? ThingsColor.accent : Color.clear))
+        }
+    }
+}
+
+private extension View {
+    /// Een mailboxtab: in het paneel delen de tabs de breedte, in de werkbalk zo breed als de naam met ruimte ernaast.
+    @ViewBuilder func tabWidth(_ fitsContent: Bool, padding: CGFloat = 12) -> some View {
+        if fitsContent {
+            self.padding(.horizontal, padding)
+        } else {
+            self.frame(maxWidth: .infinity)
         }
     }
 }
