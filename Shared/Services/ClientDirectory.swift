@@ -38,10 +38,15 @@ final class ClientDirectory {
         await importOldFilesIfNeeded()
         let all = (try? context.fetch(FetchDescriptor<Client>())) ?? []
         let clients = Self.merged(all, in: context)
-        records = clients.filter { !$0.isRemoved }
+        let current = clients.filter { !$0.isRemoved }
             .map { ClientRecord(name: $0.name, details: $0.details, domains: $0.domains) }
         removedNames = Set(clients.filter(\.isRemoved).map { $0.name.lowercased() })
-        domainMap = ClientList.domainMap(records)
+        // Alleen toewijzen als er iets veranderde: de mail- en tijdlijsten tekenen anders allemaal opnieuw.
+        if current != records {
+            records = current
+            let map = ClientList.domainMap(current)
+            if map != domainMap { domainMap = map }
+        }
         rebuildLogoDomains()
         prefetchLogos()
     }

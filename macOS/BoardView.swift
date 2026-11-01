@@ -77,9 +77,12 @@ struct BoardView: View {
     private var look: ThemeLook { ThemeStore.shared.look }
 
     var body: some View {
-        HStack(alignment: .top, spacing: look == .drukproef || look == .karmijn ? 0 : (look == .principes ? 16 : 10)) {
-            ForEach(columns) { column in
-                columnView(column)
+        // De kaarten één keer over de kolommen verdelen (niet per kolom opnieuw filteren en sorteren).
+        let columns = self.columns
+        let grouped = Self.group(cards, into: columns)
+        return HStack(alignment: .top, spacing: look == .drukproef || look == .karmijn ? 0 : (look == .principes ? 16 : 10)) {
+            ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
+                columnView(column, cards: grouped[column.id] ?? [], index: index, columns: columns)
                     .offset(x: movingColumn == column.id ? moveTranslation : 0)
                     .opacity(movingColumn == column.id ? 0.85 : 1)
                     .shadow(color: .black.opacity(movingColumn == column.id ? 0.18 : 0), radius: 10, y: 4)
@@ -173,13 +176,18 @@ struct BoardView: View {
 
     // MARK: Kolom
 
-    private func cards(in column: BoardColumn) -> [TodoCard] {
-        // In de view sorteren, zodat de volgorde direct meebeweegt met de model-wijziging na het neerzetten.
-        cards.filter { BoardService.belongs($0, to: column, in: columns) }.sorted { $0.sortOrder < $1.sortOrder }
+    /// De kaarten per kolom (op kolom-id), gesorteerd. In de view sorteren, zodat de volgorde direct meebeweegt met de
+    /// model-wijziging na het neerzetten.
+    private static func group(_ cards: [TodoCard], into columns: [BoardColumn]) -> [String: [TodoCard]] {
+        var result: [String: [TodoCard]] = [:]
+        for card in cards {
+            guard let column = columns.first(where: { BoardService.belongs(card, to: $0, in: columns) }) else { continue }
+            result[column.id, default: []].append(card)
+        }
+        return result.mapValues { $0.sorted { $0.sortOrder < $1.sortOrder } }
     }
 
-    private func items(for column: BoardColumn) -> [ColumnItem] {
-        let columnCards = cards(in: column)
+    private func items(for column: BoardColumn, cards columnCards: [TodoCard]) -> [ColumnItem] {
         guard drag.isDragging, let target = drag.target, target.column == column else {
             return columnCards.map { .card($0) }
         }
@@ -199,8 +207,9 @@ struct BoardView: View {
         return result
     }
 
-    private func columnView(_ column: BoardColumn) -> some View {
-        let columnCards = cards(in: column)
+    private func columnView(_ column: BoardColumn, cards columnCards: [TodoCard], index: Int,
+                            columns: [BoardColumn]) -> some View {
+        let columnItems = items(for: column, cards: columnCards)
         let isTarget = (drag.region == .board && drag.target?.column == column && drag.isDragging)
             || dropTargetColumn == column
 
@@ -228,7 +237,7 @@ struct BoardView: View {
                         HStack(spacing: 6) {
                             ThemedHeading(title: column.title, count: columnCards.count,
                                           highlight: columnCards.contains { runningTodoIDs.contains($0.id) },
-                                          tint: Puls.columnHue(columns.firstIndex(of: column) ?? 0).big,
+                                          tint: Puls.columnHue(index).big,
                                           unit: columnCards.count == 1 ? "KAART" : "KAARTEN")
                                 .darkScheme(look == .tischsuper)
                             Spacer(minLength: 0)
@@ -297,7 +306,7 @@ struct BoardView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(items(for: column)) { item in
+                    ForEach(columnItems) { item in
                         switch item {
                         case .card(let card):
                             cell(card, in: column)
@@ -321,7 +330,7 @@ struct BoardView: View {
                     }
                 )
                 .animation(ThingsMotion.reorder, value: drag.target)
-                .animation(ThingsMotion.reorder, value: items(for: column).map(\.id))
+                .animation(ThingsMotion.reorder, value: columnItems.map(\.id))
                 .padding(.horizontal, look == .principes || look == .drukproef || look == .karmijn ? 0 : (look == .tischsuper ? 8 : 10))
                 .padding(.top, 8)
                 .padding(.bottom, 4)
@@ -508,8 +517,10 @@ struct BoardView: View {
     }
 
     private func currentOrder() -> [BoardColumn: [UUID]] {
-        Dictionary(uniqueKeysWithValues: columns.map { column in
-            (column, cards(in: column).map(\.id))
+        let columns = self.columns
+        let grouped = Self.group(cards, into: columns)
+        return Dictionary(uniqueKeysWithValues: columns.map { column in
+            (column, (grouped[column.id] ?? []).map(\.id))
         })
     }
 }

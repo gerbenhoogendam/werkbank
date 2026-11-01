@@ -93,12 +93,16 @@ struct StoredAnalysis: Codable, Identifiable {
 }
 
 enum ThreadAnalysisStore {
-    private static var folder: URL? {
+    private static let folder: URL? = {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         let url = base.appendingPathComponent("Werkbank/Analyses", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
-    }
+    }()
+
+    /// Al ingelezen analyses per bestand: de mailweergave maakt bij elke hertekening een model aan, dat mag niet elke
+    /// keer de schijf op.
+    private static var memo: [URL: [StoredAnalysis]] = [:]
 
     private static func file(account: String?, threadID: String) -> URL? {
         let safe = "\(account ?? "standaard")-\(threadID)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "." ? $0 : "_" }
@@ -106,14 +110,21 @@ enum ThreadAnalysisStore {
     }
 
     static func load(account: String?, threadID: String) -> [StoredAnalysis] {
-        guard let url = file(account: account, threadID: threadID), let data = try? Data(contentsOf: url) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([StoredAnalysis].self, from: data)) ?? []
+        guard let url = file(account: account, threadID: threadID) else { return [] }
+        if let known = memo[url] { return known }
+        var analyses: [StoredAnalysis] = []
+        if let data = try? Data(contentsOf: url) {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            analyses = (try? decoder.decode([StoredAnalysis].self, from: data)) ?? []
+        }
+        memo[url] = analyses
+        return analyses
     }
 
     static func save(_ analyses: [StoredAnalysis], account: String?, threadID: String) {
         guard let url = file(account: account, threadID: threadID) else { return }
+        memo[url] = analyses
         if analyses.isEmpty {
             try? FileManager.default.removeItem(at: url)
             return

@@ -240,7 +240,10 @@ private struct MailModeList: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Eén keer per weergave uitrekenen: de kop, de lijst en de bundel vragen er allemaal om.
+        let listed = store.listed
+        let bundle = store.bundle
+        return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
@@ -298,27 +301,27 @@ private struct MailModeList: View {
 
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
 
-            ThemedHeading(title: store.listTitle, count: store.listed.count,
-                          unit: store.listed.count == 1 ? "MAIL" : "MAILS")
+            ThemedHeading(title: store.listTitle, count: listed.count,
+                          unit: listed.count == 1 ? "MAIL" : "MAILS")
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 6)
 
-            content
+            content(listed: listed, bundle: bundle)
         }
         .background(ThingsColor.mailBackground)
         .darkScheme(ThemeStore.shared.theme.darkMail)
         .onChange(of: store.searchFocusRequest) { _, _ in searchFocused = true }
     }
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(listed: [GmailMailItem], bundle: [GmailMailItem]) -> some View {
         if let error = store.loadError {
             Text(error)
                 .thingsFont(.metadata)
                 .foregroundStyle(ThingsColor.deadline)
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        } else if store.listed.isEmpty && store.bundle.isEmpty {
+        } else if listed.isEmpty && bundle.isEmpty {
             Text(store.isLoading ? "Mail ophalen…" : "Geen mail")
                 .thingsFont(.metadata)
                 .foregroundStyle(ThingsColor.textSecondary)
@@ -327,8 +330,9 @@ private struct MailModeList: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: MailLook.cardRows ? 2 : 0) {
-                        if !store.bundle.isEmpty { bundleRow }
-                        ForEach(store.sections) { section in
+                        if !bundle.isEmpty { bundleRow(bundle) }
+                        let following = Set(FollowUpStore.shared.items.map(\.threadID))
+                        ForEach(store.sections(of: listed)) { section in
                             Text(section.id)
                                 .font(.werk(size: 11, weight: .semibold))
                                 .foregroundStyle(ThingsColor.textSecondary)
@@ -336,7 +340,7 @@ private struct MailModeList: View {
                                 .padding(.top, 10)
                                 .padding(.bottom, 4)
                             ForEach(section.items) { item in
-                                row(item).id(item.id)
+                                row(item, following: following).id(item.id)
                             }
                         }
                     }
@@ -351,12 +355,12 @@ private struct MailModeList: View {
         }
     }
 
-    private func row(_ item: GmailMailItem) -> some View {
+    private func row(_ item: GmailMailItem, following: Set<String>) -> some View {
         GmailRow(message: store.rowSummary(item),
                  isBusy: gmail.busyMessageIDs.contains(item.id),
                  isSelected: store.selectedID == item.id,
                  accountLabel: store.showsAccounts ? gmail.account(for: item.id).map(gmail.displayName) : nil,
-                 tags: tags(for: item),
+                 tags: tags(for: item, following: following),
                  onOpen: { store.select(item) },
                  onSelect: { store.select(item) },
                  onArchive: {
@@ -367,12 +371,12 @@ private struct MailModeList: View {
                  onDragStarted: { MailDragState.shared.begin(account: gmail.account(for: item.id)) })
     }
 
-    private func tags(for item: GmailMailItem) -> [MailRowTag] {
+    private func tags(for item: GmailMailItem, following: Set<String>) -> [MailRowTag] {
         var tags: [MailRowTag] = []
         if let returned = FollowUpStore.shared.returned[item.threadID] {
             tags.append(MailRowTag(text: "Terug · \(returned)", systemImage: "arrow.uturn.backward", highlighted: true))
         }
-        if FollowUpStore.shared.items.contains(where: { $0.threadID == item.threadID }) {
+        if following.contains(item.threadID) {
             tags.append(MailRowTag(text: "Opvolgen", systemImage: "clock.arrow.circlepath"))
         }
         if store.client == nil, let client = store.clientName(for: item) { tags.append(MailRowTag(text: client)) }
@@ -387,9 +391,8 @@ private struct MailModeList: View {
     }
 
     /// Nieuwsbrieven en meldingen samen in één rij; openklappen zet ze in de lijst.
-    private var bundleRow: some View {
-        let bundle = store.bundle
-        return HStack(spacing: 6) {
+    private func bundleRow(_ bundle: [GmailMailItem]) -> some View {
+        HStack(spacing: 6) {
             bundleToggle(bundle)
             Button("Archiveren…") { store.openSheet(.bulk) }
                 .buttonStyle(MailModeButtonStyle())
@@ -412,6 +415,8 @@ private struct MailModeList: View {
                     Text("Nieuwsbrieven en meldingen · \(bundle.count)")
                         .font(.werk(size: 12.5, weight: .semibold))
                         .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     Text(Array(Set(bundle.map(\.senderDisplay))).sorted().joined(separator: ", "))
                         .font(.werk(size: 11.5))
                         .foregroundStyle(ThingsColor.textSecondary)

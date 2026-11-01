@@ -91,18 +91,22 @@ private struct SheetFrame<Content: View, Buttons: View>: View {
 struct SheetButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary, plain }
     var kind: Kind = .secondary
+    /// Een keuze die aan staat (Korter, Uitgebreider): gevuld met de accentkleur, even hoog als de andere knoppen.
+    var isOn = false
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: max(6, MailModeMetrics.radius + 2), style: .continuous)
+        let onFill = ThemeStore.shared.look == .puls ? Puls.groen.solid : ThingsColor.accent
         return configuration.label
             .font(.werk(size: 13.5, weight: kind == .primary ? .semibold : .medium))
-            .foregroundStyle(kind == .primary ? ThingsColor.backgroundContent : ThingsColor.textPrimary)
+            .foregroundStyle(isOn ? ThingsColor.onAccent
+                             : (kind == .primary ? ThingsColor.backgroundContent : ThingsColor.textPrimary))
             .padding(.horizontal, kind == .plain ? 10 : 16)
             .frame(height: 34)
-            .background(shape.fill(kind == .primary ? ThingsColor.textPrimary
-                                   : (kind == .secondary ? ThingsColor.cardBackground : Color.clear)))
-            .overlay(shape.strokeBorder(kind == .secondary ? ThingsColor.separator : Color.clear))
+            .background(shape.fill(isOn ? onFill : (kind == .primary ? ThingsColor.textPrimary
+                                   : (kind == .secondary ? ThingsColor.cardBackground : Color.clear))))
+            .overlay(shape.strokeBorder(kind == .secondary && !isOn ? ThingsColor.separator : Color.clear))
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
             .contentShape(shape)
     }
@@ -771,10 +775,10 @@ private struct MailConceptSheet: View {
             }
         } buttons: {
             Button("Korter") { restart(.shorter) }
-                .buttonStyle(MailFilterChipStyle(isOn: concept.length == .shorter))
+                .buttonStyle(SheetButtonStyle(isOn: concept.length == .shorter))
                 .disabled(concept.isRunning)
             Button("Uitgebreider") { restart(.longer) }
-                .buttonStyle(MailFilterChipStyle(isOn: concept.length == .longer))
+                .buttonStyle(SheetButtonStyle(isOn: concept.length == .longer))
                 .disabled(concept.isRunning)
             Spacer(minLength: 8)
             Button("Annuleren") {

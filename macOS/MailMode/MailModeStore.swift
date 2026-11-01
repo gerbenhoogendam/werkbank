@@ -501,14 +501,16 @@ final class MailModeStore {
         }
     }
 
-    var sections: [Section] {
+
+    /// `listed` in groepen naar dag (Vandaag, Gisteren, Deze week, Eerder).
+    func sections(of listed: [GmailMailItem]) -> [Section] {
         let calendar = Calendar.current
-        let now = Date()
+        let week = calendar.dateInterval(of: .weekOfYear, for: Date())
         func label(_ date: Date?) -> String {
             guard let date else { return "Eerder" }
             if calendar.isDateInToday(date) { return "Vandaag" }
             if calendar.isDateInYesterday(date) { return "Gisteren" }
-            if let week = calendar.dateInterval(of: .weekOfYear, for: now), week.contains(date) { return "Deze week" }
+            if let week, week.contains(date) { return "Deze week" }
             return "Eerder"
         }
         var groups: [(name: String, items: [GmailMailItem])] = []

@@ -149,13 +149,17 @@ struct GmailPanel: View {
             .onTapGesture(count: 2) { MailModeStore.shared.open() }
             .help("Dubbelklik voor de mailmodus")
             if gmail.state == .signedIn {
+                // Vaste maat: het draaiwiel en de knop nemen evenveel plek in, de kop verspringt niet bij verversen.
                 if gmail.isLoading {
                     ProgressView().controlSize(.small)
+                        .frame(width: 22, height: 22)
                 } else {
                     Button {
                         Task { await gmail.reload() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(ThingsColor.textSecondary)
@@ -165,6 +169,8 @@ struct GmailPanel: View {
                     PanelStore.shared.open(.compose(ComposeRef(mode: .new, source: nil)))
                 } label: {
                     Image(systemName: "square.and.pencil")
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(ThingsColor.textSecondary)
@@ -686,7 +692,8 @@ struct GmailRow: View {
                         .padding(.leading, 13)
                 }
                 if !tags.isEmpty {
-                    HStack(spacing: 5) {
+                    // Op meer regels als ze niet naast elkaar passen (smalle kolom, veel labels).
+                    WrapStack(spacing: 4) {
                         ForEach(tags) { tag in
                             HStack(spacing: 3) {
                                 if let symbol = tag.systemImage {
