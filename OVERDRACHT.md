@@ -395,8 +395,12 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 - Bewust niet gedaan (risico zonder te kunnen kijken, of weinig winst): de agenda tekent tijdens het slepen nog alle
   dagkolommen opnieuw (voorvertoning naar eigen kindviews halen); `AgendaEvent` haalt nog deelnemers, notities en
   organisator op voor elke afspraak (ook de dagafsluiting gebruikt die); de opvolgcontrole (elke vijf minuten) haalt
-  gesprekken na elkaar op; alle kaarten luisteren naar één gedeelde subtakenlijst; het Mail-paneel haalt elke twee
-  minuten de koppen van alle 40 inboxmails opnieuw op (de history-API van Gmail zou alleen wijzigingen geven).
+  gesprekken na elkaar op; alle kaarten luisteren naar één gedeelde subtakenlijst; de mailmodus haalt bij verversen
+  nog alle koppen opnieuw op (daar veranderen labels wel: archiveren, mappen; de history-API van Gmail zou alleen
+  wijzigingen geven).
+- Mail-paneel verversen (`GmailSession.reload(key:)`): naast de inboxlijst één lijst van ongelezen inboxmails; alleen
+  nieuwe mails krijgen hun kop, bekende houden hun gegevens en krijgen alleen gelezen/ongelezen bij. Lukt de lijst
+  van ongelezen niet, dan alles opnieuw zoals eerst.
 - Na te gaan op de Mac: of de lijst echt direct staat, of Gmail geen "rate limit" geeft bij vijf mailboxen tegelijk
   (dan `8` in `mailItems(ids:)` verlagen), en of de bewaarde lijst na archiveren niet even de oude mail toont.
 
