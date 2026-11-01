@@ -271,6 +271,7 @@ struct MailboxTab: View {
             Text(title)
                 .font(.werk(size: 12, weight: .semibold))
                 .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
+                .padding(.horizontal, fitsContent ? 0 : 8)
                 .tabWidth(fitsContent)
                 .padding(.vertical, 5)
                 .background {
@@ -373,5 +374,32 @@ enum MailLook {
     static func initials(_ name: String) -> String {
         let words = name.split(whereSeparator: { $0 == " " || $0 == "." || $0 == "@" }).prefix(2)
         return words.compactMap { $0.first.map(String.init) }.joined().uppercased()
+    }
+}
+
+/// Segmenten naast elkaar die samen de breedte vullen: elk zo breed als zijn inhoud, wat over is gelijk verdeeld. Past
+/// het niet, dan krimpen ze naar verhouding (de langste namen worden het eerst afgekort).
+struct SegmentRow: Layout {
+    var spacing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let natural = sizes.reduce(0) { $0 + $1.width } + spacing * CGFloat(max(0, subviews.count - 1))
+        return CGSize(width: proposal.width ?? natural, height: sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let ideals = subviews.map { $0.sizeThatFits(.unspecified).width }
+        let natural = ideals.reduce(0, +)
+        let available = max(0, bounds.width - spacing * CGFloat(subviews.count - 1))
+        let extra = (available - natural) / CGFloat(subviews.count)
+        var x = bounds.minX
+        for (index, subview) in subviews.enumerated() {
+            let width = extra >= 0 ? ideals[index] + extra : ideals[index] * available / max(1, natural)
+            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
+                          proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + spacing
+        }
     }
 }

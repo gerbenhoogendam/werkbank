@@ -43,7 +43,7 @@ public enum MailKind: String, Codable, CaseIterable {
 // MARK: - Mail in de mailmodus
 
 /// Eén mail uit `messages.get` (format=metadata): koppen, labels en het MIME-type (voor "met bijlage").
-public struct GmailMailItem: Equatable, Identifiable {
+public struct GmailMailItem: Equatable, Identifiable, Codable {
     public var id: String
     public var threadID: String
     public var fromName: String?

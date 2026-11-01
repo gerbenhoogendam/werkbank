@@ -621,7 +621,15 @@ final class GmailSession {
     }
 
     /// De eigen adressen (alle gekoppelde mailboxen), in kleine letters.
-    var ownAddresses: Set<String> { Set(accounts.map { $0.lowercased() }) }
+    var ownAddresses: Set<String> {
+        // Onthouden: dit wordt per mail gevraagd (klanten, aanvullen, rijen).
+        if ownAddressCache.accounts != accounts {
+            ownAddressCache = (accounts, Set(accounts.map { $0.lowercased() }))
+        }
+        return ownAddressCache.set
+    }
+
+    @ObservationIgnored private var ownAddressCache: (accounts: [String], set: Set<String>) = ([], [])
 
     // MARK: Verzonden mails (dagafsluiting)
 

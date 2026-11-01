@@ -216,8 +216,7 @@ struct GmailPanel: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 10)
         } else {
-            HStack(spacing: look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0
-                                                       : (look == .standaard ? 4 : (look == .karmijn ? 9 : (look == .tischsuper ? 2 : 6))))) {
+            tabLayout {
                 if hasPartialCombination {
                     combinedPill
                     if look == .karmijn { tabSlash }
@@ -251,6 +250,15 @@ struct GmailPanel: View {
                 if look == .standaard { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
             }
         }
+    }
+
+    /// De mailboxen naast elkaar. Puls: elk zo breed als de naam met marge, de rest gelijk verdeeld (geen gelijke
+    /// vakjes waarin een lange naam tegen de rand komt).
+    private var tabLayout: AnyLayout {
+        if look == .puls { return AnyLayout(SegmentRow()) }
+        let spacing: CGFloat = look == .drukproef ? 14 : (look == .wandklok || look == .sneeuwwitje ? 0
+            : (look == .standaard ? 4 : (look == .karmijn ? 9 : (look == .tischsuper ? 2 : 6))))
+        return AnyLayout(HStackLayout(spacing: spacing))
     }
 
     private var tabSlash: some View {

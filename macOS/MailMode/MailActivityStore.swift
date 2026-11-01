@@ -27,13 +27,14 @@ final class MailActivityStore {
     @ObservationIgnored private var coveredFrom: [String: Date] = [:]
     @ObservationIgnored private var ids = Set<String>()
     @ObservationIgnored private var loaded = false
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     /// Hoe ver terug, hoe lang een mail bewaard blijft en hoe vaak er wordt bijgewerkt.
     static let historyDays = 92.0
     private static let keepDays = 400.0
     private static let refreshInterval = 86_400.0
 
-    private static var file: URL? {
+    private nonisolated static var file: URL? {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         let folder = base.appendingPathComponent("Werkbank", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -56,13 +57,18 @@ final class MailActivityStore {
         ids = Set(records.map(\.id))
     }
 
-    private func save() {
-        guard let file = Self.file else { return }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
+    /// Bewaren gebeurt even later en buiten de hoofdthread: het bestand is groot en `add` komt per mailbox langs.
+    private func save(after delay: Duration = .seconds(2)) {
+        saveTask?.cancel()
         let stored = Stored(records: records, lastSync: lastSync, names: names, coveredFrom: coveredFrom)
-        if let data = try? encoder.encode(stored) {
-            try? data.write(to: file, options: .atomic)
+        saveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let file = MailActivityStore.file else { return }
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .secondsSince1970
+            if let data = try? encoder.encode(stored) {
+                try? data.write(to: file, options: .atomic)
+            }
         }
     }
 
@@ -144,7 +150,7 @@ final class MailActivityStore {
             ids = Set(records.map(\.id))
             changed = true
         }
-        save()
+        save(after: .zero)
         return changed
     }
 }

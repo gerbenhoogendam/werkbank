@@ -77,6 +77,11 @@ final class MailModeStore {
     static let bulkRulesKey = "mailMode.bulkRules"
 
     @ObservationIgnored private var searchTask: Task<Void, Never>?
+    /// Welke lijst er nu staat (mailbox, map, zoekopdracht, filters); bij een andere lijst komt eerst wat er de vorige
+    /// keer stond.
+    @ObservationIgnored private var shownKey: String?
+    /// De klant bij een mail, onthouden per mail (met de grootte van de klantenlijst, om te zien of die veranderde).
+    @ObservationIgnored private var clientCache: [String: (mapSize: Int, name: String?)] = [:]
     @ObservationIgnored private var returnTask: Task<Void, Never>?
     @ObservationIgnored private var escapeMonitor: Any?
     @ObservationIgnored private var loadToken = 0
@@ -220,8 +225,13 @@ final class MailModeStore {
     }
 
     func refreshLabels() async {
-        for account in gmail.accounts {
-            if let labels = try? await gmail.userLabels(account: account) { labelsByAccount[account] = labels }
+        await withTaskGroup(of: (String, [GmailLabel]?).self) { group in
+            for account in gmail.accounts {
+                group.addTask { [gmail] in (account, try? await gmail.userLabels(account: account)) }
+            }
+            for await (account, labels) in group {
+                if let labels { labelsByAccount[account] = labels }
+            }
         }
     }
 
@@ -272,10 +282,20 @@ final class MailModeStore {
 
     // MARK: Lijst
 
+    /// Laadt de lijst opnieuw. Een andere lijst dan net toont meteen wat er de vorige keer stond (ook na opnieuw
+    /// starten), anders komt wat binnen is per mailbox erbij; de mailboxen worden tegelijk opgehaald.
     func reload() async {
         guard gmail.state == .signedIn else { return }
         loadToken += 1
         let token = loadToken
+        let key = listKey
+        if key != shownKey {
+            shownKey = key
+            items = MailListCache.shared.items(for: key) ?? []
+            loadError = nil
+            if selectedID == nil { selectedID = listed.first?.id }
+        }
+        let growsWhileLoading = items.isEmpty
         isLoading = true
         let domains = client.map(clientDomains) ?? []
         if client != nil, domains.isEmpty {
@@ -284,35 +304,73 @@ final class MailModeStore {
             loadError = "Bij deze klant staat geen domein in de klantenlijst."
             return
         }
-        var found: [GmailMailItem] = []
-        var failure: String?
-        var activityChanged = false
+        var result: (items: [GmailMailItem], error: String?, activityChanged: Bool)
         if filters.contains(.waiting) {
-            found = await waitingItems()
+            result = (Self.newestFirst(await waitingItems()), nil, false)
         } else {
             let request = MailSearch.request(text: query, folder: folder, attachment: filters.contains(.attachment),
                                              unread: filters.contains(.unread), clientDomains: domains)
             var targets: [String?] = client != nil ? accounts(of: .all) : (folder.account.map { [$0] } ?? accounts(of: scope))
             if let searchAccounts, client == nil { targets = searchAccounts.map { $0 } }
+            result = await fetchAll(request, accounts: targets) { [weak self] partial in
+                guard let self, growsWhileLoading, token == self.loadToken else { return }
+                self.items = partial
+                if self.selectedID == nil { self.selectedID = self.listed.first?.id }
+            }
+        }
+        guard token == loadToken else { return }
+        items = result.items
+        if result.error == nil { MailListCache.shared.store(result.items, for: key) }
+        loadError = items.isEmpty ? result.error : nil
+        refreshTaskThreads()
+        isLoading = false
+        if selected == nil { selectedID = listed.first?.id }
+        if result.activityChanged { refreshRanking() }
+    }
+
+    /// Welke lijst er gevraagd wordt: bereik, map, zoektekst, filters, klant en eigen keuze van mailboxen.
+    private var listKey: String {
+        [String(describing: scope), String(describing: folder), query.trimmingCharacters(in: .whitespacesAndNewlines),
+         filters.map(\.rawValue).sorted().joined(separator: ","), client ?? "",
+         (searchAccounts ?? []).joined(separator: ",")].joined(separator: "|")
+    }
+
+    /// Haalt een lijst uit meerdere mailboxen tegelijk. `progress` krijgt na elke mailbox wat er tot dan toe binnen is.
+    private func fetchAll(_ request: MailListRequest, accounts targets: [String?], maxResults: Int = 50,
+                          progress: (([GmailMailItem]) -> Void)? = nil) async
+        -> (items: [GmailMailItem], error: String?, activityChanged: Bool) {
+        var found: [GmailMailItem] = []
+        var failure: String?
+        var activityChanged = false
+        await withTaskGroup(of: (String?, Result<[GmailMailItem], Error>).self) { group in
             for account in targets {
-                do {
-                    let items = try await gmail.mailItems(request, account: account)
+                group.addTask { [gmail] in
+                    do {
+                        return (account, .success(try await gmail.mailItems(request, account: account, maxResults: maxResults)))
+                    } catch {
+                        return (account, .failure(error))
+                    }
+                }
+            }
+            for await (account, outcome) in group {
+                switch outcome {
+                case .success(let items):
                     found += items
                     if MailActivityStore.shared.add(items, account: account) { activityChanged = true }
-                } catch {
+                    progress?(Self.newestFirst(found))
+                case .failure(let error):
                     failure = failure ?? error.localizedDescription
                 }
             }
         }
-        guard token == loadToken else { return }
+        return (Self.newestFirst(found), found.isEmpty ? failure : nil, activityChanged)
+    }
+
+    /// Nieuwste eerst, één mail per gesprek.
+    private static func newestFirst(_ found: [GmailMailItem]) -> [GmailMailItem] {
         var seen = Set<String>()
-        items = found.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+        return found.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
             .filter { seen.insert($0.threadID).inserted }
-        loadError = items.isEmpty ? failure : nil
-        refreshTaskThreads()
-        isLoading = false
-        if selected == nil { selectedID = listed.first?.id }
-        if activityChanged { refreshRanking() }
     }
 
     /// De gesprekken waarop een antwoord wordt verwacht (opvolgen), met de nieuwste mail van elk.
@@ -339,11 +397,19 @@ final class MailModeStore {
     /// De klant bij een mail: de afzender, of bij verzonden mail de eerste ontvanger die een klant is.
     func clientName(for item: GmailMailItem) -> String? {
         let map = ClientDirectory.shared.domainMap
+        // Per mail onthouden: de lijst, de bundel, de labels en de toetsen vragen dit bij elke weergave opnieuw.
+        if let hit = clientCache[item.id], hit.mapSize == map.count { return hit.name }
         let own = gmail.ownAddresses
+        var name: String?
         for address in item.addresses where !own.contains(address) {
-            if let name = ClientActivity.client(forAddress: address, domainMap: map) { return name }
+            if let found = ClientActivity.client(forAddress: address, domainMap: map) {
+                name = found
+                break
+            }
         }
-        return nil
+        if clientCache.count > 4000 { clientCache.removeAll() }
+        clientCache[item.id] = (map.count, name)
+        return name
     }
 
     func kind(of item: GmailMailItem) -> MailKind {
@@ -423,16 +489,16 @@ final class MailModeStore {
             if let week = calendar.dateInterval(of: .weekOfYear, for: now), week.contains(date) { return "Deze week" }
             return "Eerder"
         }
-        var result: [Section] = []
+        var groups: [(name: String, items: [GmailMailItem])] = []
         for item in listed {
             let name = label(item.date)
-            if result.last?.id == name {
-                result[result.count - 1] = Section(id: name, items: result[result.count - 1].items + [item])
+            if groups.last?.name == name {
+                groups[groups.count - 1].items.append(item)
             } else {
-                result.append(Section(id: name, items: [item]))
+                groups.append((name, [item]))
             }
         }
-        return result
+        return groups.map { Section(id: $0.name, items: $0.items) }
     }
 
     // MARK: Gekozen mail
@@ -497,6 +563,7 @@ final class MailModeStore {
         let order = listed
         let index = order.firstIndex { $0.threadID == threadID }
         items.removeAll { $0.threadID == threadID }
+        MailListCache.shared.remove(threadID: threadID)
         guard selected == nil else { return }
         let rest = listed
         if let index, !rest.isEmpty {
@@ -625,19 +692,9 @@ final class MailModeStore {
     /// De resultaten in het zoekvenster zelf, zonder de lijst te veranderen: nieuwste eerst, één per gesprek.
     func searchPreview(_ form: MailSearchForm, mailboxes: [String]) async -> (items: [GmailMailItem], error: String?) {
         let request = MailSearch.request(text: form.query(), folder: .inbox)
-        var found: [GmailMailItem] = []
-        var failure: String?
-        for account in mailboxes {
-            do {
-                found += try await gmail.mailItems(request, account: account, maxResults: 40)
-            } catch {
-                failure = failure ?? error.localizedDescription
-            }
-        }
-        var seen = Set<String>()
-        let items = found.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
-            .filter { seen.insert($0.threadID).inserted }
-        return (items, items.isEmpty ? failure : nil)
+        let result = await fetchAll(request, accounts: mailboxes.map { $0 }, maxResults: 40)
+        if result.activityChanged { refreshRanking() }
+        return (result.items, result.error)
     }
 
     func clearSearchAccounts() {
