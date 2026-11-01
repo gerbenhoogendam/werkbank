@@ -89,8 +89,11 @@ final class MailConcept {
         let names = [client, item.fromName].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.filter { $0.count > 2 }
         if let client {
             let columns = BoardService.columns(in: modelContext)
-            let cards = BoardService.allCards(in: modelContext).filter {
-                ($0.clientLabel ?? "").caseInsensitiveCompare(client) == .orderedSame && $0.columnRaw != BoardColumn.doneID
+            // Alleen open kaarten met een klant uit de database (niet het archief).
+            let open = FetchDescriptor<TodoCard>(predicate: #Predicate { $0.columnRaw != "done" && $0.clientLabel != nil },
+                                                 sortBy: [SortDescriptor(\.sortOrder)])
+            let cards = ((try? modelContext.fetch(open)) ?? []).filter {
+                ($0.clientLabel ?? "").caseInsensitiveCompare(client) == .orderedSame
             }
             for card in cards.prefix(3) {
                 let column = columns.first { $0.id == card.columnRaw }?.title
