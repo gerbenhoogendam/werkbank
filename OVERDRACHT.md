@@ -386,6 +386,17 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   paneel vragen alleen de kaarten op die ze nodig hebben (niet het archief).
 - Inspreken: `VoiceWave`/`VoiceGlow` krijgen het niveau als functie en lezen het pas in hun animatie;
   `DictationLevel` leest het zelf.
+- Inplannen (P): de afspraken rond het gekozen moment staan in `window` (één vraag aan EventKit); `CalendarService`
+  haalt buurperiodes alleen op met `prefetchNeighbors: true` (week- en maandagenda).
+- Dag afsluiten wacht 600 ms na een wijziging in het datumveld; het handtekeningvoorbeeld 300 ms na typen.
+- `QuoteSplitter.split` zoekt na de eerste vondst alleen het stuk ervoor (met 4000 tekens marge) en kijkt eerst naar
+  `<img`; `SiteIconFinder` haalt de icoonkandidaten tegelijk op (de eerste bruikbare in volgorde wint).
+- `PreferencesSync.push` leest het iCloud-bestand niet als geen gedeelde instelling veranderde.
+- Bewust niet gedaan (risico zonder te kunnen kijken, of weinig winst): de agenda tekent tijdens het slepen nog alle
+  dagkolommen opnieuw (voorvertoning naar eigen kindviews halen); `AgendaEvent` haalt nog deelnemers, notities en
+  organisator op voor elke afspraak (ook de dagafsluiting gebruikt die); de opvolgcontrole (elke vijf minuten) haalt
+  gesprekken na elkaar op; alle kaarten luisteren naar één gedeelde subtakenlijst; het Mail-paneel haalt elke twee
+  minuten de koppen van alle 40 inboxmails opnieuw op (de history-API van Gmail zou alleen wijzigingen geven).
 - Na te gaan op de Mac: of de lijst echt direct staat, of Gmail geen "rate limit" geeft bij vijf mailboxen tegelijk
   (dan `8` in `mailItems(ids:)` verlagen), en of de bewaarde lijst na archiveren niet even de oude mail toont.
 
