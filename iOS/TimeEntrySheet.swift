@@ -224,7 +224,7 @@ struct TimeEntrySheet: View {
             }
             Group {
                 if listening {
-                    VoiceWave(level: dictation.level, motion: voiceMotion)
+                    VoiceWave(level: { dictation.level }, motion: voiceMotion)
                         .frame(height: max(bodyHeight, 48))
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
                 } else if pending.contains(field) {
@@ -250,7 +250,7 @@ struct TimeEntrySheet: View {
         .background(shape.fill(ThingsColor.backgroundSidebar))
         .overlay {
             if listening {
-                VoiceGlow(level: dictation.level, motion: voiceMotion, shape: shape)
+                VoiceGlow(level: { dictation.level }, motion: voiceMotion, shape: shape)
                     .transition(.opacity)
             } else {
                 shape.strokeBorder(active ? ThingsColor.accent.opacity(0.6) : ThingsColor.separator,

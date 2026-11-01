@@ -72,6 +72,9 @@ struct EventLocationView: View {
         }
         .task(id: location) {
             isWorking = true
+            // Het vertrekpunt tegelijk alvast opzoeken (komt in het geheugen), zodat de reistijd niet daarop wacht.
+            let originText = originAddress
+            Task { await Self.warm(originText) }
             destination = await Self.mapItem(for: location)
             if let destination {
                 position = .region(MKCoordinateRegion(center: destination.placemark.coordinate,
@@ -121,7 +124,24 @@ struct EventLocationView: View {
         }
     }
 
-    private static func mapItem(for address: String) async -> MKMapItem? {
+    /// Gevonden adressen (kantoor en thuis komen bij elke afspraak terug), zolang de app draait.
+    @MainActor private static var found: [String: MKMapItem] = [:]
+
+    @MainActor private static func warm(_ address: String) async {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        _ = await mapItem(for: trimmed)
+    }
+
+    @MainActor private static func mapItem(for address: String) async -> MKMapItem? {
+        let key = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let known = found[key] { return known }
+        let item = await search(address)
+        if let item { found[key] = item }   // niet gevonden of geen verbinding: later opnieuw proberen
+        return item
+    }
+
+    private static func search(_ address: String) async -> MKMapItem? {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = address
         // Voorkeur voor Nederland.

@@ -148,7 +148,7 @@ private struct FeedbackOverlayView: View {
                         .offset(x: rect.minX, y: rect.minY)
                         .allowsHitTesting(false)
                 }
-                VoiceGlow(level: dictation.level, motion: motion,
+                VoiceGlow(level: { dictation.level }, motion: motion,
                           shape: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .frame(width: proxy.size.width, height: proxy.size.height)
                 controls

@@ -38,14 +38,15 @@ final class VoiceMotion {
 /// Rand om het veld waarin je inspreekt: een kleurverloop dat langs de rand stroomt, met een gloed die opleeft als je
 /// praat. Verminderde beweging: de rand staat stil, alleen de gloed volgt je stem.
 struct VoiceGlow<S: InsettableShape>: View {
-    let level: Double
+    /// Wordt pas in de animatie gelezen: zo tekent alleen dit vlak mee met het geluid, niet het scherm eromheen.
+    let level: () -> Double
     let motion: VoiceMotion
     let shape: S
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         TimelineView(.animation) { context in
-            let _ = motion.advance(to: level, at: context.date.timeIntervalSinceReferenceDate, reduceMotion: reduceMotion)
+            let _ = motion.advance(to: level(), at: context.date.timeIntervalSinceReferenceDate, reduceMotion: reduceMotion)
             let energy = min(motion.level, 1)
             let gradient = AngularGradient(gradient: Gradient(stops: stops(flow: motion.flow)), center: .center,
                                            angle: .radians(motion.flow * 0.6))
@@ -81,7 +82,8 @@ struct VoiceGlow<S: InsettableShape>: View {
 /// ademen en langs het veld stromen, met een zachte gloed eronder. Verminderde beweging: de golven staan stil en
 /// worden alleen helderder als je praat.
 struct VoiceWave: View {
-    let level: Double
+    /// Wordt pas in de animatie gelezen: zo tekent alleen dit vlak mee met het geluid, niet het scherm eromheen.
+    let level: () -> Double
     let motion: VoiceMotion
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -107,7 +109,7 @@ struct VoiceWave: View {
 
     var body: some View {
         TimelineView(.animation) { context in
-            let _ = motion.advance(to: level, at: context.date.timeIntervalSinceReferenceDate, reduceMotion: reduceMotion)
+            let _ = motion.advance(to: level(), at: context.date.timeIntervalSinceReferenceDate, reduceMotion: reduceMotion)
             let energy = min(motion.level, 1)
             let flow = motion.flow
             Canvas { canvas, size in

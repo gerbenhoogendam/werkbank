@@ -88,7 +88,7 @@ struct FeedbackDictationSheet: View {
         Button(action: toggle) {
             VStack(spacing: 10) {
                 if dictation.isRecording {
-                    VoiceWave(level: dictation.level, motion: voiceMotion)
+                    VoiceWave(level: { dictation.level }, motion: voiceMotion)
                         .frame(height: 56)
                     Text("Klaar")
                         .font(.werk(size: 17, weight: .semibold))
@@ -105,7 +105,7 @@ struct FeedbackDictationSheet: View {
             .background(shape.fill(ThingsColor.backgroundSidebar))
             .overlay {
                 if dictation.isRecording {
-                    VoiceGlow(level: dictation.level, motion: voiceMotion, shape: shape)
+                    VoiceGlow(level: { dictation.level }, motion: voiceMotion, shape: shape)
                 } else {
                     shape.strokeBorder(ThingsColor.separator)
                 }

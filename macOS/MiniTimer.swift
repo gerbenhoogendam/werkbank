@@ -156,17 +156,13 @@ struct MiniTimerView: View {
             .map { [$0] } ?? []
     }
 
-    private var isShown: Bool {
-        !shown.isEmpty || appState.hudMessage != nil || appState.idlePrompt != nil || dictation.isActive
-    }
-
-    /// Een melding of vraag staat als één pil; anders één pil per timer.
-    private var rows: Int {
-        appState.idlePrompt != nil || appState.hudMessage != nil || dictation.isActive ? 1 : max(1, shown.count)
-    }
-
     var body: some View {
-        Group {
+        // Eén keer per weergave (filteren en sorteren); zichtbaar en het aantal pillen volgen eruit.
+        let shown = self.shown
+        let isShown = !shown.isEmpty || appState.hudMessage != nil || appState.idlePrompt != nil || dictation.isActive
+        // Een melding of vraag staat als één pil; anders één pil per timer.
+        let rows = appState.idlePrompt != nil || appState.hudMessage != nil || dictation.isActive ? 1 : max(1, shown.count)
+        return Group {
             if let prompt = appState.idlePrompt {
                 // Blijft staan tot er gekozen is.
                 idleContent(prompt)
@@ -442,7 +438,7 @@ struct MiniTimerView: View {
                 .font(.werk(size: size.titleFont + 3, weight: .semibold))
                 .foregroundStyle(listening ? Color(hex: 0xFF453A) : Color.white)
             if listening {
-                DictationLevel(level: dictation.level, size: size)
+                DictationLevel(size: size)
             } else {
                 ProgressView()
                     .controlSize(.small)

@@ -128,13 +128,13 @@ struct ComposeView: View {
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url else { return }
-                    Task { @MainActor in addFile(url) }
+                    Task { @MainActor in addFiles([url]) }
                 }
             }
             return true
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { urls.forEach { addFile($0, scoped: true) } }
+            if case .success(let urls) = result { addFiles(urls, scoped: true) }
         }
     }
 
@@ -574,10 +574,21 @@ struct ComposeView: View {
 
     // MARK: Bijlagen
 
-    private func addFile(_ url: URL, scoped: Bool = false) {
-        let access = scoped ? url.startAccessingSecurityScopedResource() : false
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else {
+    /// Na elkaar, zodat de volgorde blijft zoals gekozen.
+    private func addFiles(_ urls: [URL], scoped: Bool = false) {
+        Task { @MainActor in
+            for url in urls { await addFile(url, scoped: scoped) }
+        }
+    }
+
+    private func addFile(_ url: URL, scoped: Bool) async {
+        // Lezen buiten de hoofdthread: een groot bestand, of een dat iCloud nog moet ophalen, liet het venster hangen.
+        let read = await Task.detached(priority: .userInitiated) { () -> Data? in
+            let access = scoped ? url.startAccessingSecurityScopedResource() : false
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            return try? Data(contentsOf: url)
+        }.value
+        guard let data = read else {
             errorText = "\(url.lastPathComponent) kon niet worden gelezen."
             return
         }

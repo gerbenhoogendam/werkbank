@@ -430,11 +430,12 @@ enum DictationSplitter {
 
 /// Tijdens het inspreken in de timer-pil: het niveau als balkjes, daarna een draaiend wieltje.
 struct DictationLevel: View {
-    let level: Double
     let size: MiniTimerSize
 
     var body: some View {
-        HStack(alignment: .center, spacing: max(2, size.dot * 0.3)) {
+        // Het niveau hier lezen (een keer of tien per seconde): dan tekent alleen dit staafje opnieuw, niet de hele pil.
+        let level = Dictation.shared.level
+        return HStack(alignment: .center, spacing: max(2, size.dot * 0.3)) {
             ForEach(0..<9, id: \.self) { index in
                 // Midden hoger dan de randen, zodat het als een golf leest.
                 let shape = 1 - abs(Double(index) - 4) / 5
