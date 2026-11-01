@@ -176,7 +176,7 @@ struct AgendaView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         HStack(alignment: .top, spacing: 0) {
-                            hourGutter(hourHeight)
+                            hourGutter(hourHeight, showsNow: days.contains { calendar.isDateInToday($0) })
                             HStack(alignment: .top, spacing: 0) {
                             ForEach(days, id: \.self) { day in
                                 DayColumn(
@@ -615,7 +615,7 @@ struct AgendaView: View {
         .padding(.bottom, 4)
     }
 
-    private func hourGutter(_ hourHeight: CGFloat) -> some View {
+    private func hourGutter(_ hourHeight: CGFloat, showsNow: Bool = false) -> some View {
         let look = ThemeStore.shared.look
         let ruler = look == .wandklok || look == .tischsuper
         return VStack(spacing: 0) {
@@ -636,6 +636,28 @@ struct AgendaView: View {
         .frame(width: gutterWidth, alignment: .leading)
         .overlay(alignment: .topTrailing) {
             if ruler { HourRuler(hours: endHour - startHour, hourHeight: hourHeight) }
+        }
+        .overlay(alignment: .topLeading) {
+            // Puls: hoe laat het is, in een rood labeltje op de liniaal bij de lijn van nu.
+            if look == .puls && showsNow {
+                TimelineView(.periodic(from: .now, by: 30)) { timeline in
+                    let hours = timeline.date.timeIntervalSince(Calendar.current.startOfDay(for: timeline.date)) / 3600
+                        - Double(startHour)
+                    if hours >= 0, hours <= Double(endHour - startHour) {
+                        Text(DutchDate.time(timeline.date))
+                            .font(.werkNumbers(size: 10.5, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 6)
+                            .frame(height: 18)
+                            .background(Capsule().fill(Puls.redLabel))
+                            .frame(width: gutterWidth - 4, alignment: .trailing)
+                            .offset(y: CGFloat(hours) * hourHeight - 9)
+                    }
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         }
     }
 

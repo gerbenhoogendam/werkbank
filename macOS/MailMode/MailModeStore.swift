@@ -313,8 +313,9 @@ final class MailModeStore {
             shownKey = key
             items = MailListCache.shared.items(for: key) ?? []
             loadError = nil
-            if selectedID == nil { selectedID = listed.first?.id }
         }
+        // Meteen een mail open als er al een lijst staat (bij opnieuw openen is dat die van de vorige keer).
+        if selectedID == nil { selectedID = listed.first?.id }
         let growsWhileLoading = items.isEmpty
         isLoading = true
         let domains = client.map(clientDomains) ?? []
