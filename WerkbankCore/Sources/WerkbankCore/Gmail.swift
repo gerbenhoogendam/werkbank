@@ -24,7 +24,7 @@ public enum Base64URL {
 // MARK: - Berichten uit de Gmail API
 
 /// Eén mail in de lijst van het Gmail-paneel.
-public struct GmailMessageSummary: Equatable, Identifiable {
+public struct GmailMessageSummary: Equatable, Identifiable, Codable {
     public var id: String
     public var threadID: String
     public var fromName: String?

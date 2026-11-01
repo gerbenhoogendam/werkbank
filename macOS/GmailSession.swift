@@ -125,6 +125,7 @@ final class GmailSession {
     @ObservationIgnored private var tokenCache: [String: (token: String, expiry: Date)] = [:]
     /// Bij welke mailbox een bericht of gesprek hoort, zodat acties de juiste token gebruiken (ook in de gecombineerde lijst).
     @ObservationIgnored private var messageAccount: [String: String] = [:]
+    @ObservationIgnored private var inboxSaveTask: Task<Void, Never>?
     @ObservationIgnored private var authSession: ASWebAuthenticationSession?
     @ObservationIgnored private let presenter = WebAuthPresenter()
 
@@ -149,7 +150,10 @@ final class GmailSession {
             ?? (defaults.bool(forKey: Self.combinedKey) ? accounts : [])
         let combination = accounts.filter(savedCombination.contains)
         combinedAccounts = combination.count > 1 ? combination : []
-        if hasAnyAccount { state = .signedIn }
+        if hasAnyAccount {
+            state = .signedIn
+            restoreInbox()
+        }
     }
 
     private var hasAnyAccount: Bool { !accounts.isEmpty || Keychain.read(Self.legacyAccount) != nil }
@@ -203,6 +207,46 @@ final class GmailSession {
     private func removeThreadFromLists(_ threadID: String) {
         for key in Array(messageCache.keys) { messageCache[key]?.removeAll { $0.threadID == threadID } }
         refreshVisible()
+        saveInboxLater()
+    }
+
+    // MARK: Bewaarde inbox
+
+    private struct StoredInbox: Codable {
+        var lists: [String: [GmailMessageSummary]]
+    }
+
+    /// De inbox van de vorige keer: meteen zichtbaar bij het starten, tot Gmail is bijgewerkt (alleen op deze Mac).
+    private func restoreInbox() {
+        guard let file = Self.inboxFile, let data = try? Data(contentsOf: file),
+              let stored = try? JSONDecoder().decode(StoredInbox.self, from: data) else { return }
+        for (key, list) in stored.lists where key.isEmpty || accounts.contains(key) {
+            messageCache[key] = list
+            for summary in list {
+                messageAccount[summary.id] = key
+                messageAccount[summary.threadID] = key
+            }
+        }
+        refreshVisible()
+    }
+
+    /// Even later en buiten de hoofdthread bewaren.
+    private func saveInboxLater() {
+        inboxSaveTask?.cancel()
+        let stored = StoredInbox(lists: messageCache)
+        inboxSaveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let file = GmailSession.inboxFile,
+                  let data = try? JSONEncoder().encode(stored) else { return }
+            try? data.write(to: file, options: .atomic)
+        }
+    }
+
+    private nonisolated static var inboxFile: URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let folder = base.appendingPathComponent("Werkbank", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder.appendingPathComponent("GmailInbox.json")
     }
 
     private func persistAccounts() {
@@ -341,6 +385,7 @@ final class GmailSession {
         Keychain.delete(Self.tokenAccount(email))
         accounts.removeAll { $0 == email }
         messageCache[email] = nil
+        saveInboxLater()
         tokenCache[email] = nil
         if activeAccount == email { activeAccount = accounts.first }
         combinedAccounts.removeAll { $0 == email }
@@ -358,6 +403,7 @@ final class GmailSession {
             Keychain.delete(Self.legacyAccount)
             tokenCache[""] = nil
             messageCache[""] = nil
+            saveInboxLater()
             refreshVisible()
             state = .signedOut
         }
@@ -531,6 +577,7 @@ final class GmailSession {
                 messageAccount[summary.threadID] = key
             }
             refreshVisible()
+            saveInboxLater()
             lastError = nil
         } catch {
             if state == .signedIn, isCombined || key == (activeAccount ?? "") { lastError = error.localizedDescription }

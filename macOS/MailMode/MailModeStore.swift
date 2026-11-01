@@ -351,7 +351,8 @@ final class MailModeStore {
     /// Welke lijst er gevraagd wordt: bereik, map, zoektekst, filters, klant en eigen keuze van mailboxen.
     private var listKey: String {
         [String(describing: scope), String(describing: folder), query.trimmingCharacters(in: .whitespacesAndNewlines),
-         filters.map(\.rawValue).sorted().joined(separator: ","), client ?? "",
+         // "Zonder taak" filtert alleen wat er al is (geen nieuwe aanvraag), dus hoort niet bij de lijst.
+         filters.filter { $0 != .noTask }.map(\.rawValue).sorted().joined(separator: ","), client ?? "",
          (searchAccounts ?? []).joined(separator: ",")].joined(separator: "|")
     }
 

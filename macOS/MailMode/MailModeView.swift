@@ -264,8 +264,7 @@ private struct MailModeList: View {
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 32)
-                .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).fill(ThingsColor.cardBackground))
-                .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).strokeBorder(ThingsColor.separator))
+                .mailSearchField()
 
                 WrapStack(spacing: 6) {
                     if let mailboxes = store.searchAccounts {
@@ -659,8 +658,7 @@ private struct MailModeClients: View {
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 30)
-                .background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).fill(ThingsColor.cardBackground))
-                .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).strokeBorder(ThingsColor.separator))
+                .mailSearchField()
             }
             .padding(14)
 
@@ -953,6 +951,16 @@ private struct WindowReader: NSViewRepresentable {
 }
 
 private extension View {
+    /// Achter een zoekveld: in Puls een grijze capsule zonder rand, elders een kaartje met een haarlijn.
+    @ViewBuilder func mailSearchField() -> some View {
+        if ThemeStore.shared.look == .puls {
+            background(Capsule().fill(Puls.track))
+        } else {
+            background(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).fill(ThingsColor.cardBackground))
+                .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous).strokeBorder(ThingsColor.separator))
+        }
+    }
+
     /// Puls: een kolom van de mailmodus als losse tegel met ronde hoeken op het zwart; in andere thema's niets.
     @ViewBuilder func pulsTile() -> some View {
         if ThemeStore.shared.look == .puls {

@@ -348,6 +348,24 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   knop Werkbank staat niet meer in de eigen werkbalk van de mailmodus; het knopje voor het Mail-paneel is weg zolang de
   mailmodus open staat (het paneel hoort bij de werkbank).
 
+## Snelheid (nacht van 1 op 2 nov)
+
+- **Mailmodus openen**: een lijst toont meteen wat er de vorige keer stond (`MailListCache`, laatste twaalf lijsten in
+  `MailModeLists.json`); zonder bewaarde lijst komt wat binnen is per mailbox erbij. Mailboxen worden tegelijk
+  opgehaald (`MailModeStore.fetchAll`), de kopjes per mailbox met steeds acht tegelijk onderweg (glijdend venster in
+  `GmailSession.mailItems(ids:)`, binnen wat Gmail per seconde toestaat). Mappen laden tegelijk met de lijst; de
+  klanten pas daarna (die halen soms veel op bij dezelfde mailboxen). Elke twee minuten ververst de lijst vanzelf.
+- **Bladeren**: na het kiezen van een mail worden de volgende twee alvast opgehaald en klaargezet (`MailPrefetch` in
+  `MailThread.swift`); een vooruit opgehaald gesprek wordt één keer en binnen een minuut gebruikt.
+- **Starten**: klantactiviteit en bewaarde lijsten worden buiten de hoofdthread ingelezen (`preload()` in
+  `applicationDidFinishLaunching`); het Mail-paneel toont de inbox van de vorige keer (`GmailInbox.json`) tot Gmail
+  is bijgewerkt. Bewaren gebeurt even later en buiten de hoofdthread.
+- Klant per mail en de eigen adressen worden onthouden (werden per mail per weergave opnieuw bepaald).
+- Mailboxknoppen: de naam reserveert de vette breedte (kiezen verschuift niets); in Puls zijn ze zo breed als hun
+  naam met vaste marge (`SegmentRow` in `MailTheme.swift`).
+- Na te gaan op de Mac: of de lijst echt direct staat, of Gmail geen "rate limit" geeft bij vijf mailboxen tegelijk
+  (dan `8` in `mailItems(ids:)` verlagen), en of de bewaarde lijst na archiveren niet even de oude mail toont.
+
 ## Open punten
 
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in
