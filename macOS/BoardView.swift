@@ -97,10 +97,14 @@ struct BoardView: View {
         }
         .padding(look == .drukproef || look == .karmijn ? 6 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Tischsuper: één oranje balk achter alle kolomkoppen. Karmijn: een rode gloed linksboven.
+        // Tischsuper: één balk notenhoutfineer achter alle kolomkoppen, met een oranje rand eronder (de kast en de
+        // schaal van de RT 20). Karmijn: een rode gloed linksboven.
         .background(alignment: .top) {
             if look == .tischsuper {
-                ThemeParts.orange.frame(height: 50)
+                VStack(spacing: 0) {
+                    Veneer().frame(height: 47)
+                    ThemeParts.orange.frame(height: 3)
+                }
             } else if look == .karmijn {
                 KarmijnGlow()
             }
@@ -221,7 +225,7 @@ struct BoardView: View {
                         HStack(spacing: 6) {
                             ThemedHeading(title: column.title, count: columnCards.count,
                                           highlight: columnCards.contains { runningTodoIDs.contains($0.id) })
-                                .lightScheme(look == .tischsuper)
+                                .darkScheme(look == .tischsuper)
                             Spacer(minLength: 0)
                         }
                     } else {

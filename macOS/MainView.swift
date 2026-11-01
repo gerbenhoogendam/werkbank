@@ -101,24 +101,28 @@ struct MainView: View {
 
         ZStack {
             // De mailmodus neemt het hele venster over (dubbelklik op Mail); terug met Werkbank of Esc. Tijdens het slepen
-            // van een mail klapt hij naar achteren weg en staat de werkbank ervoor; Esc haalt hem terug.
-            ZStack {
-                if !mailMode.isActive || mailMode.isReceded {
-                    workbench
-                        .transition(.opacity.combined(with: .scale(scale: 1.02)))
+            // van een mail schuift hij snel naar beneden weg en staat de werkbank erachter; Esc schuift hem terug. Een
+            // verschuiving neemt ook de mail zelf (een webweergave) mee, en kost weinig.
+            GeometryReader { proxy in
+                ZStack {
+                    if !mailMode.isActive || mailMode.isReceded {
+                        workbench
+                            // Pas weg als de mail er weer helemaal voor staat.
+                            .transition(.asymmetric(insertion: .identity,
+                                                    removal: .opacity.animation(.linear(duration: 0.01).delay(0.3))))
+                    }
+                    if mailMode.isActive {
+                        MailModeView()
+                            .themePanel()
+                            .offset(y: mailMode.isReceded ? proxy.size.height + 30 : 0)
+                            .shadow(color: .black.opacity(mailMode.isReceded ? 0.3 : 0), radius: 24, y: -6)
+                            .allowsHitTesting(!mailMode.isReceded)
+                    }
                 }
-                if mailMode.isActive {
-                    MailModeView()
-                        .themePanel()
-                        .scaleEffect(mailMode.isReceded ? 0.86 : 1)
-                        .rotation3DEffect(.degrees(mailMode.isReceded ? 8 : 0), axis: (x: 1, y: 0, z: 0),
-                                          perspective: 0.6)
-                        .blur(radius: mailMode.isReceded ? 10 : 0)
-                        .opacity(mailMode.isReceded ? 0 : 1)
-                        .allowsHitTesting(!mailMode.isReceded)
-                }
+                .animation(mailMode.isReceded ? .easeIn(duration: 0.2) : .spring(duration: 0.3, bounce: 0.08),
+                           value: mailMode.isReceded)
+                .clipped()
             }
-            .animation(.spring(duration: 0.4, bounce: 0.12), value: mailMode.isReceded)
             .overlay(alignment: .top) {
                 if mailMode.isActive && mailMode.isReceded {
                     Button { mailMode.restore() } label: {

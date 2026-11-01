@@ -95,13 +95,15 @@ struct MailModeView: View {
 
     private func handle(_ event: NSEvent) -> Bool {
         guard store.isActive, let window, event.window === window, window.attachedSheet == nil,
-              !PanelStore.shared.hasFocusPanels, !FeedbackOverlay.shared.isShown else { return false }
+              !FeedbackOverlay.shared.isShown else { return false }
         if store.isReceded {
-            // Weggeklapt voor het slepen: alleen Esc, en die haalt de mail terug.
+            // Weggeschoven voor het slepen: alleen Esc, en die haalt de mail meteen terug (ook als er na het neerzetten
+            // een paneel open staat).
             guard event.keyCode == 53 else { return false }
             store.restore()
             return true
         }
+        guard !PanelStore.shared.hasFocusPanels else { return false }
         if store.sheet != nil {
             // In een blad gaan alle toetsen naar het blad; Esc sluit het.
             guard event.keyCode == 53 else { return false }
