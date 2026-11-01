@@ -692,21 +692,41 @@ final class GmailSession {
     func sentMails(from start: Date, to end: Date) async -> [(account: String?, mail: GmailThreadMessage)] {
         let keys: [String?] = accounts.isEmpty ? [activeAccount] : accounts.map { $0 }
         let q = "in:sent after:\(Int(start.timeIntervalSince1970)) before:\(Int(end.timeIntervalSince1970))"
-        let headers = ["To", "Cc", "Subject"].map { URLQueryItem(name: "metadataHeaders", value: $0) }
-        var found: [(account: String?, mail: GmailThreadMessage)] = []
-        for account in keys {
-            guard let list = try? await api("messages", query: [URLQueryItem(name: "q", value: q),
-                                                                 URLQueryItem(name: "maxResults", value: "40")],
-                                            account: account) else { continue }
-            for ref in GmailAPI.messageRefs(fromListJSON: list).refs {
-                guard let data = try? await api("messages/\(ref.id)",
-                                                query: [URLQueryItem(name: "format", value: "metadata")] + headers,
-                                                account: account),
-                      let mail = GmailAPI.threadMessage(fromMessageJSON: data) else { continue }
-                found.append((account, mail))
+        // De mailboxen tegelijk, per mailbox acht mails tegelijk onderweg.
+        let found = await withTaskGroup(of: [(account: String?, mail: GmailThreadMessage)].self) { group in
+            for account in keys {
+                group.addTask { await self.sentMails(matching: q, account: account) }
             }
+            var all: [(account: String?, mail: GmailThreadMessage)] = []
+            for await part in group { all += part }
+            return all
         }
         return found.sorted { $0.mail.date < $1.mail.date }
+    }
+
+    private func sentMails(matching q: String, account: String?) async -> [(account: String?, mail: GmailThreadMessage)] {
+        guard let list = try? await api("messages", query: [URLQueryItem(name: "q", value: q),
+                                                             URLQueryItem(name: "maxResults", value: "40")],
+                                        account: account) else { return [] }
+        let query = [URLQueryItem(name: "format", value: "metadata")]
+            + ["To", "Cc", "Subject"].map { URLQueryItem(name: "metadataHeaders", value: $0) }
+        let fetch: @Sendable (String) async -> GmailThreadMessage? = { id in
+            guard let data = try? await self.api("messages/\(id)", query: query, account: account) else { return nil }
+            return GmailAPI.threadMessage(fromMessageJSON: data)
+        }
+        var pending = GmailAPI.messageRefs(fromListJSON: list).refs.map(\.id).makeIterator()
+        return await withTaskGroup(of: GmailThreadMessage?.self) { group in
+            for _ in 0..<8 {
+                guard let id = pending.next() else { break }
+                group.addTask { await fetch(id) }
+            }
+            var mails: [(account: String?, mail: GmailThreadMessage)] = []
+            for await mail in group {
+                if let mail { mails.append((account, mail)) }
+                if let id = pending.next() { group.addTask { await fetch(id) } }
+            }
+            return mails
+        }
     }
 
     // MARK: Verplaatsen naar een andere mailbox
@@ -930,9 +950,20 @@ final class GmailSession {
     }
 
     private func restoreBulk(threadIDs: [String]) async {
+        // Acht tegelijk, net als bij het archiveren.
         var failed = 0
-        for id in threadIDs {
-            do { try await moveToInbox(threadID: id, account: nil) } catch { failed += 1 }
+        var pending = threadIDs.makeIterator()
+        await withTaskGroup(of: Bool.self) { group in
+            for _ in 0..<8 {
+                guard let id = pending.next() else { break }
+                group.addTask { (try? await self.moveToInbox(threadID: id, account: nil)) != nil }
+            }
+            for await succeeded in group {
+                if !succeeded { failed += 1 }
+                if let id = pending.next() {
+                    group.addTask { (try? await self.moveToInbox(threadID: id, account: nil)) != nil }
+                }
+            }
         }
         await reload()
         if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }

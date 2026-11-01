@@ -230,16 +230,29 @@ public enum ClientActivity {
         var recent: [String: [Bool]] = [:]
         var last: [String: Date] = [:]
         var seen = Set<String>()
+        // Klant per adres ("" = geen): dezelfde adressen komen in duizenden mails terug.
+        var clientOf: [String: String] = [:]
         for record in records where record.date >= start && record.date <= now.addingTimeInterval(3600) {
             guard seen.insert(record.id).inserted else { continue }
-            let clients = Set(record.addresses
-                .filter { !ownAddresses.contains($0) && !isOwnDomain($0, ownDomains) }
-                .compactMap { client(forAddress: $0, domainMap: domainMap) }
-                .filter { !excluded.contains($0) })
+            let clients = Set(record.addresses.compactMap { address -> String? in
+                if let known = clientOf[address] { return known.isEmpty ? nil : known }
+                var name = ""
+                if !ownAddresses.contains(address), !isOwnDomain(address, ownDomains),
+                   let found = client(forAddress: address, domainMap: domainMap), !excluded.contains(found) {
+                    name = found
+                }
+                clientOf[address] = name
+                return name.isEmpty ? nil : name
+            })
+            guard !clients.isEmpty else { continue }
             let age = max(0, now.timeIntervalSince(record.date))
             let week = bars - 1 - min(bars - 1, Int(age / (7 * 86_400)))
-            // Hoeveel kalenderdagen geleden (0 = vandaag).
-            let daysAgo = calendar.dateComponents([.day], from: calendar.startOfDay(for: record.date), to: today).day ?? -1
+            // Hoeveel kalenderdagen geleden (0 = vandaag); de kalender alleen voor de laatste dagen (dat is het dure deel,
+            // en ouder dan recentCount + 1 etmaal valt er toch buiten).
+            var daysAgo = -1
+            if recentCount > 0, age < Double(recentCount + 1) * 86_400 {
+                daysAgo = calendar.dateComponents([.day], from: calendar.startOfDay(for: record.date), to: today).day ?? -1
+            }
             for name in clients {
                 counts[name, default: 0] += 1
                 var row = weeks[name] ?? Array(repeating: 0, count: bars)

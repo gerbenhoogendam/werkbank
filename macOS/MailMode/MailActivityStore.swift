@@ -141,26 +141,35 @@ final class MailActivityStore {
         defer { isSyncing = false }
         let accounts: [String?] = gmail.accounts.isEmpty ? [gmail.activeAccount] : gmail.accounts.map { $0 }
         let start = Date().addingTimeInterval(-Self.historyDays * 86_400)
-        var changed = false
-        for account in accounts {
+        // Per mailbox vooraf bepalen wat er nodig is: wat er sinds de vorige keer bij kwam (met een uur overlap: Gmail
+        // zoekt op dagen en mails komen soms iets later binnen), en wat er nog ontbreekt tot drie maanden terug.
+        let plans: [(account: String?, since: Date, olderUntil: Date?)] = accounts.map { account in
             let key = account ?? ""
-            let started = Date()
-            if let last = lastSync[key] {
-                // Een uur overlap: Gmail zoekt op dagen en mails komen soms iets later binnen.
-                let items = await gmail.activityItems(since: last.addingTimeInterval(-3600), account: account, limit: 2000)
-                if add(items, account: account) { changed = true }
-                // Ging het nog geen drie maanden terug: het ontbrekende stuk erbij.
-                let covered = coveredFrom[key] ?? records.filter { $0.account == account }.map(\.date).min() ?? last
-                if covered > start {
-                    let older = await gmail.activityItems(since: start, until: covered, account: account, limit: 2000)
-                    if add(older, account: account) { changed = true }
+            guard let last = lastSync[key] else { return (account, start, nil) }
+            let covered = coveredFrom[key] ?? records.filter { $0.account == account }.map(\.date).min() ?? last
+            return (account, last.addingTimeInterval(-3600), covered > start ? covered : nil)
+        }
+        // De mailboxen tegelijk (Gmail telt per mailbox); bijwerken gebeurt daarna op de hoofdthread.
+        let fetched = await withTaskGroup(of: (account: String?, started: Date, items: [GmailMailItem]).self) { group in
+            for plan in plans {
+                group.addTask {
+                    let started = Date()
+                    var items = await gmail.activityItems(since: plan.since, account: plan.account, limit: 2000)
+                    if let until = plan.olderUntil {
+                        items += await gmail.activityItems(since: start, until: until, account: plan.account, limit: 2000)
+                    }
+                    return (plan.account, started, items)
                 }
-            } else {
-                let items = await gmail.activityItems(since: start, account: account, limit: 2000)
-                if add(items, account: account) { changed = true }
             }
-            lastSync[key] = started
-            coveredFrom[key] = start
+            var all: [(account: String?, started: Date, items: [GmailMailItem])] = []
+            for await result in group { all.append(result) }
+            return all
+        }
+        var changed = false
+        for result in fetched {
+            if add(result.items, account: result.account) { changed = true }
+            lastSync[result.account ?? ""] = result.started
+            coveredFrom[result.account ?? ""] = start
         }
         let cutoff = Date().addingTimeInterval(-Self.keepDays * 86_400)
         let before = records.count

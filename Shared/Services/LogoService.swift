@@ -163,6 +163,24 @@ actor LogoService {
     }
 }
 
+/// Al ontlede logo's (per domein of mailadres): een rij die weer in beeld komt toont meteen het logo in plaats van
+/// eerst de letter, en het plaatje wordt niet bij elke keer opnieuw ontleed.
+enum DecodedLogos {
+    private static let cache: NSCache<NSString, PlatformImage> = {
+        let cache = NSCache<NSString, PlatformImage>()
+        cache.countLimit = 400
+        return cache
+    }()
+
+    static func image(for key: String) -> PlatformImage? { cache.object(forKey: key as NSString) }
+
+    static func image(from data: Data, for key: String) -> PlatformImage? {
+        guard let image = PlatformImage(data: data) else { return nil }
+        cache.setObject(image, forKey: key as NSString)
+        return image
+    }
+}
+
 /// Toont het logo van een domein; bij mislukken de eerste letter van de klantnaam in een klein vierkant.
 struct LogoView: View {
     let domain: String
@@ -172,9 +190,11 @@ struct LogoView: View {
     @State private var image: PlatformImage?
     @State private var didFail = false
 
+    private var key: String { "logo:" + domain.lowercased() }
+
     var body: some View {
         ZStack {
-            if let image {
+            if let image = image ?? DecodedLogos.image(for: key) {
                 Image(platformImage: image)
                     .resizable()
                     .scaledToFit()
@@ -192,9 +212,13 @@ struct LogoView: View {
         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         .accessibilityHidden(true)
         .task(id: domain) {
+            if let cached = DecodedLogos.image(for: key) {
+                image = cached
+                return
+            }
             image = nil
             didFail = false
-            if let data = await LogoService.shared.logo(for: domain), let img = PlatformImage(data: data) {
+            if let data = await LogoService.shared.logo(for: domain), let img = DecodedLogos.image(from: data, for: key) {
                 image = img
             } else {
                 didFail = true

@@ -82,6 +82,7 @@ final class MailModeStore {
     @ObservationIgnored private var shownKey: String?
     @ObservationIgnored private var prefetchTask: Task<Void, Never>?
     @ObservationIgnored private var refreshLoop: Task<Void, Never>?
+    @ObservationIgnored private var rankingTask: Task<Void, Never>?
     /// De klant bij een mail, onthouden per mail (met de grootte van de klantenlijst, om te zien of die veranderde).
     @ObservationIgnored private var clientCache: [String: (mapSize: Int, name: String?)] = [:]
     @ObservationIgnored private var returnTask: Task<Void, Never>?
@@ -397,13 +398,26 @@ final class MailModeStore {
 
     /// De gesprekken waarop een antwoord wordt verwacht (opvolgen), met de nieuwste mail van elk.
     private func waitingItems() async -> [GmailMailItem] {
-        var result: [GmailMailItem] = []
-        for entry in FollowUpStore.shared.waiting {
-            guard let messages = try? await gmail.threadMessages(threadID: entry.threadID, account: entry.account),
-                  let newest = messages.max(by: { $0.date < $1.date }) else { continue }
-            result += await gmail.mailItems(messageIDs: [newest.id], account: entry.account)
+        let gmail = self.gmail
+        let fetch: @Sendable (String, String?) async -> [GmailMailItem] = { threadID, account in
+            guard let messages = try? await gmail.threadMessages(threadID: threadID, account: account),
+                  let newest = messages.max(by: { $0.date < $1.date }) else { return [] }
+            return await gmail.mailItems(messageIDs: [newest.id], account: account)
         }
-        return result
+        // Zes gesprekken tegelijk; de volgorde maakt niet uit, de lijst wordt daarna gesorteerd.
+        var pending = FollowUpStore.shared.waiting.map { (threadID: $0.threadID, account: $0.account) }.makeIterator()
+        return await withTaskGroup(of: [GmailMailItem].self) { group in
+            for _ in 0..<6 {
+                guard let entry = pending.next() else { break }
+                group.addTask { await fetch(entry.threadID, entry.account) }
+            }
+            var result: [GmailMailItem] = []
+            for await items in group {
+                result += items
+                if let entry = pending.next() { group.addTask { await fetch(entry.threadID, entry.account) } }
+            }
+            return result
+        }
     }
 
     func refreshTasks() { refreshTaskThreads() }
@@ -691,11 +705,22 @@ final class MailModeStore {
         MailActivityStore.shared.loadIfNeeded()
         let counted = Set(MailClientSettings.accounts)
         let records = MailActivityStore.shared.records.filter { record in record.account.map { counted.contains($0) } ?? false }
-        ranking = ClientActivity.ranking(records: records, domainMap: ClientDirectory.shared.domainMap,
-                                         ownAddresses: gmail.ownAddresses,
-                                         ownDomains: ClientActivity.ownDomains(of: gmail.accounts),
-                                         excluded: Set(MailClientSettings.excluded), now: .now,
-                                         days: Int(MailActivityStore.historyDays) - 1, weekCount: Self.clientWeeks)
+        let domainMap = ClientDirectory.shared.domainMap
+        let own = gmail.ownAddresses
+        let ownDomains = ClientActivity.ownDomains(of: gmail.accounts)
+        let excluded = Set(MailClientSettings.excluded)
+        let days = Int(MailActivityStore.historyDays) - 1
+        let weeks = Self.clientWeeks
+        // Drie maanden mail doorlopen: buiten de hoofdthread, anders hapert het openen van de mailmodus.
+        rankingTask?.cancel()
+        rankingTask = Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                ClientActivity.ranking(records: records, domainMap: domainMap, ownAddresses: own, ownDomains: ownDomains,
+                                       excluded: excluded, now: .now, days: days, weekCount: weeks)
+            }.value
+            guard !Task.isCancelled, result != ranking else { return }
+            ranking = result
+        }
     }
 
     /// Rechtermuisknop op een klant: geen klant (bijvoorbeeld een leverancier).

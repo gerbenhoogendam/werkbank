@@ -317,12 +317,14 @@ struct MailSenderIcon: View {
 
     @State private var logo: NSImage?
 
+    private var key: String { "sender:" + address }
+
     var body: some View {
         let look = ThemeStore.shared.look
         // Karmijn: recht, zoals de rest van dat thema; elders rond.
         let shape = RoundedRectangle(cornerRadius: look == .karmijn ? 0 : size / 2, style: .continuous)
         Group {
-            if let logo {
+            if let logo = logo ?? DecodedLogos.image(for: key) {
                 shape.fill(look == .karmijn ? ThemeParts.creme : Color.white)
                     .overlay(Image(nsImage: logo).resizable().interpolation(.high).scaledToFit().padding(size * 0.14))
                     .clipShape(shape)
@@ -343,9 +345,13 @@ struct MailSenderIcon: View {
         }
         .frame(width: size, height: size)
         .task(id: address) {
+            if let cached = DecodedLogos.image(for: key) {
+                logo = cached
+                return
+            }
             logo = nil
             guard !address.isEmpty, let data = await SenderLogoService.shared.logo(forAddress: address) else { return }
-            logo = NSImage(data: data)
+            logo = DecodedLogos.image(from: data, for: key)
         }
         .accessibilityHidden(true)
     }

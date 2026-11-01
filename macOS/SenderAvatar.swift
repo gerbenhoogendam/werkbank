@@ -63,9 +63,11 @@ struct SenderAvatar: View {
 
     @State private var logo: NSImage?
 
+    private var key: String { "sender:" + address }
+
     var body: some View {
         ZStack {
-            if let logo {
+            if let logo = logo ?? DecodedLogos.image(for: key) {
                 Circle().fill(Color.white)
                 Image(nsImage: logo)
                     .resizable()
@@ -81,11 +83,15 @@ struct SenderAvatar: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(ThingsColor.separator.opacity(logo == nil ? 0 : 1)))
+        .overlay(Circle().strokeBorder(ThingsColor.separator.opacity((logo ?? DecodedLogos.image(for: key)) == nil ? 0 : 1)))
         .task(id: address) {
+            if let cached = DecodedLogos.image(for: key) {
+                logo = cached
+                return
+            }
             logo = nil
             guard !address.isEmpty, let data = await SenderLogoService.shared.logo(forAddress: address) else { return }
-            logo = NSImage(data: data)
+            logo = DecodedLogos.image(from: data, for: key)
         }
         .accessibilityHidden(true)
     }

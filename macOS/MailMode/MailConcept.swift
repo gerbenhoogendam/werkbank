@@ -66,12 +66,20 @@ final class MailConcept {
     private static func loadThread(_ item: GmailMailItem) async throws -> [MailContent] {
         let gmail = GmailSession.shared
         let messages = try await gmail.threadMessages(threadID: item.threadID, account: gmail.account(for: item.id))
-        var result: [MailContent] = []
-        for message in messages.suffix(6) {
-            let raw = try await gmail.rawMessageData(id: message.id)
-            result.append(await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value)
+        let ids = messages.suffix(6).map(\.id)
+        // Tegelijk ophalen en (buiten de hoofdthread) ontleden; de volgorde van het gesprek blijft.
+        let parsed = try await withThrowingTaskGroup(of: (Int, MailContent).self) { group in
+            for (index, id) in ids.enumerated() {
+                group.addTask {
+                    let raw = try await gmail.rawMessageData(id: id)
+                    return (index, MailContentParser.parse(raw))
+                }
+            }
+            var list: [(Int, MailContent)] = []
+            for try await entry in group { list.append(entry) }
+            return list
         }
-        return result
+        return parsed.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
     /// Wat Werkbank weet: open kaarten en de laatste tijdregels van de klant, afspraken de komende twee weken met de
