@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         IdleWatcher.shared.start()
         WerkbankSync.start()
         Dictation.shared.start()
+        // Wat de mailmodus nodig heeft alvast buiten de hoofdthread inlezen, zodat hij meteen opent.
+        MailActivityStore.shared.preload()
+        MailListCache.shared.preload()
 
         // Globale sneltoets: werkt ook als Werkbank niet op de voorgrond staat.
         KeyboardShortcuts.onKeyUp(for: .quickEntry) {

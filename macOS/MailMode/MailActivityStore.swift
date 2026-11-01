@@ -41,13 +41,32 @@ final class MailActivityStore {
         return folder.appendingPathComponent("MailActivity.json")
     }
 
+    /// Bij het starten: het bestand alvast buiten de hoofdthread inlezen, zodat de mailmodus en het aanvullen er niet op
+    /// hoeven te wachten. Wie eerder iets nodig heeft, leest het gewoon zelf (`loadIfNeeded`).
+    func preload() {
+        guard !loaded else { return }
+        Task.detached(priority: .utility) {
+            let stored = MailActivityStore.readStored()
+            await MainActor.run { MailActivityStore.shared.apply(stored) }
+        }
+    }
+
     func loadIfNeeded() {
         guard !loaded else { return }
-        loaded = true
-        guard let file = Self.file, let data = try? Data(contentsOf: file) else { return }
+        apply(Self.readStored())
+    }
+
+    private nonisolated static func readStored() -> Stored? {
+        guard let file = Self.file, let data = try? Data(contentsOf: file) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
-        guard let stored = try? decoder.decode(Stored.self, from: data) else { return }
+        return try? decoder.decode(Stored.self, from: data)
+    }
+
+    private func apply(_ stored: Stored?) {
+        guard !loaded else { return }
+        loaded = true
+        guard let stored else { return }
         names = stored.names ?? [:]
         // Van vóór de mailbox per mail werd bewaard: opnieuw ophalen, zodat de klanten per mailbox kloppen.
         guard !stored.records.contains(where: { $0.account == nil }) else { return }

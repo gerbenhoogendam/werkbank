@@ -67,6 +67,7 @@ struct MailModeView: View {
         }
         .animation(.easeOut(duration: 0.12), value: store.sheet)
         .background(WindowReader(window: $window))
+        .onChange(of: store.selectedID) { _, _ in store.prefetchAfterSelection() }
         .onAppear(perform: installKeys)
         .onDisappear(perform: removeKeys)
     }

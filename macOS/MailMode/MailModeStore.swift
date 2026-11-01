@@ -80,6 +80,8 @@ final class MailModeStore {
     /// Welke lijst er nu staat (mailbox, map, zoekopdracht, filters); bij een andere lijst komt eerst wat er de vorige
     /// keer stond.
     @ObservationIgnored private var shownKey: String?
+    @ObservationIgnored private var prefetchTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshLoop: Task<Void, Never>?
     /// De klant bij een mail, onthouden per mail (met de grootte van de klantenlijst, om te zien of die veranderde).
     @ObservationIgnored private var clientCache: [String: (mapSize: Int, name: String?)] = [:]
     @ObservationIgnored private var returnTask: Task<Void, Never>?
@@ -107,20 +109,38 @@ final class MailModeStore {
         isReturning = false
         watchEscape(false)
         isActive = true
+        // De mappen (één aanvraag per mailbox) tegelijk met de lijst; de klanten pas daarna, want die halen soms veel op
+        // bij dezelfde mailboxen en Gmail begrenst het aantal aanvragen per seconde.
+        Task { await refreshLabels() }
         Task {
             await reload()
-            await refreshLabels()
             await refreshClients()
         }
+        startRefreshing()
     }
 
     func close() {
+        refreshLoop?.cancel()
+        refreshLoop = nil
         isActive = false
         isReceded = false
         isReturning = false
         watchEscape(false)
         sheet = nil
         searchTask?.cancel()
+    }
+
+    /// Zolang de mailmodus open is komt nieuwe mail vanzelf binnen (elke twee minuten, zoals het Mail-paneel); niet
+    /// tijdens een blad, het slepen of als er al geladen wordt.
+    private func startRefreshing() {
+        refreshLoop?.cancel()
+        refreshLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(120))
+                guard let self, !Task.isCancelled else { return }
+                if self.isActive, !self.isReceded, self.sheet == nil, !self.isLoading { await self.reload() }
+            }
+        }
     }
 
     /// Een mail wordt gesleept: de werkbank naar voren, zodat je hem op een kolom, de agenda of Tijd schrijven kunt
@@ -510,6 +530,22 @@ final class MailModeStore {
 
     func select(_ item: GmailMailItem) {
         selectedID = item.id
+    }
+
+    /// Na het kiezen van een mail: de volgende twee alvast ophalen en klaarzetten, zodat j/k direct is.
+    func prefetchAfterSelection() {
+        prefetchTask?.cancel()
+        let order = listed
+        guard let index = order.firstIndex(where: { $0.id == selectedID }) else { return }
+        let upcoming = Array(order.dropFirst(index + 1).prefix(2))
+        guard !upcoming.isEmpty else { return }
+        prefetchTask = Task { [gmail] in
+            try? await Task.sleep(for: .milliseconds(350))
+            for item in upcoming {
+                guard !Task.isCancelled else { return }
+                await MailPrefetch.warm(threadID: item.threadID, messageID: item.id, account: gmail.account(for: item.id))
+            }
+        }
     }
 
     func selectNext() { step(1) }

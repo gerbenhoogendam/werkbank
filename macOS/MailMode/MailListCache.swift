@@ -46,11 +46,29 @@ final class MailListCache {
         if changed { scheduleSave() }
     }
 
+    /// Bij het starten alvast inlezen, buiten de hoofdthread.
+    func preload() {
+        guard !loaded else { return }
+        Task.detached(priority: .utility) {
+            let stored = MailListCache.readStored()
+            await MainActor.run { MailListCache.shared.apply(stored) }
+        }
+    }
+
     private func loadIfNeeded() {
         guard !loaded else { return }
+        apply(Self.readStored())
+    }
+
+    private nonisolated static func readStored() -> Stored? {
+        guard let file = Self.file, let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode(Stored.self, from: data)
+    }
+
+    private func apply(_ stored: Stored?) {
+        guard !loaded else { return }
         loaded = true
-        guard let file = Self.file, let data = try? Data(contentsOf: file),
-              let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return }
+        guard let stored else { return }
         lists = stored.lists
         order = stored.order.filter { stored.lists[$0] != nil }
     }

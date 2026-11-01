@@ -178,8 +178,7 @@ struct MailboxTab: View {
                 if isOn && ThemeStore.shared.look == .sneeuwwitje {
                     RoundedRectangle(cornerRadius: 1.5).fill(ThemeParts.elm).frame(width: 3, height: 12)
                 }
-                Text(title)
-                    .font(.werk(size: 11, weight: isOn ? .semibold : .regular))
+                name(size: 11, on: .semibold, off: .regular)
                     .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
             }
                 .tabWidth(fitsContent)
@@ -193,8 +192,7 @@ struct MailboxTab: View {
         case .tischsuper:
             if fitsContent {
                 // Op het hout van de mailmodus: een leesbaar knopje, gekozen oranje.
-                Text(title)
-                    .font(.werk(size: 12, weight: isOn ? .semibold : .medium))
+                name(size: 12, on: .semibold, off: .medium)
                     .foregroundStyle(isOn ? Color(hex: 0x1C1C1C) : ThemeParts.creme)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
@@ -207,8 +205,7 @@ struct MailboxTab: View {
                     .frame(maxWidth: .infinity)
             }
         case .principes:
-            Text(title)
-                .font(.werk(size: 11, weight: isOn ? .medium : .regular))
+            name(size: 11, on: .medium, off: .regular)
                 .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
@@ -231,8 +228,7 @@ struct MailboxTab: View {
                     }
                 }
         case .drukproef:
-            Text(title)
-                .font(.werk(size: 16, weight: isOn ? .medium : .regular))
+            name(size: 16, on: .medium, off: .regular)
                 .tracking(-0.5)
                 .foregroundStyle(isOn ? ThingsColor.textPrimary : ThingsColor.textSecondary)
         case .spark:
@@ -282,12 +278,19 @@ struct MailboxTab: View {
                     }
                 }
         case .standaard:
-            Text(title)
-                .font(.werk(size: 11.5, weight: isOn ? .semibold : .regular))
+            name(size: 11.5, on: .semibold, off: .regular)
                 .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(isOn ? ThingsColor.accent : Color.clear))
+        }
+    }
+
+    /// De naam, altijd zo breed als hij gekozen (vetter) is: kiezen laat de knoppen ernaast niet verschuiven.
+    private func name(size: CGFloat, on: Font.Weight, off: Font.Weight) -> some View {
+        ZStack {
+            Text(title).font(.werk(size: size, weight: on)).hidden()
+            Text(title).font(.werk(size: size, weight: isOn ? on : off))
         }
     }
 }

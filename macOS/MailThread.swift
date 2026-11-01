@@ -58,6 +58,28 @@ private enum ParsedMailCache {
     }
 }
 
+/// Haalt een gesprek alvast op en zet de mails klaar die open zullen gaan (de nieuwste, de ongelezen en de gekozen), zodat
+/// bladeren in de mailmodus direct is.
+@MainActor
+enum MailPrefetch {
+    static func warm(threadID: String, messageID: String, account: String?) async {
+        let gmail = GmailSession.shared
+        guard let messages = try? await gmail.prefetchThread(threadID: threadID, account: account) else { return }
+        var open = Set(messages.filter(\.isUnread).map(\.id))
+        if let newest = messages.last { open.insert(newest.id) }
+        if messages.contains(where: { $0.id == messageID }) { open.insert(messageID) }
+        for id in open where ParsedMailCache.get(id) == nil {
+            guard !Task.isCancelled, let raw = try? await gmail.rawMessageData(id: id) else { continue }
+            let entry = await Task.detached(priority: .utility) { () -> ParsedThreadMail in
+                let content = MailContentParser.parse(raw)
+                let split = QuoteSplitter.split(html: content.displayHTML, subject: content.subject)
+                return ParsedThreadMail(content: content, main: split.main, history: split.history)
+            }.value
+            ParsedMailCache.put(id, entry)
+        }
+    }
+}
+
 // MARK: - Bewaarde analyses
 
 /// Een analyse zoals hij op schijf staat (per gesprek, alleen op deze Mac).

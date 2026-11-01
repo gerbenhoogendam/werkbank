@@ -115,6 +115,7 @@ final class GmailSession {
 
     @ObservationIgnored private var bodyCache: [String: String] = [:]
     @ObservationIgnored private var rawCache: [String: Data] = [:]
+    @ObservationIgnored private var prefetchedThreads: [String: (date: Date, messages: [GmailThreadMessage])] = [:]
     @ObservationIgnored private var rawCacheOrder: [String] = []
     private static let rawCacheLimit = 40
     /// Laatst opgehaalde inbox per mailbox, zodat schakelen direct iets toont.
@@ -588,29 +589,36 @@ final class GmailSession {
         await mailItems(ids: messageIDs, account: account, headers: GmailAPI.mailItemHeaders)
     }
 
-    /// Haalt de koppen van mails op, acht tegelijk (zo blijft het binnen wat Gmail per seconde toestaat).
+    /// Haalt de koppen van mails op, steeds acht tegelijk onderweg (zo blijft het binnen wat Gmail per seconde
+    /// toestaat): is er één binnen, dan begint de volgende, zonder op de traagste van een groepje te wachten.
     private func mailItems(ids: [String], account: String?, headers: [String]) async -> [GmailMailItem] {
         let query = [URLQueryItem(name: "format", value: "metadata")]
             + headers.map { URLQueryItem(name: "metadataHeaders", value: $0) }
-        var found: [(Int, GmailMailItem)] = []
-        var start = 0
-        while start < ids.count {
-            let chunk = Array(ids[start..<min(start + 8, ids.count)].enumerated()).map { ($0.offset + start, $0.element) }
-            let results = await withTaskGroup(of: (Int, GmailMailItem?).self) { group -> [(Int, GmailMailItem)] in
-                for (index, id) in chunk {
+        let found = await withTaskGroup(of: (Int, GmailMailItem?).self) { group -> [(Int, GmailMailItem)] in
+            var next = 0
+            var list: [(Int, GmailMailItem)] = []
+            while next < min(8, ids.count) {
+                let index = next
+                let id = ids[index]
+                group.addTask {
+                    let data = try? await self.api("messages/\(id)", query: query, account: account)
+                    return (index, data.flatMap(GmailAPI.mailItem(fromMessageJSON:)))
+                }
+                next += 1
+            }
+            for await (index, item) in group {
+                if let item { list.append((index, item)) }
+                if next < ids.count {
+                    let nextIndex = next
+                    let id = ids[nextIndex]
                     group.addTask {
                         let data = try? await self.api("messages/\(id)", query: query, account: account)
-                        return (index, data.flatMap(GmailAPI.mailItem(fromMessageJSON:)))
+                        return (nextIndex, data.flatMap(GmailAPI.mailItem(fromMessageJSON:)))
                     }
+                    next += 1
                 }
-                var list: [(Int, GmailMailItem)] = []
-                for await (index, item) in group {
-                    if let item { list.append((index, item)) }
-                }
-                return list
             }
-            found += results
-            start += 8
+            return list
         }
         let key = account ?? ""
         for (_, item) in found {
@@ -776,6 +784,9 @@ final class GmailSession {
     /// De mails van een gesprek (oudste eerst, zonder concepten): koppen en snippet, nog zonder inhoud.
     /// Eén lichte aanvraag; de inhoud per mail volgt pas als hij open wordt geklapt.
     func threadMessages(threadID: String, account: String?) async throws -> [GmailThreadMessage] {
+        if let hit = prefetchedThreads.removeValue(forKey: threadID), Date().timeIntervalSince(hit.date) < 60 {
+            return hit.messages
+        }
         note(account: account, forMessageID: threadID)
         let owner = account ?? messageAccount[threadID]
         let query = [URLQueryItem(name: "format", value: "metadata")]
@@ -783,6 +794,16 @@ final class GmailSession {
         let data = try await api("threads/\(threadID)", query: query, account: owner)
         guard let messages = GmailAPI.threadMessages(fromJSON: data) else { throw GmailError.invalidResponse }
         for message in messages { note(account: owner, forMessageID: message.id) }
+        return messages
+    }
+
+    /// Alvast ophalen (bladeren in de mailmodus). Wordt één keer gebruikt en hooguit binnen een minuut, zodat een gesprek
+    /// dat je opent altijd vers is.
+    func prefetchThread(threadID: String, account: String?) async throws -> [GmailThreadMessage] {
+        let messages = try await threadMessages(threadID: threadID, account: account)
+        let now = Date()
+        prefetchedThreads = prefetchedThreads.filter { now.timeIntervalSince($0.value.date) < 60 }
+        prefetchedThreads[threadID] = (now, messages)
         return messages
     }
 
