@@ -570,21 +570,41 @@ final class GmailSession {
             isLoading = !loadingKeys.isEmpty
         }
         do {
+            // Tegelijk: welke inboxmails ongelezen zijn. Een bekende mail verandert verder niet (afzender, onderwerp,
+            // begin, datum), dus alleen nieuwe mails hoeven hun kop op te halen; eerder elke twee minuten alle veertig.
+            let unreadTask = Task { () -> Data? in
+                try? await self.api("messages", query: [URLQueryItem(name: "labelIds", value: "INBOX"),
+                                                         URLQueryItem(name: "labelIds", value: "UNREAD"),
+                                                         URLQueryItem(name: "maxResults", value: "100")],
+                                    account: account)
+            }
             let listData = try await api("messages", query: [URLQueryItem(name: "labelIds", value: "INBOX"),
                                                               URLQueryItem(name: "maxResults", value: Self.inboxPageSize)],
                                          account: account)
             var seenThreads = Set<String>()
             let refs = GmailAPI.messageRefs(fromListJSON: listData).refs.filter { seenThreads.insert($0.threadID).inserted }
+            // Wat bovenaan de inbox ongelezen is, valt binnen de eerste ongelezen (zelfde volgorde, een deel ervan);
+            // honderd geeft marge.
+            let unreadIDs = await unreadTask.value.map { Set(GmailAPI.messageRefs(fromListJSON: $0).refs.map(\.id)) }
+            let known: [String: GmailMessageSummary] = unreadIDs == nil ? [:]
+                : Dictionary((messageCache[key] ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let missing = refs.filter { known[$0.id] == nil }
 
-            let summaries = await withTaskGroup(of: (Int, GmailMessageSummary?).self) { group -> [GmailMessageSummary] in
-                for (index, ref) in refs.enumerated() {
-                    group.addTask { (index, await self.summary(forMessageID: ref.id, account: account)) }
+            let fetched = await withTaskGroup(of: GmailMessageSummary?.self) { group -> [String: GmailMessageSummary] in
+                for ref in missing {
+                    group.addTask { await self.summary(forMessageID: ref.id, account: account) }
                 }
-                var found: [(Int, GmailMessageSummary)] = []
-                for await (index, summary) in group {
-                    if let summary { found.append((index, summary)) }
+                var found: [String: GmailMessageSummary] = [:]
+                for await summary in group {
+                    if let summary { found[summary.id] = summary }
                 }
-                return found.sorted { $0.0 < $1.0 }.map(\.1)
+                return found
+            }
+            let summaries = refs.compactMap { ref -> GmailMessageSummary? in
+                if let fresh = fetched[ref.id] { return fresh }
+                guard let unreadIDs, var cached = known[ref.id] else { return nil }
+                cached.isUnread = unreadIDs.contains(ref.id)
+                return cached
             }
             guard key.isEmpty || accounts.contains(key) else { return }   // intussen losgekoppeld
             let changed = messageCache[key] != summaries
