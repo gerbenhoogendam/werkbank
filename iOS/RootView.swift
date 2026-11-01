@@ -71,7 +71,7 @@ struct RootView: View {
             }
         }
         .sheet(item: $state.stopContext) { stop in
-            if let entry = TimerService.allEntries(in: context).first(where: { $0.id == stop.entryID }) {
+            if let entry = TimerService.entry(withID: stop.entryID, in: context) {
                 StopSheet(entry: entry, defaultEnd: stop.defaultEnd)
                     .presentationDetents([.large])
             }

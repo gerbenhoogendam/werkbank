@@ -23,7 +23,10 @@ struct CSVDocument: FileDocument {
 struct TimeListView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
-    @Query(sort: \TimeEntry.createdAt, order: .reverse) private var entries: [TimeEntry]
+    /// Alleen de regels die nog niet geschreven zijn (en wat loopt): de geschreven regels groeien jaar na jaar en komen
+    /// pas uit de database als "Al geschreven" open staat (`WrittenTimeEntries`).
+    @Query(filter: #Predicate<TimeEntry> { !$0.isWritten || $0.statusRaw == "running" },
+           sort: \TimeEntry.createdAt, order: .reverse) private var entries: [TimeEntry]
 
     /// "Al geschreven" is standaard ingeklapt; de keuze blijft bewaard.
     @AppStorage("timeList.writtenExpanded") private var showWritten = false
@@ -40,36 +43,32 @@ struct TimeListView: View {
         var running: [TimeEntry] = []
         /// Nog te schrijven: bovenaan. Afgevinkte regels gaan naar "Al geschreven" onderaan.
         var toWrite: [TimeEntry] = []
-        var written: [TimeEntry] = []
         var outstanding: Double = 0
 
-        init(_ entries: [TimeEntry], sortWritten: Bool) {
+        init(_ entries: [TimeEntry]) {
             for entry in entries {
-                switch (entry.status, entry.isWritten) {
-                case (.running, _): running.append(entry)
-                case (_, true): written.append(entry)
-                default: toWrite.append(entry)
-                }
+                if entry.status == .running { running.append(entry) } else { toWrite.append(entry) }
             }
             outstanding = TimerService.outstandingHours(toWrite)
-            // Alleen sorteren als de lijst open staat; dicht is het aantal genoeg.
-            if sortWritten {
-                written.sort { ($0.finishedAt ?? $0.createdAt) > ($1.finishedAt ?? $1.createdAt) }
-            }
         }
     }
 
+    /// Hoeveel regels er al geschreven zijn (een telling in de database, zonder ze in te lezen).
+    private var writtenCount: Int {
+        (try? context.fetchCount(FetchDescriptor<TimeEntry>(predicate: WrittenTimeEntries.predicate))) ?? 0
+    }
+
     var body: some View {
-        let parts = Parts(entries, sortWritten: showWritten)
+        let parts = Parts(entries)
         let running = parts.running.sorted { ($0.firstStart ?? $0.createdAt) < ($1.firstStart ?? $1.createdAt) }
         let toWrite = parts.toWrite
-        let written = parts.written
+        let writtenCount = self.writtenCount
         let look = ThemeStore.shared.look
         return VStack(spacing: 0) {
             header(outstanding: parts.outstanding, count: toWrite.count)
             if look == .standaard { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
 
-            if entries.isEmpty {
+            if entries.isEmpty && writtenCount == 0 {
                 ThingsEmptyStateSymbol(symbol: "clock", text: "Nog geen tijdregels")
             } else {
                 ScrollView {
@@ -81,17 +80,13 @@ struct TimeListView: View {
                         ForEach(Array(toWrite.enumerated()), id: \.element.id) { offset, entry in
                             TimeEntryRow(entry: entry, index: offset + 1)
                         }
-                        if !written.isEmpty {
-                            writtenHeader(count: written.count)
-                            if showWritten {
-                                ForEach(Array(written.enumerated()), id: \.element.id) { offset, entry in
-                                    TimeEntryRow(entry: entry, index: offset + 1)
-                                }
-                            }
+                        if showWritten {
+                            WrittenTimeEntries()
+                        } else if writtenCount > 0 {
+                            WrittenHeader(count: writtenCount)
                         }
                     }
                     .animation(ThingsMotion.reorder, value: toWrite.map(\.id))
-                    .animation(ThingsMotion.reorder, value: showWritten ? written.map(\.id) : [])
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
@@ -116,8 +111,42 @@ struct TimeListView: View {
         }
     }
 
-    /// Uitklapbare kop onder de regels die nog geschreven moeten worden.
-    private func writtenHeader(count: Int) -> some View {
+    private func export(onlyUnwritten: Bool) {
+        let lines = TimerService.allEntries(in: context)
+            .filter { $0.status == .finished && (!onlyUnwritten || !$0.isWritten) }
+            .sorted { ($0.finishedAt ?? $0.createdAt) < ($1.finishedAt ?? $1.createdAt) }
+            .map(\.billingLine)
+        let exporter: BillingExporter = CSVBillingExporter()
+        guard let data = try? exporter.export(lines) else { return }
+        exportDocument = CSVDocument(data: data)
+        isExporting = true
+    }
+}
+
+/// "Al geschreven" opengeklapt: de kop en de regels, met een eigen vraag aan de database (alleen als hij open staat).
+private struct WrittenTimeEntries: View {
+    static let predicate = #Predicate<TimeEntry> { $0.isWritten && $0.statusRaw != "running" }
+
+    @Query(filter: WrittenTimeEntries.predicate) private var entries: [TimeEntry]
+
+    var body: some View {
+        let written = entries.sorted { ($0.finishedAt ?? $0.createdAt) > ($1.finishedAt ?? $1.createdAt) }
+        if !written.isEmpty {
+            WrittenHeader(count: written.count)
+            ForEach(Array(written.enumerated()), id: \.element.id) { offset, entry in
+                TimeEntryRow(entry: entry, index: offset + 1)
+            }
+        }
+    }
+}
+
+/// Uitklapbare kop onder de regels die nog geschreven moeten worden.
+private struct WrittenHeader: View {
+    let count: Int
+    /// "Al geschreven" is standaard ingeklapt; de keuze blijft bewaard.
+    @AppStorage("timeList.writtenExpanded") private var showWritten = false
+
+    var body: some View {
         Button {
             withAnimation(ThingsMotion.reorder) { showWritten.toggle() }
         } label: {
@@ -154,6 +183,9 @@ struct TimeListView: View {
         .padding(.top, 8)
         .accessibilityLabel("Al geschreven, \(count) regels, \(showWritten ? "uitgeklapt" : "ingeklapt")")
     }
+}
+
+private extension TimeListView {
 
     /// Nog te factureren uren per dag van deze week (maandag tot en met zondag), voor de staven van Puls.
     private static func hoursPerWeekday(_ entries: [TimeEntry]) -> [Double] {
@@ -279,6 +311,7 @@ struct TimeListView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .frame(width: 24, height: 24)   // even groot als Dag afsluiten en de plus ernaast
             .help("Exporteer afgeronde regels als CSV")
 
             // iOS: de Magic Plus rechtsonder opent de tijdinvoer.
@@ -304,16 +337,6 @@ struct TimeListView: View {
         .padding(.vertical, 10)
     }
 
-    private func export(onlyUnwritten: Bool) {
-        let lines = entries
-            .filter { $0.status == .finished && (!onlyUnwritten || !$0.isWritten) }
-            .sorted { ($0.finishedAt ?? $0.createdAt) < ($1.finishedAt ?? $1.createdAt) }
-            .map(\.billingLine)
-        let exporter: BillingExporter = CSVBillingExporter()
-        guard let data = try? exporter.export(lines) else { return }
-        exportDocument = CSVDocument(data: data)
-        isExporting = true
-    }
 }
 
 struct ThingsEmptyStateSymbol: View {

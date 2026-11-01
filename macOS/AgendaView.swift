@@ -791,6 +791,9 @@ struct DayColumn: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     private let calendar = Calendar.current
+    /// Begin van deze dag en van de volgende (één keer, niet per afspraak per weergave).
+    private let startOfDay: Date
+    private let nextDay: Date
     /// Waar een gesleepte mail boven de kolom hangt (voor het stippelblok).
     @State private var mailHoverY: CGFloat?
     /// Het tijdvak dat je nu met de muis opspant.
@@ -820,6 +823,9 @@ struct DayColumn: View {
         self.onTapEvent = onTapEvent
         self.onCreate = onCreate
         self.eventDrag = eventDrag
+        let start = Calendar.current.startOfDay(for: day)
+        startOfDay = start
+        nextDay = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
     }
 
     private var totalHeight: CGFloat { hourHeight * CGFloat(endHour - startHour) }
@@ -834,8 +840,7 @@ struct DayColumn: View {
 
     private func minutes(_ date: Date) -> Int {
         // Afspraken van eerdere/latere dagen worden tot deze dag begrensd.
-        let startOfDay = calendar.startOfDay(for: day)
-        let clamped = min(max(date, startOfDay), calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? date)
+        let clamped = min(max(date, startOfDay), nextDay)
         return Int(clamped.timeIntervalSince(startOfDay) / 60)
     }
 
@@ -844,6 +849,8 @@ struct DayColumn: View {
     }
 
     var body: some View {
+        // Alleen de breedte uit de GeometryReader; de plek in het venster (die bij elk scrollbeeld verandert) komt uit een
+        // apart achtergrondje, anders wordt de hele kolom bij het scrollen steeds opnieuw opgebouwd.
         GeometryReader { geo in
             let width = geo.size.width
             let layout = EventLayout.assign(events.map { ($0.start, $0.end) })
@@ -925,11 +932,13 @@ struct DayColumn: View {
             .onDrop(of: [.gmailMessage], delegate: MailDropDelegate(hoverY: $mailHoverY, perform: handleMailDrop))
             // Slepen afgebroken (Esc): de plek op de agenda verdwijnt ook, alsof er niets is gebeurd.
             .onChange(of: MailDragState.shared.isDragging) { _, dragging in if !dragging { mailHoverY = nil } }
-            .background(
-                Color.clear.preference(key: DayFrameKey.self, value: [day: geo.frame(in: .main)])
-            )
         }
         .frame(height: totalHeight)
+        .background(
+            GeometryReader { frame in
+                Color.clear.preference(key: DayFrameKey.self, value: [day: frame.frame(in: .main)])
+            }
+        )
         .overlay(alignment: .leading) {
             Rectangle().fill(ThingsColor.separator).frame(width: 1)
         }
@@ -970,8 +979,6 @@ struct DayColumn: View {
 
     /// Grepen op de boven- en onderrand, alleen waar het echte begin of einde in deze kolom valt.
     @ViewBuilder private func resizeEdges(_ event: AgendaEvent, height: CGFloat) -> some View {
-        let startOfDay = calendar.startOfDay(for: day)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
         let grip = min(6, height / 4)
         VStack(spacing: 0) {
             if event.start >= startOfDay {

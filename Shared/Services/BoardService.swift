@@ -247,6 +247,17 @@ enum BoardService {
         return !columns.contains { $0.id == card.columnRaw }
     }
 
+    /// De kaarten per kolom (op kolom-id, zie `belongs`), gesorteerd, in één doorgang: de borden vragen dit bij elke
+    /// weergave, per kolom opnieuw filteren en sorteren kostte kolommen × kaarten × kolommen.
+    static func grouped(_ cards: [TodoCard], into columns: [BoardColumn]) -> [String: [TodoCard]] {
+        var result: [String: [TodoCard]] = [:]
+        for card in cards {
+            guard let column = columns.first(where: { belongs(card, to: $0, in: columns) }) else { continue }
+            result[column.id, default: []].append(card)
+        }
+        return result.mapValues { $0.sorted { $0.sortOrder < $1.sortOrder } }
+    }
+
     /// De kolom zelf als die bestaat; anders de eerste kolom (bijv. als de Inbox is verwijderd).
     static func resolve(_ column: BoardColumn, in context: ModelContext) -> BoardColumn {
         let all = columns(in: context)

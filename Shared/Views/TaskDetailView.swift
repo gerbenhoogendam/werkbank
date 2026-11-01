@@ -71,7 +71,9 @@ struct TaskDetailView: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
-            .padding(12)
+            // Zelfde inspringing als de inhoud erboven.
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
         .background(ThingsColor.backgroundContent)
         .scrollIndicators(.never)

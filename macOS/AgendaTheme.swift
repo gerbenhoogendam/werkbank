@@ -105,14 +105,14 @@ struct AgendaTodayButton: View {
                     .tracking(0.8)
                     .foregroundStyle(ThingsColor.textPrimary)
                     .padding(.horizontal, 12)
-                    .frame(height: 28)
+                    .frame(height: 30)   // even hoog als de pijltoetsen ernaast
                     .background(Capsule().fill(ThingsColor.tagBackground))
             case .tischsuper:
                 Text("Vandaag")
                     .font(.werk(size: 11))
                     .foregroundStyle(ThingsColor.textPrimary)
                     .padding(.horizontal, 10)
-                    .frame(height: 26)
+                    .frame(height: 28)   // even hoog als de pijlknoppen ernaast
                     .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ThingsColor.cardBackground))
             case .spark:
                 Text("Vandaag")
@@ -121,7 +121,7 @@ struct AgendaTodayButton: View {
             case .karmijn:
                 KarmijnLabel(text: "Vandaag", color: ThingsColor.running)
                     .padding(.horizontal, 12)
-                    .frame(height: 28)
+                    .frame(height: 32)   // even hoog als de pijlknoppen ernaast
                     .overlay(Rectangle().strokeBorder(ThingsColor.running, lineWidth: 1))
             case .wandklok:
                 Text("Vandaag")

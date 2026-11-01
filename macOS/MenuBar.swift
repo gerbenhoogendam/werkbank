@@ -27,13 +27,14 @@ struct MenuBarPanel: View {
     @Environment(\.modelContext) private var context
     @Environment(\.openWindow) private var openWindow
     @Environment(AppState.self) private var appState
-    @Query(sort: \TodoCard.sortOrder) private var cards: [TodoCard]
+    /// Alleen open kaarten (het archief van afgeronde kaarten hoeft het menubalkpaneel niet te laden).
+    @Query(filter: #Predicate<TodoCard> { $0.columnRaw != "done" }, sort: \TodoCard.sortOrder) private var cards: [TodoCard]
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
     @State private var mode: Mode = .todo
     @State private var selectedID: UUID?
 
-    private var openCards: [TodoCard] { cards.filter { $0.columnRaw != BoardColumn.doneID } }
+    private var openCards: [TodoCard] { cards }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -110,7 +111,7 @@ struct MenuBarPanel: View {
                     .frame(maxWidth: .infinity, minHeight: 60)
             } else {
                 ScrollView {
-                    VStack(spacing: 2) {
+                    LazyVStack(spacing: 2) {
                         ForEach(openCards) { card in
                             Button { selectedID = card.id } label: {
                                 HStack {

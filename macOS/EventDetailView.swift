@@ -150,7 +150,9 @@ struct EventDetailView: View {
                     }
                 }
             }
-            .padding(12)
+            // Zelfde inspringing als de inhoud erboven, zodat de knoppen in de lijn van de tekst staan.
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
     }
 
@@ -225,7 +227,9 @@ struct EventDetailView: View {
                     .keyboardShortcut(.defaultAction)
                 }
             }
-            .padding(12)
+            // Zelfde inspringing als de inhoud erboven, zodat de knoppen in de lijn van de tekst staan.
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
     }
 

@@ -79,7 +79,7 @@ struct BoardView: View {
     var body: some View {
         // De kaarten één keer over de kolommen verdelen (niet per kolom opnieuw filteren en sorteren).
         let columns = self.columns
-        let grouped = Self.group(cards, into: columns)
+        let grouped = BoardService.grouped(cards, into: columns)
         return HStack(alignment: .top, spacing: look == .drukproef || look == .karmijn ? 0 : (look == .principes ? 16 : 10)) {
             ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
                 columnView(column, cards: grouped[column.id] ?? [], index: index, columns: columns)
@@ -175,17 +175,6 @@ struct BoardView: View {
     }
 
     // MARK: Kolom
-
-    /// De kaarten per kolom (op kolom-id), gesorteerd. In de view sorteren, zodat de volgorde direct meebeweegt met de
-    /// model-wijziging na het neerzetten.
-    private static func group(_ cards: [TodoCard], into columns: [BoardColumn]) -> [String: [TodoCard]] {
-        var result: [String: [TodoCard]] = [:]
-        for card in cards {
-            guard let column = columns.first(where: { BoardService.belongs(card, to: $0, in: columns) }) else { continue }
-            result[column.id, default: []].append(card)
-        }
-        return result.mapValues { $0.sorted { $0.sortOrder < $1.sortOrder } }
-    }
 
     private func items(for column: BoardColumn, cards columnCards: [TodoCard]) -> [ColumnItem] {
         guard drag.isDragging, let target = drag.target, target.column == column else {
@@ -518,7 +507,7 @@ struct BoardView: View {
 
     private func currentOrder() -> [BoardColumn: [UUID]] {
         let columns = self.columns
-        let grouped = Self.group(cards, into: columns)
+        let grouped = BoardService.grouped(cards, into: columns)
         return Dictionary(uniqueKeysWithValues: columns.map { column in
             (column, (grouped[column.id] ?? []).map(\.id))
         })

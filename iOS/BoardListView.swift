@@ -64,9 +64,15 @@ struct BoardListView: View {
     }
 
     private var boardContent: some View {
-        List {
+        // Eén keer per weergave: kolommen, kaarten per kolom, lopende timers en ingeklapte kolommen.
+        let columns = self.columns
+        let grouped = BoardService.grouped(cards, into: columns)
+        let running = runningTodoIDs
+        let collapsed = self.collapsed
+        return List {
             ForEach(columns) { column in
-                section(column)
+                section(column, cards: grouped[column.id] ?? [], isCollapsed: collapsed.contains(column.id),
+                        running: running)
             }
             addColumnTile
                 .listRowSeparator(.hidden)
@@ -97,17 +103,17 @@ struct BoardListView: View {
 
     // MARK: Kolom
 
+    /// Voor het neerzetten (niet per weergave).
     private func cards(in column: BoardColumn) -> [TodoCard] {
-        cards.filter { BoardService.belongs($0, to: column, in: columns) }.sorted { $0.sortOrder < $1.sortOrder }
+        BoardService.grouped(cards, into: columns)[column.id] ?? []
     }
 
-    @ViewBuilder private func section(_ column: BoardColumn) -> some View {
-        let columnCards = cards(in: column)
-        let isCollapsed = collapsed.contains(column.id)
+    @ViewBuilder private func section(_ column: BoardColumn, cards columnCards: [TodoCard], isCollapsed: Bool,
+                                      running: Set<UUID>) -> some View {
         Section {
             if !isCollapsed {
                 ForEach(columnCards) { card in
-                    cardRow(card, in: column)
+                    cardRow(card, in: column, isTimerRunning: running.contains(card.id))
                 }
                 if columnCards.isEmpty { emptyRow(column) }
             }
@@ -116,8 +122,8 @@ struct BoardListView: View {
         }
     }
 
-    private func cardRow(_ card: TodoCard, in column: BoardColumn) -> some View {
-        CardView(card: card, isTimerRunning: runningTodoIDs.contains(card.id),
+    private func cardRow(_ card: TodoCard, in column: BoardColumn, isTimerRunning: Bool) -> some View {
+        CardView(card: card, isTimerRunning: isTimerRunning,
                  onStartTimer: {
                      TimerService.startTimer(for: card, in: context)
                      appState.showToast("Timer gestart: \(card.title)")

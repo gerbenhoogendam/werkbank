@@ -15,6 +15,8 @@ struct FeedbackDictationSheet: View {
     @State private var transcribing = 0
     @State private var error: String?
     @State private var voiceMotion = VoiceMotion()
+    /// Eén keer verkleind (niet in `body`: die loopt tijdens het opnemen een keer of twaalf per seconde).
+    @State private var thumbnail: CGImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var dictation: PhoneDictation { PhoneDictation.shared }
 
@@ -28,7 +30,7 @@ struct FeedbackDictationSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
-                    if let data = screenshot?.data, let image = ScreenshotEncoding.thumbnail(data, maxPixels: 600) {
+                    if let image = thumbnail {
                         Image(decorative: image, scale: 1)
                             .resizable()
                             .scaledToFit()
@@ -71,6 +73,12 @@ struct FeedbackDictationSheet: View {
             if !enabled { dictation.apply(enabled: true) }
             dictation.prepare()
             await start()
+        }
+        .task {
+            guard let data = screenshot?.data else { return }
+            thumbnail = await Task.detached(priority: .userInitiated) {
+                ScreenshotEncoding.thumbnail(data, maxPixels: 600)
+            }.value
         }
         .onDisappear { _ = dictation.stopRecording() }
     }

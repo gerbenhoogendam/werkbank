@@ -186,8 +186,11 @@ enum TimerService {
         return entry
     }
 
+    /// Eén regel opzoeken zonder alle tijdregels (ook de geschreven) in te lezen.
     static func entry(withID id: UUID, in context: ModelContext) -> TimeEntry? {
-        allEntries(in: context).first { $0.id == id }
+        var descriptor = FetchDescriptor<TimeEntry>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first
     }
 
     static func setWritten(_ entry: TimeEntry, _ value: Bool, in context: ModelContext) {

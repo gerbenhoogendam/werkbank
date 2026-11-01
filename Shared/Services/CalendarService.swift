@@ -51,6 +51,7 @@ final class CalendarService {
     /// herberekening van de weergave op; zo gaat dat niet telkens naar EventKit.
     @ObservationIgnored private var eventCache: [EventQuery: [AgendaEvent]] = [:]
     @ObservationIgnored private var changeTask: Task<Void, Never>?
+    @ObservationIgnored private var prefetchTask: Task<Void, Never>?
 
     private struct EventQuery: Hashable {
         let start: Date
@@ -131,11 +132,42 @@ final class CalendarService {
     func events(from start: Date, to end: Date, hiddenCalendarIDs: Set<String>) -> [AgendaEvent] {
         guard hasAccess else { return [] }
         let key = EventQuery(start: start, end: end, hidden: hiddenCalendarIDs)
-        if let cached = eventCache[key] { return cached }
+        if let cached = eventCache[key] {
+            prefetchNeighbors(of: key)
+            return cached
+        }
         if eventCache.count > 12 { eventCache.removeAll() }
         let result = fetchEvents(from: start, to: end, hiddenCalendarIDs: hiddenCalendarIDs)
         eventCache[key] = result
+        prefetchNeighbors(of: key)
         return result
+    }
+
+    /// De periode ervoor en erna alvast ophalen, even na het tekenen: vorige en volgende week komen dan uit het geheugen.
+    /// Alleen als er nog een buur ontbreekt en er niet al een ophaalronde wacht (de agenda vraagt dit bij elke weergave).
+    private func prefetchNeighbors(of key: EventQuery) {
+        guard prefetchTask == nil else { return }
+        let calendar = Calendar.current
+        guard let days = calendar.dateComponents([.day], from: key.start, to: key.end).day, days > 0, days <= 42 else { return }
+        let neighbors = [days, -days].compactMap { offset -> EventQuery? in
+            guard let start = calendar.date(byAdding: .day, value: offset, to: key.start),
+                  let end = calendar.date(byAdding: .day, value: offset, to: key.end) else { return nil }
+            return EventQuery(start: start, end: end, hidden: key.hidden)
+        }.filter { eventCache[$0] == nil }
+        guard !neighbors.isEmpty else { return }
+        let revisionAtStart = revision
+        prefetchTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            defer { self?.prefetchTask = nil }
+            for neighbor in neighbors {
+                guard let self, self.revision == revisionAtStart, self.eventCache.count < 12 else { return }
+                if self.eventCache[neighbor] == nil {
+                    self.eventCache[neighbor] = self.fetchEvents(from: neighbor.start, to: neighbor.end,
+                                                                 hiddenCalendarIDs: neighbor.hidden)
+                }
+                await Task.yield()
+            }
+        }
     }
 
     private func fetchEvents(from start: Date, to end: Date, hiddenCalendarIDs: Set<String>) -> [AgendaEvent] {
