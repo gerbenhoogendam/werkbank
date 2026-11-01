@@ -25,9 +25,7 @@ enum SiteIconFinder {
             let base = http.url ?? url
             var candidates = SiteIcons.candidates(html: html, baseURL: base)
             if let touch = URL(string: "/apple-touch-icon.png", relativeTo: base)?.absoluteURL { candidates.append(touch) }
-            for candidate in candidates.prefix(5) {
-                if let icon = await usableImage(at: candidate) { return icon }
-            }
+            if let icon = await firstUsable(Array(candidates.prefix(5))) { return icon }
             break   // de homepage laadde: niet ook nog www. proberen
         }
         // Laatste kans: de favicondienst van Google (404 = niets bekend).
@@ -35,6 +33,30 @@ enum SiteIconFinder {
             return await usableImage(at: url)
         }
         return nil
+    }
+
+    /// De kandidaten tegelijk ophalen (eerder na elkaar, elk tot zes seconden); de eerste bruikbare in volgorde wint,
+    /// zodra alles ervóór klaar is.
+    private static func firstUsable(_ candidates: [URL]) async -> Data? {
+        guard !candidates.isEmpty else { return nil }
+        return await withTaskGroup(of: (Int, Data?).self) { group -> Data? in
+            for (index, candidate) in candidates.enumerated() {
+                group.addTask { (index, await usableImage(at: candidate)) }
+            }
+            // nil = nog bezig; .some(nil) = niets bruikbaars.
+            var results = [Data??](repeating: nil, count: candidates.count)
+            for await (index, data) in group {
+                results[index] = .some(data)
+                for result in results {
+                    guard let done = result else { break }
+                    if let icon = done {
+                        group.cancelAll()
+                        return icon
+                    }
+                }
+            }
+            return nil
+        }
     }
 
     private static func usableImage(at url: URL) async -> Data? {

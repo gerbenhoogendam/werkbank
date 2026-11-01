@@ -95,6 +95,9 @@ final class PreferencesSync {
         guard let folder = WerkbankFolder.iCloud else { return }
         // Eerst overnemen wat een andere Mac intussen heeft gewijzigd, behalve wat hier net is gewijzigd.
         let changed = changedKeys()
+        // Niets van de gesynchroniseerde instellingen gewijzigd (bijvoorbeeld alleen een paneelbreedte of de plek van
+        // de mini-timer): dan ook niet het iCloud-bestand inlezen. Overnemen van een andere Mac doet de vaste ronde.
+        if changed.isEmpty, lastSnapshot != nil { return }
         await pull(keeping: changed)
         let values = snapshot()
         guard !changed.isEmpty || !(lastSnapshot?.isEqual(to: values) ?? false) else { return }
