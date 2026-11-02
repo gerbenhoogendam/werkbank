@@ -522,6 +522,7 @@ struct MailModeFolders: View {
         case .inbox: "tray"
         case .starred: "star"
         case .sent: "paperplane"
+        case .drafts: "doc.text"
         case .all: "archivebox"
         case .spam: "xmark.bin"
         case .trash: "trash"
@@ -547,8 +548,11 @@ private struct MailModeReader: View {
                     proposalBanner(proposal)
                 }
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                // Een concept (Concepten, of als nieuwste in Alle mail) komt in het antwoordblok om verder te schrijven.
                 MailWindowView(ref: MailRef(message: item.summary), embedded: true, trigger: store.replyTrigger,
-                               onReplySent: { store.archiveAfterSending(threadID: item.threadID, appState: appState) })
+                               opensDraft: item.labels.contains("DRAFT"),
+                               onReplySent: { store.archiveAfterSending(threadID: item.threadID, appState: appState) },
+                               onDraftDiscarded: { store.draftDiscarded(threadID: item.threadID) })
                     .id(item.threadID)
             }
             .task(id: item.id) { await store.proposals(for: item) }

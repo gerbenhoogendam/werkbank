@@ -10,8 +10,10 @@ struct ComposeRef: Codable, Hashable {
     var id = UUID()
     var mode: Mode
     var source: MailRef?
-    /// Een nieuwe mail die al is ingevuld (een mailto-link).
+    /// Een nieuwe mail die al is ingevuld (een mailto-link), of een concept dat verder geschreven wordt.
     var prefill: MailPrefill?
+    /// Vanaf welke mailbox (een concept: die waarin het staat); anders die van de mail of de actieve.
+    var fromAccount: String?
 }
 
 /// Mail opstellen als paneel boven het hoofdvenster. Verstuurt via de Gmail API, met de handtekening uit Voorkeuren.
@@ -86,6 +88,12 @@ struct ComposeView: View {
     @State private var followUpDays: Int?
     /// Opmaak van de tekst (werkbalk, HTML bij versturen).
     @State private var rich = RichTextController()
+    /// Wat er het laatst als concept in Gmail is bewaard (`draftSignature`); nil: nog niets.
+    @State private var savedDraftSignature: String?
+    /// Het bewaren van het concept, één tegelijk.
+    @State private var draftSaveTask: Task<Void, Never>?
+    /// Verstuurd: niets meer als concept bewaren.
+    @State private var sent = false
 
     private static let maxAttachmentBytes = 18_000_000
 
@@ -118,6 +126,12 @@ struct ComposeView: View {
         }
         .background(ThingsColor.mailPaper)
         .task { await prepare() }
+        // Wat je typt en (nog) niet verstuurt, staat als concept in Gmail: een paar seconden na de laatste wijziging.
+        .task(id: draftSignature) {
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            saveDraftSoon()
+        }
         .onChange(of: suggestion) { _, _ in suggestionDismissed = false }
         .onChange(of: bodyText) { _, _ in markEngaged() }
         .onChange(of: toText) { _, _ in markEngaged() }
@@ -473,6 +487,7 @@ struct ComposeView: View {
                     Button {
                         bodyBinding.wrappedValue = ""
                         attachments = []
+                        discardDraft()
                         onDiscard()
                     } label: {
                         Image(systemName: "trash")
@@ -515,11 +530,13 @@ struct ComposeView: View {
     // MARK: Voorbereiden
 
     private func prepare() async {
+        // Een bestaand concept geopend: wat er nu staat, staat al in Gmail.
+        defer { if GmailDrafts.draft(for: ref.id) != nil, savedDraftSignature == nil { savedDraftSignature = draftSignature } }
         if let restored {
             restore(restored)
             return
         }
-        fromAccount = ref.source?.account ?? gmail.activeAccount ?? gmail.accounts.first ?? ""
+        fromAccount = ref.fromAccount ?? ref.source?.account ?? gmail.activeAccount ?? gmail.accounts.first ?? ""
         if attachments.isEmpty { attachments = initialAttachments }
         guard let source = ref.source else {
             if let prefill = ref.prefill {
@@ -566,6 +583,15 @@ struct ComposeView: View {
                 toText = recipients.to.map(\.displayString).joined(separator: ", ")
                 ccText = recipients.cc.map(\.displayString).joined(separator: ", ")
             }
+            // Een concept dat verder geschreven wordt: zijn eigen ontvangers en onderwerp.
+            if let prefill = ref.prefill {
+                toText = prefill.to
+                ccText = prefill.cc
+                bccText = prefill.bcc
+                if !prefill.subject.isEmpty { subject = prefill.subject }
+                showCc = !prefill.cc.isEmpty
+                showBcc = !prefill.bcc.isEmpty
+            }
             focus = isReply ? .body : .to
         } catch {
             errorText = "Oorspronkelijke mail ophalen mislukt: \(error.localizedDescription)"
@@ -600,6 +626,68 @@ struct ComposeView: View {
         let type = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
         attachments.append(MailAttachment(name: url.lastPathComponent, mediaType: type, data: data))
         errorText = nil
+    }
+
+    // MARK: Concept in Gmail
+
+    /// Alles wat in het concept komt; verandert dit, dan wordt het concept even later opnieuw bewaard.
+    private var draftSignature: String {
+        [fromAccount, toText, ccText, bccText, subject, bodyText, useSignature ? "1" : "0",
+         attachments.map { "\($0.name):\($0.data.count)" }.joined(separator: ",")].joined(separator: "\u{1F}")
+    }
+
+    /// Er staat iets in om te bewaren (een leeg antwoord niet).
+    private var hasDraftContent: Bool {
+        !bodyText.replacingOccurrences(of: "\u{FFFC}", with: "x").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !attachments.isEmpty
+    }
+
+    /// Bewaart het concept in Gmail, na wat er al aan het bewaren is (nooit twee tegelijk: anders twee concepten).
+    private func saveDraftSoon() {
+        guard !sent, !isSending, !isLoading, !fromAccount.isEmpty, hasDraftContent,
+              draftSignature != savedDraftSignature else { return }
+        let previous = draftSaveTask
+        draftSaveTask = Task { @MainActor in
+            await previous?.value
+            await saveDraft()
+        }
+    }
+
+    private func saveDraft() async {
+        guard !sent, hasDraftContent else { return }
+        let signature = draftSignature
+        guard signature != savedDraftSignature else { return }
+        var existing = GmailDrafts.draft(for: ref.id)
+        // Een andere afzender: het concept stond in een andere mailbox.
+        if let old = existing, old.account != fromAccount {
+            await gmail.deleteDraft(id: old.id, account: old.account)
+            GmailDrafts.set(nil, for: ref.id)
+            existing = nil
+        }
+        let account = fromAccount
+        guard let id = try? await gmail.saveDraft(raw: MailComposer.build(composedMail()), draftID: existing?.id,
+                                                  threadID: threadIDForSending, account: account) else { return }
+        if sent {
+            // Intussen verstuurd: dit concept hoort er niet meer.
+            await gmail.deleteDraft(id: id, account: account)
+            return
+        }
+        GmailDrafts.set((id, account), for: ref.id)
+        savedDraftSignature = signature
+    }
+
+    /// Verstuurd of weggegooid: het concept in Gmail weg (na een bewaarronde die nog bezig was).
+    private func discardDraft() {
+        let pending = draftSaveTask
+        let refID = ref.id
+        draftSaveTask = nil
+        savedDraftSignature = nil
+        Task { @MainActor in
+            await pending?.value
+            guard let draft = GmailDrafts.draft(for: refID) else { return }
+            GmailDrafts.set(nil, for: refID)
+            await GmailSession.shared.deleteDraft(id: draft.id, account: draft.account)
+        }
     }
 
     // MARK: Loshalen
@@ -676,7 +764,8 @@ struct ComposeView: View {
         return false
     }
 
-    private func send() async {
+    /// De mail zoals hij nu is ingevuld: om te versturen, en om als concept in Gmail te bewaren.
+    private func composedMail() -> ComposedMail {
         let to = MailAddress.parse(toText).valid, cc = MailAddress.parse(ccText).valid, bcc = MailAddress.parse(bccText).valid
         let name = MailSignatures.senderName(for: fromAccount).flatMap { $0.isEmpty ? nil : $0 }
         // Afbeeldingen in de tekst gaan als cid-bijlage mee; in de tekstversie staan ze niet.
@@ -702,14 +791,25 @@ struct ComposeView: View {
             mail.inReplyTo = original.messageID
             mail.references = ReplyBuilder.references(old: original.references, messageID: original.messageID)
         }
-        // Een gesprek bestaat alleen in de mailbox waar het in staat.
-        let threadID = isReply && ref.source?.account == fromAccount ? ref.source?.threadID : nil
+        return mail
+    }
+
+    /// Een gesprek bestaat alleen in de mailbox waar het in staat.
+    private var threadIDForSending: String? {
+        isReply && ref.source?.account == fromAccount ? ref.source?.threadID : nil
+    }
+
+    private func send() async {
+        let mail = composedMail()
+        let threadID = threadIDForSending
 
         isSending = true
         defer { isSending = false }
         do {
             let sentThread = try await gmail.send(raw: MailComposer.build(mail), threadID: threadID, account: fromAccount)
             SendSound.play()
+            sent = true
+            discardDraft()
             // Een antwoord in het gesprek van een kaart: die wacht nu op de klant.
             let waiting = isReply ? ref.source.flatMap { WaitingWatcher.shared.didReply(threadID: $0.threadID) } : nil
             var message = waiting.map { "Mail verzonden · kaart naar \($0)" } ?? "Mail verzonden"
@@ -778,6 +878,19 @@ struct ComposeDraft {
     var original: MailContent?
     /// De tekst met opmaak (RTF), zodat die meegaat naar het eigen venster.
     var bodyRich: Data? = nil
+}
+
+/// Het Gmail-concept bij een opstelblok, op het id van zijn `ComposeRef`: zo blijft het bij hetzelfde concept als het
+/// blok opnieuw wordt opgebouwd (andere mail in de mailmodus en terug, loshalen in een eigen venster).
+@MainActor
+enum GmailDrafts {
+    private static var drafts: [UUID: (id: String, account: String)] = [:]
+
+    static func draft(for ref: UUID) -> (id: String, account: String)? { drafts[ref] }
+
+    static func set(_ draft: (id: String, account: String)?, for ref: UUID) {
+        drafts[ref] = draft
+    }
 }
 
 /// Concepten die naar een eigen venster gaan (een venster krijgt alleen een id mee).

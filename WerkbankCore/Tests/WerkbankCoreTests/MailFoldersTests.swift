@@ -36,6 +36,9 @@ final class MailFoldersTests: XCTestCase {
                        MailListRequest(query: "offerte", labelIDs: [], includeSpamTrash: false))
         XCTAssertEqual(MailSearch.request(text: "offerte", folder: .sent, attachment: true),
                        MailListRequest(query: "offerte has:attachment", labelIDs: ["SENT"], includeSpamTrash: false))
+        XCTAssertEqual(MailSearch.request(text: "", folder: .drafts),
+                       MailListRequest(query: "", labelIDs: ["DRAFT"], includeSpamTrash: false))
+        XCTAssertEqual(MailFolder.drafts.title, "Concepten")
         // Een klant: al zijn mail, ook als er een map open staat.
         XCTAssertEqual(MailSearch.request(text: "", folder: .label(account: "a", id: "Label_1", name: "Klanten"),
                                           clientDomains: ["vandijk.nl"]),

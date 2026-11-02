@@ -715,6 +715,12 @@ final class MailModeStore {
     func archiveAfterSending(threadID: String, appState: AppState) {
         openReplies.remove(threadID)   // verstuurd: er staat geen antwoord meer open
         guard let item = items.first(where: { $0.threadID == threadID }) else { return }
+        if folder == .drafts {
+            // Een concept verstuurd: weg uit Concepten; het gesprek (als dat in de inbox stond) ook uit de inbox.
+            remove(threadID: threadID)
+            Task { await gmail.archiveMessage(item.summary, appState: appState, announce: false) }
+            return
+        }
         archive(item, announcing: "", appState: appState)
     }
 
@@ -729,6 +735,12 @@ final class MailModeStore {
         FollowUpStore.shared.clearReturned(threadID: item.threadID)
         if let text, !text.isEmpty { appState.announce(text, seconds: 3) }
         Task { await gmail.archiveMessage(item.summary, appState: appState, announce: text == nil) }
+    }
+
+    /// Een concept weggegooid: in Concepten staat het dan niet meer.
+    func draftDiscarded(threadID: String) {
+        openReplies.remove(threadID)
+        if folder == .drafts { remove(threadID: threadID) }
     }
 
     // MARK: Open antwoorden

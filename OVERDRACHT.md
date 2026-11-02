@@ -237,6 +237,16 @@ beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet to
   De toetsen staan niet meer naast de knoppen (alleen in de tooltip). Per knop in de mail een vinkje in dezelfde lijst
   (`MailModeKeys.hiddenButtonsKey`); uit = geen knop, de sneltoets werkt wel. Gaat mee naar je andere Macs. Versturen
   vanuit de mailmodus archiveert meteen en opent de volgende mail.
+- **Concepten** (`MailFolder.drafts`, label DRAFT): een map in de mailmodus. Een concept openen (ook als het het
+  nieuwste in Alle mail is) zet het in het antwoordblok: bij een gesprek als antwoord op de nieuwste mail (ontvangers,
+  onderwerp en tekst uit het concept, het citaat komt bij versturen weer uit die mail), anders als nieuwe mail vanaf
+  de mailbox van het concept (`MailWindowView.openDraft`, `ComposeRef.fromAccount`). Bijlagen gaan mee, afbeeldingen
+  in de tekst en opmaak van het concept niet (de tekst komt uit `QuoteSplitter.mainText`).
+  Elk opstelblok bewaart zichzelf als Gmail-concept, vier seconden na de laatste wijziging (`ComposeView.saveDraft`,
+  `GmailSession.saveDraft`: drafts.create of drafts.update; ook in het Mail-paneel en in losse vensters). Het concept
+  hoort bij het id van de `ComposeRef` (`GmailDrafts`), zodat het hetzelfde blijft na wisselen van mail en loshalen.
+  Versturen of de prullenbak haalt het concept weg (`deleteDraft`); een ander afzenderadres verhuist het. Een paneel
+  sluiten zonder versturen laat het concept staan, zoals in Gmail.
 - **Open antwoord**: met tekst of een bijlage in het antwoord archiveren Archiveren, Tijd schrijven, Inplannen,
   Opvolgen en Taak maken het gesprek niet (melding "niet gearchiveerd: je antwoord staat nog open"); versturen
   archiveert daarna wel. Ga je naar een andere mail of sluit je de mailmodus, dan wordt het antwoord per gesprek

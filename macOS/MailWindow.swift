@@ -54,6 +54,10 @@ struct MailWindowView: View {
     var trigger: MailReplyTrigger?
     /// Mailmodus: na versturen wordt het gesprek gearchiveerd en opent de volgende mail.
     var onReplySent: (() -> Void)?
+    /// Mailmodus: de gekozen mail is een concept; dat komt in het antwoordblok om verder te schrijven.
+    var opensDraft = false
+    /// Mailmodus: het concept is weggegooid (uit de lijst Concepten).
+    var onDraftDiscarded: (() -> Void)?
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
@@ -78,11 +82,14 @@ struct MailWindowView: View {
     /// Een blok waar het gesprek naartoe moet scrollen (bijv. een net gestarte analyse).
     @State private var scrollTarget: String?
 
-    init(ref: MailRef, embedded: Bool = false, trigger: MailReplyTrigger? = nil, onReplySent: (() -> Void)? = nil) {
+    init(ref: MailRef, embedded: Bool = false, trigger: MailReplyTrigger? = nil, opensDraft: Bool = false,
+         onReplySent: (() -> Void)? = nil, onDraftDiscarded: (() -> Void)? = nil) {
         self.ref = ref
         self.embedded = embedded
         self.trigger = trigger
+        self.opensDraft = opensDraft
         self.onReplySent = onReplySent
+        self.onDraftDiscarded = onDraftDiscarded
         _model = State(initialValue: MailThreadModel(ref: ref))
     }
 
@@ -142,11 +149,30 @@ struct MailWindowView: View {
         taskTitle = ref.subject
         wasInList = gmail.messages.contains { $0.threadID == ref.threadID }
         await model.load(notBefore: embedded ? nil : ContinuousClock.now + .seconds(FoldSpeed.mailOpen.duration))
+        if opensDraft, replyRef == nil { await openDraft() }
         // Geen antwoordblok vooraf: dat komt pas bij ⌘R, Beantwoorden, Allen of Doorsturen.
         if ref.analyze, ClaudeKeychain.read() != nil {
             let target = model.mails.contains { $0.id == ref.messageID } ? ref.messageID : (model.mails.last?.id ?? ref.messageID)
             if let block = model.analyze(messageID: target) { scrollTarget = "analyse-\(block.id)" }
         }
+    }
+
+    /// Een concept verder schrijven: zijn ontvangers, onderwerp, tekst (zonder het citaat; dat komt bij versturen weer
+    /// uit de mail waarop het antwoordt) en bijlagen in het antwoordblok. Bewaren werkt hetzelfde concept in Gmail bij.
+    private func openDraft() async {
+        let account = gmail.account(for: ref.messageID) ?? ref.account ?? gmail.activeAccount ?? ""
+        guard let raw = try? await gmail.rawMessageData(id: ref.messageID) else { return }
+        let content = await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value
+        let draftID = await gmail.draftID(forMessageID: ref.messageID, account: account)
+        let prefill = MailPrefill(to: content.to, cc: content.cc, subject: content.subject)
+        // Een antwoord in een gesprek: op de nieuwste mail ervan; anders een nieuwe mail.
+        var compose = model.mails.last.map { composeRef(.replyAll, for: $0) } ?? ComposeRef(mode: .new, source: nil)
+        compose.prefill = prefill
+        compose.fromAccount = account
+        if let draftID { GmailDrafts.set((draftID, account), for: compose.id) }
+        replyAttachments = content.files
+        replyBody = QuoteSplitter.mainText(of: content)
+        replyRef = compose
     }
 
     private func composeRef(_ mode: ComposeRef.Mode, for mail: ThreadMail) -> ComposeRef {
@@ -417,30 +443,35 @@ struct MailWindowView: View {
     }
 
     @ViewBuilder private var replyBlock: some View {
-        if let replyRef, let mail = model.mails.first(where: { $0.id == replyRef.source?.messageID }) {
-            let draft = model.latestDraft
-            ComposeView(ref: replyRef, embedded: true, preloaded: mail.content, externalBody: $replyBody,
-                        suggestion: draft.flatMap { $0.id == usedDraftID ? nil : $0.text },
-                        onSuggestionDone: { usedDraftID = model.latestDraft?.id },
-                        onSent: {
-                            if embedded {
+        if let replyRef {
+            // Een antwoord hoort bij een mail uit het gesprek; een concept voor een nieuwe mail heeft er geen.
+            let mail = model.mails.first { $0.id == replyRef.source?.messageID }
+            if mail != nil || replyRef.source == nil {
+                let draft = model.latestDraft
+                ComposeView(ref: replyRef, embedded: true, preloaded: mail?.content, externalBody: $replyBody,
+                            suggestion: draft.flatMap { $0.id == usedDraftID ? nil : $0.text },
+                            onSuggestionDone: { usedDraftID = model.latestDraft?.id },
+                            onSent: {
+                                if embedded {
+                                    self.replyRef = nil
+                                    onReplySent?()
+                                } else {
+                                    // Verstuurd: het gesprek vouwt weg.
+                                    PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
+                                }
+                            },
+                            onDiscard: {
+                                usedDraftID = model.latestDraft?.id
+                                replyAttachments = []
                                 self.replyRef = nil
-                                onReplySent?()
-                            } else {
-                                // Verstuurd: het gesprek vouwt weg.
-                                PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
-                            }
-                        },
-                        onDiscard: {
-                            usedDraftID = model.latestDraft?.id
-                            replyAttachments = []
-                            self.replyRef = nil
-                        },
-                        archivesOnSend: embedded,
-                        initialAttachments: replyAttachments)
-                .id(replyRef.id)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
+                                if opensDraft { onDraftDiscarded?() }
+                            },
+                            archivesOnSend: embedded,
+                            initialAttachments: replyAttachments)
+                    .id(replyRef.id)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
+            }
         }
     }
 

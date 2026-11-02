@@ -43,18 +43,19 @@ extension GmailAPI {
 
 /// Een map in de mailmodus.
 public enum MailFolder: Hashable {
-    case inbox, starred, sent, all, spam, trash
+    case inbox, starred, sent, drafts, all, spam, trash
     /// Een eigen label van één mailbox.
     case label(account: String, id: String, name: String)
 
     /// De vaste mappen, in de volgorde van de kolom.
-    public static let standard: [MailFolder] = [.inbox, .starred, .sent, .all, .spam, .trash]
+    public static let standard: [MailFolder] = [.inbox, .starred, .sent, .drafts, .all, .spam, .trash]
 
     public var title: String {
         switch self {
         case .inbox: "Postvak IN"
         case .starred: "Met ster"
         case .sent: "Verstuurd"
+        case .drafts: "Concepten"
         case .all: "Alle mail"
         case .spam: "Spam"
         case .trash: "Prullenbak"
@@ -67,6 +68,7 @@ public enum MailFolder: Hashable {
         case .inbox: "INBOX"
         case .starred: "STARRED"
         case .sent: "SENT"
+        case .drafts: "DRAFT"
         case .all: nil
         case .spam: "SPAM"
         case .trash: "TRASH"

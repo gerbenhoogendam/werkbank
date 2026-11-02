@@ -885,6 +885,52 @@ final class GmailSession {
         return thread
     }
 
+    // MARK: Concepten
+
+    /// Bewaart een concept in Gmail: nieuw, of `draftID` bijwerken. Geeft het id van het concept terug. Is het concept
+    /// intussen weg (verstuurd of weggegooid in Gmail), dan komt er een nieuw.
+    func saveDraft(raw: Data, draftID: String?, threadID: String?, account: String) async throws -> String {
+        var message: [String: Any] = ["raw": Base64URL.encode(raw)]
+        if let threadID { message["threadId"] = threadID }
+        if let draftID {
+            let body = try JSONSerialization.data(withJSONObject: ["id": draftID, "message": message])
+            do {
+                _ = try await api("drafts/\(draftID)", method: "PUT", body: body, account: account)
+                return draftID
+            } catch GmailError.http(404, _) {
+                // Weg: hieronder een nieuw.
+            }
+        }
+        let body = try JSONSerialization.data(withJSONObject: ["message": message])
+        let response = try await api("drafts", method: "POST", body: body, account: account)
+        guard let id = ((try? JSONSerialization.jsonObject(with: response)) as? [String: Any])?["id"] as? String else {
+            throw GmailError.invalidResponse
+        }
+        return id
+    }
+
+    /// Haalt een concept weg (na versturen of weggooien); mislukt het, dan blijft het in Gmail staan.
+    func deleteDraft(id: String, account: String) async {
+        _ = try? await api("drafts/\(id)", method: "DELETE", account: account)
+    }
+
+    /// Het id van het concept bij een mail (in Gmail is een concept ook een mail, met het label DRAFT).
+    func draftID(forMessageID messageID: String, account: String) async -> String? {
+        var pageToken: String?
+        repeat {
+            var query = [URLQueryItem(name: "maxResults", value: "100")]
+            if let pageToken { query.append(URLQueryItem(name: "pageToken", value: pageToken)) }
+            guard let data = try? await api("drafts", query: query, account: account),
+                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+            for draft in json["drafts"] as? [[String: Any]] ?? []
+            where (draft["message"] as? [String: Any])?["id"] as? String == messageID {
+                return draft["id"] as? String
+            }
+            pageToken = json["nextPageToken"] as? String
+        } while pageToken != nil
+        return nil
+    }
+
     /// De mails van een gesprek (oudste eerst, zonder concepten): koppen en snippet, nog zonder inhoud.
     /// Eén lichte aanvraag; de inhoud per mail volgt pas als hij open wordt geklapt.
     func threadMessages(threadID: String, account: String?) async throws -> [GmailThreadMessage] {
