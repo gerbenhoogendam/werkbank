@@ -28,6 +28,16 @@ final class MailThreadingTests: XCTestCase {
         XCTAssertTrue(history?.contains("oud") ?? false)
     }
 
+    func testPlainQuoteLevelsBecomeNestedBlocks() {
+        let html = #"<pre class="plain">Zie hieronder.\#n&gt; Eerste\#n&gt; &gt; Tweede\#n&gt;&gt;&gt; Derde\#n&gt; Terug\#nKlaar</pre>"#
+        XCTAssertEqual(QuoteLevels.nestPlainQuotes(html),
+                       #"<pre class="plain">Zie hieronder.<blockquote type="cite">Eerste<blockquote type="cite">Tweede"#
+                       + #"<blockquote type="cite">Derde</blockquote></blockquote>Terug</blockquote>Klaar</pre>"#)
+        // Geen citaat of geen platte tekst: ongewijzigd.
+        XCTAssertEqual(QuoteLevels.nestPlainQuotes(#"<pre class="plain">Gewoon</pre>"#), #"<pre class="plain">Gewoon</pre>"#)
+        XCTAssertEqual(QuoteLevels.nestPlainQuotes("<div>&gt; html</div>"), "<div>&gt; html</div>")
+    }
+
     func testForwardsAreNotFolded() {
         let html = #"<div>Kijk even hiernaar</div><div class="gmail_quote"><div class="gmail_attr">---------- Forwarded message ---------<br>Van: Jan</div><div>De inhoud</div></div>"#
         XCTAssertNil(QuoteSplitter.split(html: html, subject: "Fwd: Surface").history)

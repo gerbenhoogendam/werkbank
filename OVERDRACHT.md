@@ -434,6 +434,14 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 
 ## Open punten
 
+- Citaten in de weergave per niveau gekleurd en ingesprongen zoals in Apple Mail (blauw, groen, rood;
+  `MailWebView.quoteLevels`, voor `blockquote type="cite"` en `blockquote.gmail_quote`, ook over de grijze streep van de
+  afzender heen). Platte tekst met ">" wordt eerst geneste citaatblokken (`QuoteLevels.nestPlainQuotes`). Outlook zet
+  een doorgestuurd gesprek niet in citaatblokken maar plat onder elkaar: dat blijft zonder kleur.
+- Handtekeningafbeeldingen: een afbeelding telt als "in de tekst" bij cid, Content-Location of bestandsnaam
+  (`MailContentParser.imageReferences`/`isReferenced`, `inlineNamedImages` zet hem op zijn plek); een ingesloten
+  afbeelding met cid tot 100 KB waar de tekst niet naar verwijst, is geen bijlage (`embeddedImageLimit`). In de
+  bijlagen wordt een afbeelding nooit groter getoond dan hij is.
 - Apple-citaten ("Op … schreef:") worden niet altijd ingeklapt in een gesprek (`QuoteSplitter` in
   `WerkbankCore/Sources/WerkbankCore/MailThreading.swift`). Een .eml van zo'n mail helpt; klantmails niet committen.
 - Standaardfavicons worden herkend op URL, niet op beeld (`SenderAvatar.swift`, `SiteIcons.swift`).

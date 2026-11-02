@@ -8,12 +8,19 @@ public struct MailAttachment: Equatable {
     public var data: Data
     /// Zonder `<` en `>`; inline afbeeldingen verwijzen hiernaar met `cid:`.
     public var contentID: String?
+    /// Content-Location: sommige mailprogramma's verwijzen daarmee (of met de bestandsnaam) vanuit de HTML, zonder cid.
+    public var contentLocation: String?
+    /// Content-Disposition: inline (bedoeld om in de tekst te staan, niet als bijlage).
+    public var isInline: Bool
 
-    public init(name: String, mediaType: String, data: Data, contentID: String? = nil) {
+    public init(name: String, mediaType: String, data: Data, contentID: String? = nil, contentLocation: String? = nil,
+                isInline: Bool = false) {
         self.name = name
         self.mediaType = mediaType
         self.data = data
         self.contentID = contentID
+        self.contentLocation = contentLocation
+        self.isInline = isInline
     }
 }
 
@@ -168,9 +175,12 @@ public enum MailContentParser {
 
         let bytes = MIMEBody.decodeTransfer(body, encoding: header("content-transfer-encoding").lowercased())
         let cid = header("content-id").trimmingCharacters(in: CharacterSet(charactersIn: "<> \t"))
+        let location = header("content-location").trimmingCharacters(in: .whitespacesAndNewlines)
         let fallbackName = mediaType.hasPrefix("image/") ? "afbeelding" : "bijlage"
         let attachment = MailAttachment(name: name ?? fallbackName, mediaType: mediaType, data: bytes,
-                                        contentID: cid.isEmpty ? nil : cid)
+                                        contentID: cid.isEmpty ? nil : cid,
+                                        contentLocation: location.isEmpty ? nil : location,
+                                        isInline: disposition.hasPrefix("inline"))
         return Walked(plain: nil, html: nil, attachments: [attachment])
     }
 
@@ -245,7 +255,10 @@ public enum MailContentParser {
 
     /// De mail als HTML voor de weergave, met losse webadressen in de tekst klikbaar (`MailLinks`).
     static func displayHTML(html: String?, plain: String?, attachments: [MailAttachment]) -> String {
-        if let html { return inlineCIDImages(in: MailLinks.linkify(html: html), attachments: attachments) }
+        if let html {
+            return inlineNamedImages(in: inlineCIDImages(in: MailLinks.linkify(html: html), attachments: attachments),
+                                     attachments: attachments)
+        }
         if let plain { return "<pre class=\"plain\">" + MailLinks.linkify(text: escapeHTML(plain)) + "</pre>" }
         return "<p><i>(Geen inhoud)</i></p>"
     }
@@ -266,20 +279,77 @@ public enum MailContentParser {
     }
 
     /// Bijlagen die niet via `cid:` in de HTML staan (en niet leeg zijn).
+    /// Echte bijlagen: zonder de afbeeldingen waar de HTML naar verwijst (met cid, Content-Location of bestandsnaam),
+    /// en zonder kleine ingesloten afbeeldingen waar de tekst niet (meer) naar verwijst: een handtekening of icoon die
+    /// bij doorsturen of beantwoorden zijn plek in de tekst kwijt is.
     static func files(_ attachments: [MailAttachment], html: String?) -> [MailAttachment] {
-        var referenced = Set<String>()
-        if let html {
-            let ns = NSString(string: html)
-            for match in cidReference.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
-                let raw = ns.substring(with: match.range(at: 1))
-                referenced.insert((raw.removingPercentEncoding ?? raw).trimmingCharacters(in: CharacterSet(charactersIn: "<> ")).lowercased())
-            }
-        }
+        let references: (cids: Set<String>, names: Set<String>) = html.map { imageReferences(in: $0) } ?? ([], [])
         return attachments.filter { attachment in
             guard !attachment.data.isEmpty else { return false }
-            guard let cid = attachment.contentID?.lowercased() else { return true }
-            return !referenced.contains(cid)
+            if isReferenced(attachment, references) { return false }
+            if html != nil, attachment.mediaType.hasPrefix("image/"), attachment.isInline, attachment.contentID != nil,
+               attachment.data.count <= embeddedImageLimit {
+                return false
+            }
+            return true
         }
+    }
+
+    /// Kleiner dan dit, ingesloten en nergens in de tekst: een plaatje uit een handtekening, geen bijlage.
+    static let embeddedImageLimit = 100_000
+
+    /// Waar de HTML afbeeldingen vandaan haalt: cid-verwijzingen, en losse namen zonder adres ervoor (Content-Location
+    /// of bestandsnaam), in kleine letters.
+    static func imageReferences(in html: String) -> (cids: Set<String>, names: Set<String>) {
+        let ns = NSString(string: html)
+        var cids = Set<String>()
+        for match in cidReference.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let raw = ns.substring(with: match.range(at: 1))
+            cids.insert((raw.removingPercentEncoding ?? raw).trimmingCharacters(in: CharacterSet(charactersIn: "<> ")).lowercased())
+        }
+        var names = Set<String>()
+        for match in srcAttribute.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let group = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+            guard group.location != NSNotFound else { continue }
+            let value = ns.substring(with: group).trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty, !value.contains(":") else { continue }   // http:, https:, cid:, data:
+            let decoded = (value.removingPercentEncoding ?? value).lowercased()
+            names.insert(decoded)
+            names.insert((decoded as NSString).lastPathComponent)
+        }
+        return (cids, names)
+    }
+
+    static func isReferenced(_ attachment: MailAttachment, _ references: (cids: Set<String>, names: Set<String>)) -> Bool {
+        if let cid = attachment.contentID?.lowercased(), references.cids.contains(cid) { return true }
+        guard attachment.mediaType.hasPrefix("image/") else { return false }
+        var candidates = [attachment.name.lowercased()]
+        if let location = attachment.contentLocation?.lowercased() {
+            candidates += [location, (location as NSString).lastPathComponent]
+        }
+        return candidates.contains { !$0.isEmpty && references.names.contains($0) }
+    }
+
+    /// Afbeeldingen waar de HTML met hun naam naar verwijst (Content-Location of bestandsnaam, zonder cid): als
+    /// data-URL op hun plek.
+    static func inlineNamedImages(in html: String, attachments: [MailAttachment]) -> String {
+        let images = attachments.filter { $0.mediaType.hasPrefix("image/") }
+        guard !images.isEmpty else { return html }
+        let ns = NSString(string: html)
+        var result = html
+        for match in srcAttribute.matches(in: html, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let group = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+            guard group.location != NSNotFound else { continue }
+            let value = ns.substring(with: group).trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty, !value.contains(":") else { continue }
+            let decoded = (value.removingPercentEncoding ?? value).lowercased()
+            let names: Set<String> = [decoded, (decoded as NSString).lastPathComponent]
+            let references: (cids: Set<String>, names: Set<String>) = ([], names)
+            guard let image = images.first(where: { isReferenced($0, references) }),
+                  let range = Range(group, in: result) else { continue }
+            result.replaceSubrange(range, with: "data:\(image.mediaType);base64,\(image.data.base64EncodedString())")
+        }
+        return result
     }
 
     static func escapeHTML(_ text: String) -> String {

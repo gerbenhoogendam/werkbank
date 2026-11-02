@@ -908,9 +908,24 @@ struct MailWebView: NSViewRepresentable {
         view.loadHTMLString(Self.document(html, allowRemote: allowRemote), baseURL: nil)
     }
 
+    /// Een citaat: `blockquote type="cite"` (Apple Mail, Werkbank, platte tekst met ">") of `blockquote.gmail_quote`.
+    private static let quote = #":is(blockquote[type="cite" i], blockquote.gmail_quote)"#
+
+    private static let quoteLevels: String = {
+        // Streep en tekst per niveau; de tekstkleuren zijn donker genoeg voor wit (4,5:1).
+        let colors = [("#007AFF", "#1F5FC9"), ("#34C759", "#1E7B34"), ("#FF3B30", "#C0261C")]
+        return (1...6).map { level -> String in
+            let selector = Array(repeating: MailWebView.quote, count: level).joined(separator: " ")
+            let (bar, text) = colors[(level - 1) % colors.count]
+            return "\(selector) { margin: 8px 0 8px 2px !important; padding: 0 0 0 12px !important; "
+                + "border: none !important; border-left: 2px solid \(bar) !important; color: \(text); }"
+        }.joined(separator: "\n")
+    }()
+
     static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
         let images = allowRemote ? "img-src data: https: http: \(MailImageLoader.scheme):" : "img-src data:"
-        let body = GIFLoop.playOnce(inHTML: allowRemote ? MailImageLoader.route(inner) : inner)
+        let body = GIFLoop.playOnce(inHTML: allowRemote ? MailImageLoader.route(QuoteLevels.nestPlainQuotes(inner))
+                                                        : QuoteLevels.nestPlainQuotes(inner))
         return """
         <!doctype html><html><head><meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; \(images); style-src 'unsafe-inline'; font-src data:">
@@ -922,6 +937,9 @@ struct MailWebView: NSViewRepresentable {
         img { max-width: 100%; height: auto; }
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }
         blockquote { margin: 8px 0 8px 4px; padding-left: 12px; border-left: 3px solid #d0d0d5; color: #55555a; }
+        /* Citaten per niveau in een eigen kleur en ingesprongen, zoals in Apple Mail: blauw, groen, rood, en weer van
+           voren af. Ook als de afzender er zelf een grijze streep aan gaf (Gmail, Outlook op het web). */
+        \(Self.quoteLevels)
         table { max-width: 100%; }
         \(fitsContent ? "html, body { overflow: hidden; }" : "")
         </style></head><body>\(body)</body></html>

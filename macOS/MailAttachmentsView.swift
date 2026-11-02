@@ -50,11 +50,12 @@ private struct AttachmentItem: View {
             case .image, .pdf:
                 VStack(alignment: .leading, spacing: 4) {
                     if let preview {
+                        // Nooit groter dan het plaatje zelf (een klein icoon werd over de hele breedte opgeblazen).
                         Image(nsImage: preview)
                             .resizable()
                             .scaledToFit()
-                            .frame(maxWidth: kind == .pdf ? 360 : .infinity, maxHeight: kind == .pdf ? 460 : 420,
-                                   alignment: .leading)
+                            .frame(maxWidth: min(preview.size.width, 360),
+                                   maxHeight: min(preview.size.height, kind == .pdf ? 460 : 300), alignment: .leading)
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(ThingsColor.separator))
                     } else {

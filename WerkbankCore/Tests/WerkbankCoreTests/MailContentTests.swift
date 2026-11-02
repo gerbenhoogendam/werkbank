@@ -166,6 +166,52 @@ final class MailContentTests: XCTestCase {
         XCTAssertEqual(plain.displayHTML, "<pre class=\"plain\">1 &lt; 2 &amp; 3 &gt; 2</pre>")
     }
 
+    /// Een handtekening die met de bestandsnaam naar zijn plaatje verwijst (Content-Location, geen cid): in de tekst, geen
+    /// bijlage. Een klein ingesloten plaatje met cid waar de tekst niet naar verwijst: ook geen bijlage. Een gewone
+    /// bijlage blijft.
+    func testSignatureImagesAreNotAttachments() {
+        let logo = b64(3)
+        let raw = """
+        From: a@example.com
+        Subject: Groet
+        Content-Type: multipart/mixed; boundary="M"
+
+        --M
+        Content-Type: multipart/related; boundary="R"
+
+        --R
+        Content-Type: text/html; charset=utf-8
+
+        <p>Groet,</p><img src="image001.png" width="120">
+        --R
+        Content-Type: image/png; name="image001.png"
+        Content-Location: image001.png
+        Content-Disposition: inline; filename="image001.png"
+        Content-Transfer-Encoding: base64
+
+        \(logo)
+        --R
+        Content-Type: image/png; name="telefoon.png"
+        Content-ID: <telefoon@x>
+        Content-Disposition: inline; filename="telefoon.png"
+        Content-Transfer-Encoding: base64
+
+        \(b64(4, count: 900))
+        --R--
+        --M
+        Content-Type: application/pdf; name="factuur.pdf"
+        Content-Disposition: attachment; filename="factuur.pdf"
+        Content-Transfer-Encoding: base64
+
+        \(b64(5))
+        --M--
+        """
+        let mail = MailContentParser.parse(Data(raw.utf8))
+        XCTAssertEqual(mail.files.map(\.name), ["factuur.pdf"])
+        XCTAssertTrue(mail.displayHTML.contains("data:image/png;base64,\(logo)"))
+        XCTAssertFalse(mail.displayHTML.contains("src=\"image001.png\""))
+    }
+
     func testHeaderTextOmitsEmptyFields() {
         let mail = MailContentParser.parse(Data("From: a@b.nl\nSubject: Hoi\n\nTekst".utf8))
         XCTAssertEqual(mail.headerText, "Van: a@b.nl\nOnderwerp: Hoi")

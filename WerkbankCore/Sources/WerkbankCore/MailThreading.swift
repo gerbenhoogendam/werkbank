@@ -1,5 +1,50 @@
 import Foundation
 
+/// Citaatniveaus in platte tekst (regels met ">", ">>" of "> >") als geneste citaatblokken, zodat de weergave ze per
+/// niveau kan kleuren en laten inspringen, zoals bij HTML-mail (`blockquote type="cite"`).
+public enum QuoteLevels {
+    /// Werkt alleen binnen `<pre class="plain">…</pre>` (de weergave van platte tekst); de tekens zijn daar al als
+    /// `&gt;` geschreven. De rest van de HTML blijft zoals hij is.
+    public static func nestPlainQuotes(_ html: String) -> String {
+        let open = #"<pre class="plain">"#
+        guard let start = html.range(of: open), let end = html.range(of: "</pre>", options: .backwards),
+              start.upperBound <= end.lowerBound else { return html }
+        let text = String(html[start.upperBound..<end.lowerBound])
+        guard text.contains("&gt;") else { return html }
+        var output = ""
+        var level = 0
+        var segment: [String] = []
+        for line in text.components(separatedBy: "\n") {
+            let (depth, rest) = split(line)
+            if depth != level {
+                output += segment.joined(separator: "\n")
+                segment = []
+                while level < depth { output += #"<blockquote type="cite">"#; level += 1 }
+                while level > depth { output += "</blockquote>"; level -= 1 }
+            }
+            segment.append(rest)
+        }
+        output += segment.joined(separator: "\n")
+        output += String(repeating: "</blockquote>", count: level)
+        return String(html[..<start.upperBound]) + output + String(html[end.lowerBound...])
+    }
+
+    /// Hoeveel ">" er voor de regel staan (spaties ertussen mogen), en de regel zonder die tekens en de spatie erna.
+    private static func split(_ line: String) -> (Int, String) {
+        var rest = Substring(line)
+        var depth = 0
+        while true {
+            let trimmed = rest.drop { $0 == " " }
+            guard trimmed.hasPrefix("&gt;") else { break }
+            rest = trimmed.dropFirst(4)
+            depth += 1
+        }
+        guard depth > 0 else { return (0, line) }
+        if rest.hasPrefix(" ") { rest = rest.dropFirst() }
+        return (depth, String(rest))
+    }
+}
+
 /// Splitst de HTML van een mail in het nieuwe deel en de geciteerde geschiedenis (Gmail, Apple Mail, Outlook,
 /// platte tekst met ">"). Het is een schatting: bij onbekende opmaak blijft alles in het nieuwe deel.
 public enum QuoteSplitter {
