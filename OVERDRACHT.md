@@ -252,6 +252,17 @@ beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet to
   archiveert daarna wel. Ga je naar een andere mail of sluit je de mailmodus, dan wordt het antwoord per gesprek
   bewaard (`MailModeStore.keptReplies`, alleen in het geheugen, tekst zonder opmaak) en staat het er weer als je
   terugkomt.
+- **Meer mails tegelijk** (2 nov): ⌘-klik zet een mail erbij of haalt hem eraf, ⇧-klik kiest alles vanaf de vorige
+  klik (`MailModeStore.click`, `markedIDs`; ⌃-klik is op de Mac het contextmenu en doet hier niets). Boven de lijst
+  staat dan "N geselecteerd" met Verwijderen (prullenbak, niet in de map Prullenbak), Archiveren, Naar map (de labels
+  van de mailboxen van de gekozen mails, op naam; Postvak IN en de open map eraf) en Naar postvak (`moveThreads`, één
+  gesprek tegelijk zoals `moveThread`). Alles met één keer ⌘Z terug (`trashBulk`, `relabelBulk`, `moveThreads` in
+  `GmailSession`). E archiveert de gekozen mails, Esc heft de selectie op, j/k gaat terug naar één mail; bladen en R
+  werken niet zolang er meer gekozen zijn. Het leesvlak toont dan alleen het aantal.
+- **Onderste regel van een antwoord vast** (2 nov): in een gesprek (paneel en mailmodus) staat de regel met Bijlage,
+  Controleer, Opvolgen en Verstuur vast onder in het venster in plaats van onder de tekst (`ComposeView.pinsFooter`,
+  `ComposeFooterKey`, neergezet met `overlayPreferenceValue` in `MailWindowView.conversation`; daaronder blijft zoveel
+  ruimte vrij als de regel hoog is). Losse opstelvensters hadden hem al vast.
 - **Bladen** (`MailModeSheets.swift`): taak, tijd schrijven, inplannen (datums uit de mail via `DateProposals`, vrije
   momenten via `FreeSlots`, de week met overlap; uitnodiging als .ics-bijlage in een antwoord dat je zelf verstuurt),
   opvolgen (`FollowUps.swift`: terug als er geen antwoord kwam, eventueel met een kaart in Wacht op klant, of later
@@ -275,7 +286,8 @@ en het aanpassen ervan; taak met en zonder archiveren; tijd schrijven; inplannen
 .ics bij de ontvanger als uitnodiging binnen, verschijnt de afspraak in je agenda); vrije momenten in een antwoord;
 opvolgen (komt het gesprek terug, verdwijnt het bij een antwoord); concept (stijl, gebruikte context, korter en
 uitgebreider); bulk met uitvinken, uitsluiten en ⌘Z; aanvullen in Aan/Cc/Bcc (vraagt macOS om Contacten); opvolgen
-bij versturen; elke map en een label met submappen; Werkbank als standaard instellen en een mailto-link klikken, ook
+bij versturen; elke map en een label met submappen; meer mails kiezen met ⌘ en ⇧ en elke knop in de balk (met ⌘Z,
+ook over twee mailboxen); de onderste regel van een antwoord bij scrollen in een lang gesprek; Werkbank als standaard instellen en een mailto-link klikken, ook
 als Werkbank nog niet draait.
 
 Bekende beperkingen: de afspraak in je eigen agenda en de uitnodiging zijn niet gekoppeld (EventKit kan geen

@@ -38,12 +38,16 @@ struct ComposeView: View {
     var archivesOnSend = false
     /// Bijlagen waarmee het venster begint (de uitnodiging bij Inplannen in de mailmodus).
     var initialAttachments: [MailAttachment] = []
+    /// In een gesprek: de onderste regel (bijlage, controleren, versturen …) niet onder de tekst maar vast onder in het
+    /// venster, zodat hij ook bij scrollen te zien is. Het gesprek zet hem neer (`ComposeFooterKey`).
+    var pinsFooter = false
 
     init(ref: ComposeRef, embedded: Bool = false, preloaded: MailContent? = nil, externalBody: Binding<String>? = nil,
          suggestion: String? = nil, onSuggestionDone: (() -> Void)? = nil, onSent: (() -> Void)? = nil,
          onDiscard: (() -> Void)? = nil, detached: Bool = false, restored: ComposeDraft? = nil,
-         archivesOnSend: Bool = false, initialAttachments: [MailAttachment] = []) {
+         archivesOnSend: Bool = false, initialAttachments: [MailAttachment] = [], pinsFooter: Bool = false) {
         self.ref = ref
+        self.pinsFooter = pinsFooter
         self.archivesOnSend = archivesOnSend
         self.initialAttachments = initialAttachments
         self.embedded = embedded
@@ -122,9 +126,10 @@ struct ComposeView: View {
                 quotePreview
             }
             reviewSection
-            footer
+            if !pinsFooter { footer }
         }
         .background(ThingsColor.mailPaper)
+        .preference(key: ComposeFooterKey.self, value: pinsFooter ? ComposeFooterBox(view: AnyView(footer)) : nil)
         .task { await prepare() }
         // Wat je typt en (nog) niet verstuurt, staat als concept in Gmail: een paar seconden na de laatste wijziging.
         .task(id: draftSignature) {
@@ -524,7 +529,13 @@ struct ComposeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .overlay(alignment: .top) { Rectangle().fill(ThingsColor.separator.opacity(0.5)).frame(height: 0.5).padding(.horizontal, 20) }
+        .overlay(alignment: .top) {
+            // Vast onder in het venster: een lijn over de hele breedte.
+            Rectangle()
+                .fill(pinsFooter ? ThingsColor.separator : ThingsColor.separator.opacity(0.5))
+                .frame(height: pinsFooter ? 1 : 0.5)
+                .padding(.horizontal, pinsFooter ? 0 : 20)
+        }
     }
 
     // MARK: Voorbereiden
@@ -929,5 +940,19 @@ struct DetachedComposeWindow: View {
             .frame(minWidth: 520, minHeight: 420)
             .background(DuoWindowHook().frame(width: 0, height: 0))
             .onDisappear { ComposeDrafts.remove(value.draftID) }
+    }
+}
+
+/// De onderste regel van een antwoord in een gesprek (`ComposeView.pinsFooter`): het gesprek zet hem vast onder in het
+/// venster in plaats van onder de tekst.
+struct ComposeFooterBox {
+    let view: AnyView
+}
+
+struct ComposeFooterKey: PreferenceKey {
+    static var defaultValue: ComposeFooterBox? { nil }
+
+    static func reduce(value: inout ComposeFooterBox?, nextValue: () -> ComposeFooterBox?) {
+        value = value ?? nextValue()
     }
 }

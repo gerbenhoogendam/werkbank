@@ -548,6 +548,8 @@ struct GmailRow: View {
     var tags: [MailRowTag] = []
     /// Dubbelklik; zonder: het gesprek als paneel openen.
     var onOpen: (() -> Void)? = nil
+    /// De knoppen rechtsonder ook zonder muis erboven als de rij gekozen is (niet bij meer gekozen rijen).
+    var showsActionsWhenSelected = true
     let onSelect: () -> Void
     let onArchive: () -> Void
     let onDragStarted: () -> Void
@@ -760,7 +762,7 @@ struct GmailRow: View {
         .padding(.vertical, 8)
         // De knoppen zweven over de rij (rechtsonder) in plaats van altijd ruimte in te nemen.
         .overlay(alignment: .bottomTrailing) {
-            if isHovering || isSelected { hoverActions }
+            if isHovering || (isSelected && showsActionsWhenSelected) { hoverActions }
         }
     }
 

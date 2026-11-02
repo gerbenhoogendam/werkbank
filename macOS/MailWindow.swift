@@ -81,6 +81,9 @@ struct MailWindowView: View {
     @State private var usedDraftID: UUID?
     /// Een blok waar het gesprek naartoe moet scrollen (bijv. een net gestarte analyse).
     @State private var scrollTarget: String?
+    /// De hoogte van de onderste regel van het antwoord, die vast onder in het venster staat: zoveel ruimte blijft er
+    /// onder het gesprek, zodat het laatste stuk er niet achter verdwijnt.
+    @State private var footerHeight: CGFloat = 0
 
     init(ref: MailRef, embedded: Bool = false, trigger: MailReplyTrigger? = nil, opensDraft: Bool = false,
          onReplySent: (() -> Void)? = nil, onDraftDiscarded: (() -> Void)? = nil) {
@@ -396,9 +399,25 @@ struct MailWindowView: View {
                     if newestAtBottom { replyBlock.id("reply") }
                 }
                 .padding(14)
+                .padding(.bottom, footerHeight)
             }
             .scrollIndicators(.never)
             .background(ThingsColor.backgroundSidebar)
+            // De onderste regel van het antwoord (bijlage, opvolgen, versturen …) staat vast onder in het venster.
+            .overlayPreferenceValue(ComposeFooterKey.self, alignment: .bottom) { box in
+                if let box {
+                    box.view
+                        .background(ThingsColor.mailPaper)
+                        .background {
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .onAppear { footerHeight = geometry.size.height }
+                                    .onChange(of: geometry.size.height) { _, height in footerHeight = height }
+                            }
+                        }
+                        .onDisappear { footerHeight = 0 }
+                }
+            }
             .background {
                 // ⌘R: allen beantwoorden op de nieuwste mail.
                 Button("") {
@@ -467,7 +486,8 @@ struct MailWindowView: View {
                                 if opensDraft { onDraftDiscarded?() }
                             },
                             archivesOnSend: embedded,
-                            initialAttachments: replyAttachments)
+                            initialAttachments: replyAttachments,
+                            pinsFooter: true)
                     .id(replyRef.id)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))

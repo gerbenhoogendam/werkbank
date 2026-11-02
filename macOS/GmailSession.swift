@@ -781,50 +781,96 @@ final class GmailSession {
         defer { busyMessageIDs.remove(busyKey) }
 
         do {
-            // Concepten en wat al in de prullenbak of spam ligt gaan niet mee.
-            let items = try await threadMessages(threadID: threadID, account: source)
-                .filter { Set($0.labels).isDisjoint(with: ["DRAFT", "TRASH", "SPAM"]) }
-            guard let newest = items.last else { return }
-            let keep: Set<String> = ["INBOX", "UNREAD", "STARRED", "IMPORTANT"]
-            let inInbox = items.contains { $0.labels.contains("INBOX") }
-            var inserted: [String] = []
-            var targetThread: String?
-            for item in items {
-                let raw = try await rawMessage(id: item.id)
-                var labels = item.labels.filter(keep.contains)
-                // Een gearchiveerd gesprek komt in de andere mailbox gewoon in de inbox terecht.
-                if !inInbox, item.id == newest.id { labels.append("INBOX") }
-                let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
-                inserted.append(result.id)
-                targetThread = targetThread ?? result.threadID
-            }
-            try await trash(threadID: threadID, account: source)
-            removeThreadFromLists(threadID)
-            if let targetThread { WaitingWatcher.shared.relink(threadID: threadID, to: targetThread, account: target) }
-            for id in inserted { note(account: target, forMessageID: id) }
-            if let targetThread { note(account: target, forMessageID: targetThread) }
+            guard let move = try await transfer(threadID: threadID, from: source, to: target) else { return }
             if isCombined || activeAccount == target { await reload() }
             appState.announce("Verplaatst naar \(displayName(target))")
-
             UndoCenter.shared.record("Mail verplaatsen", undo: { [weak self] in
-                if let targetThread { WaitingWatcher.shared.relink(threadID: targetThread, to: threadID, account: source) }
-                Task { await self?.undoMove(threadID: threadID, source: source, inserted: inserted, target: target) }
+                Task { await self?.undoMoves([move]) }
             })
         } catch {
             appState.showToast("Verplaatsen mislukt: \(error.localizedDescription)", seconds: 5)
         }
     }
 
-    private func undoMove(threadID: String, source: String?, inserted: [String], target: String) async {
-        do {
-            _ = try await api("threads/\(threadID)/untrash", method: "POST", account: source)
-            for id in inserted {
-                _ = try? await api("messages/\(id)/trash", method: "POST", account: target)
+    /// Verplaatst gesprekken naar een andere mailbox, één voor één (zoals `moveThread`); `onMoved` na elk gesprek dat
+    /// lukte. Eén keer ⌘Z zet ze allemaal terug. Geeft de gesprekken terug waarbij het lukte.
+    func moveThreads(_ threads: [(threadID: String, messageID: String)], to target: String,
+                     onMoved: @MainActor (String) -> Void) async -> [String] {
+        guard accounts.contains(target) else { return [] }
+        var moves: [Transfer] = []
+        for thread in threads where !busyMessageIDs.contains(thread.messageID) {
+            let source = messageAccount[thread.threadID] ?? activeAccount
+            guard source != target else { continue }
+            busyMessageIDs.insert(thread.messageID)
+            if let move = try? await transfer(threadID: thread.threadID, from: source, to: target) {
+                moves.append(move)
+                onMoved(thread.threadID)
             }
-            await reload()
-        } catch {
-            AppState.shared.announce("Terugzetten mislukt")
+            busyMessageIDs.remove(thread.messageID)
         }
+        guard !moves.isEmpty else { return [] }
+        if isCombined || activeAccount == target { await reload() }
+        UndoCenter.shared.record(moves.count == 1 ? "Mail verplaatsen" : "\(moves.count) mails verplaatsen", undo: { [weak self] in
+            Task { await self?.undoMoves(moves) }
+        })
+        return moves.map(\.threadID)
+    }
+
+    /// Een verplaatst gesprek: waar het stond en wat er in de andere mailbox van is gemaakt (voor ⌘Z).
+    private struct Transfer {
+        let threadID: String
+        let source: String?
+        let target: String
+        let inserted: [String]
+        let targetThread: String?
+    }
+
+    /// Zet elke mail van het gesprek in `target` (alsof hij daar binnenkwam; er gaat niets de deur uit) en daarna het
+    /// gesprek in `source` in de prullenbak. `nil` als er niets te verplaatsen was.
+    private func transfer(threadID: String, from source: String?, to target: String) async throws -> Transfer? {
+        // Concepten en wat al in de prullenbak of spam ligt gaan niet mee.
+        let items = try await threadMessages(threadID: threadID, account: source)
+            .filter { Set($0.labels).isDisjoint(with: ["DRAFT", "TRASH", "SPAM"]) }
+        guard let newest = items.last else { return nil }
+        let keep: Set<String> = ["INBOX", "UNREAD", "STARRED", "IMPORTANT"]
+        let inInbox = items.contains { $0.labels.contains("INBOX") }
+        var inserted: [String] = []
+        var targetThread: String?
+        for item in items {
+            let raw = try await rawMessage(id: item.id)
+            var labels = item.labels.filter(keep.contains)
+            // Een gearchiveerd gesprek komt in de andere mailbox gewoon in de inbox terecht.
+            if !inInbox, item.id == newest.id { labels.append("INBOX") }
+            let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
+            inserted.append(result.id)
+            targetThread = targetThread ?? result.threadID
+        }
+        try await trash(threadID: threadID, account: source)
+        removeThreadFromLists(threadID)
+        if let targetThread { WaitingWatcher.shared.relink(threadID: threadID, to: targetThread, account: target) }
+        for id in inserted { note(account: target, forMessageID: id) }
+        if let targetThread { note(account: target, forMessageID: targetThread) }
+        return Transfer(threadID: threadID, source: source, target: target, inserted: inserted, targetThread: targetThread)
+    }
+
+    private func undoMoves(_ moves: [Transfer]) async {
+        var failed = 0
+        for move in moves {
+            if let targetThread = move.targetThread {
+                WaitingWatcher.shared.relink(threadID: targetThread, to: move.threadID, account: move.source)
+            }
+            do {
+                _ = try await api("threads/\(move.threadID)/untrash", method: "POST", account: move.source)
+                for id in move.inserted {
+                    _ = try? await api("messages/\(id)/trash", method: "POST", account: move.target)
+                }
+            } catch {
+                failed += 1
+            }
+        }
+        await reload()
+        if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
+        if failed > 0 { AppState.shared.announce(moves.count == 1 ? "Terugzetten mislukt" : "Terugzetten mislukt bij \(failed) mails") }
     }
 
     private func trash(threadID: String, account: String?) async throws {
@@ -1051,6 +1097,106 @@ final class GmailSession {
         await reload()
         if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
         if failed > 0 { AppState.shared.announce("Terugzetten in de inbox mislukt bij \(failed) mails") }
+    }
+
+    // MARK: Meer gesprekken tegelijk (mailmodus)
+
+    /// Gesprekken naar de prullenbak, acht tegelijk onderweg. Eén keer ⌘Z haalt ze er weer uit. Geeft de gesprekken
+    /// terug waarbij het lukte.
+    func trashBulk(threadIDs: [String]) async -> [String] {
+        let done = await trashEach(threadIDs)
+        guard !done.isEmpty else { return done }
+        UndoCenter.shared.record(done.count == 1 ? "Mail verwijderen" : "\(done.count) mails verwijderen", undo: { [weak self] in
+            Task { await self?.untrashBulk(threadIDs: done) }
+        }, redo: { [weak self] in
+            Task {
+                _ = await self?.trashEach(done)
+                if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
+            }
+        })
+        return done
+    }
+
+    private func trashEach(_ threadIDs: [String]) async -> [String] {
+        let done = await forEachThread(threadIDs) { id in try await self.trash(threadID: id, account: self.messageAccount[id]) }
+        for id in done { removeThreadFromLists(id) }
+        return done
+    }
+
+    private func untrashBulk(threadIDs: [String]) async {
+        let done = await forEachThread(threadIDs) { id in
+            _ = try await self.api("threads/\(id)/untrash", method: "POST", account: self.messageAccount[id])
+        }
+        await reload()
+        if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
+        let failed = threadIDs.count - done.count
+        if failed > 0 { AppState.shared.announce("Terugzetten uit de prullenbak mislukt bij \(failed) mails") }
+    }
+
+    /// Labels van een gesprek erbij en eraf (naar een map verplaatsen).
+    struct LabelChange {
+        let threadID: String
+        let account: String?
+        let add: [String]
+        let remove: [String]
+
+        var reversed: LabelChange { LabelChange(threadID: threadID, account: account, add: remove, remove: add) }
+    }
+
+    /// Past de labels van gesprekken aan, acht tegelijk onderweg; één keer ⌘Z zet ze terug. Geeft de gesprekken terug
+    /// waarbij het lukte.
+    func relabelBulk(_ changes: [LabelChange]) async -> [String] {
+        let applied = await relabelEach(changes)
+        guard !applied.isEmpty else { return [] }
+        UndoCenter.shared.record(applied.count == 1 ? "Mail verplaatsen" : "\(applied.count) mails verplaatsen", undo: { [weak self] in
+            Task {
+                _ = await self?.relabelEach(applied.map(\.reversed))
+                await self?.reload()
+                if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
+            }
+        }, redo: { [weak self] in
+            Task {
+                _ = await self?.relabelEach(applied)
+                if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
+            }
+        })
+        return applied.map(\.threadID)
+    }
+
+    private func relabelEach(_ changes: [LabelChange]) async -> [LabelChange] {
+        let byThread = Dictionary(changes.map { ($0.threadID, $0) }, uniquingKeysWith: { first, _ in first })
+        let done = await forEachThread(changes.map(\.threadID)) { id in
+            guard let change = byThread[id] else { return }
+            var request: [String: [String]] = [:]
+            if !change.add.isEmpty { request["addLabelIds"] = change.add }
+            if !change.remove.isEmpty { request["removeLabelIds"] = change.remove }
+            guard !request.isEmpty else { return }
+            let body = try JSONSerialization.data(withJSONObject: request)
+            _ = try await self.api("threads/\(id)/modify", method: "POST", body: body, account: change.account)
+        }
+        // Wat uit de inbox ging, ook uit de lijsten van het Mail-paneel.
+        for id in done where byThread[id]?.remove.contains("INBOX") == true { removeThreadFromLists(id) }
+        return done.compactMap { byThread[$0] }
+    }
+
+    /// Doet `work` voor elk gesprek, steeds acht tegelijk onderweg (binnen wat Gmail per seconde toestaat). Geeft de
+    /// gesprekken terug waarbij het lukte.
+    private func forEachThread(_ threadIDs: [String], _ work: @escaping @MainActor (String) async throws -> Void) async -> [String] {
+        var done: [String] = []
+        var pending = threadIDs.makeIterator()
+        await withTaskGroup(of: String?.self) { group in
+            for _ in 0..<8 {
+                guard let id = pending.next() else { break }
+                group.addTask { (try? await work(id)) != nil ? id : nil }
+            }
+            for await id in group {
+                if let id { done.append(id) }
+                if let next = pending.next() {
+                    group.addTask { (try? await work(next)) != nil ? next : nil }
+                }
+            }
+        }
+        return done
     }
 
     private func recordArchive(threadID: String) {

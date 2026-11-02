@@ -119,7 +119,8 @@ struct MailModeView: View {
         }
         let typing = window.firstResponder is NSText
         if !typing, event.keyCode == 53 {
-            store.close()
+            // Eerst de selectie van meer mails opheffen, daarna pas de mailmodus dicht.
+            if store.isMarking { store.clearMarks() } else { store.close() }
             return true
         }
         guard let action = MailModeKeys.action(for: event) else { return false }
@@ -132,14 +133,14 @@ struct MailModeView: View {
         switch action {
         case .archive: store.archiveSelected(appState: appState)
         case .reply:
-            guard store.selected != nil else { return false }
+            guard store.selected != nil, !store.isMarking else { return false }
             store.replyTrigger.reply()
         case .scope: store.cycleScope()
         case .search: store.requestSearchFocus()
         case .next: store.selectNext()
         case .previous: store.selectPrevious()
         case .task, .time, .plan, .follow, .claude:
-            guard store.selected != nil else { return false }
+            guard store.selected != nil, !store.isMarking else { return false }
             store.openSheet(Self.sheet(for: action))
         }
         return true
@@ -323,11 +324,18 @@ private struct MailModeList: View {
 
             Rectangle().fill(ThingsColor.separator).frame(height: 1)
 
-            ThemedHeading(title: store.listTitle, count: listed.count,
-                          unit: listed.count == 1 ? "MAIL" : "MAILS")
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
+            if store.isMarking {
+                markedBar(listed.filter { store.markedIDs.contains($0.id) })
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+            } else {
+                ThemedHeading(title: store.listTitle, count: listed.count,
+                              unit: listed.count == 1 ? "MAIL" : "MAILS")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+            }
 
             content(listed: listed, bundle: bundle)
         }
@@ -377,17 +385,83 @@ private struct MailModeList: View {
         }
     }
 
+    /// Meer mails gekozen (⌘- of ⇧-klik): wat ermee moet, boven de lijst.
+    private func markedBar(_ marked: [GmailMailItem]) -> some View {
+        let labels = store.labelNames(for: marked)
+        let mailboxes = store.targetMailboxes(for: marked)
+        return VStack(alignment: .leading, spacing: 8) {
+            ThemedHeading(title: "\(marked.count) geselecteerd")
+            WrapStack(spacing: 6) {
+                if store.folder != .trash {
+                    Button { store.trashMarked(appState: appState) } label: {
+                        Label("Verwijderen", systemImage: "trash")
+                    }
+                    .buttonStyle(MailModeButtonStyle())
+                    .help("Naar de prullenbak (⌘Z zet ze terug)")
+                }
+                Button { store.archiveMarked(appState: appState) } label: {
+                    Label("Archiveren", systemImage: "archivebox")
+                }
+                .buttonStyle(MailModeButtonStyle(prominent: true))
+                if !labels.isEmpty {
+                    Menu {
+                        ForEach(labels, id: \.self) { name in
+                            Button(name.replacingOccurrences(of: "/", with: " › ")) {
+                                store.moveMarked(toLabel: name, appState: appState)
+                            }
+                        }
+                    } label: {
+                        menuLabel("Naar map", systemImage: "folder")
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(MailModeButtonStyle())
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                }
+                if !mailboxes.isEmpty {
+                    Menu {
+                        ForEach(mailboxes, id: \.self) { account in
+                            Button(gmail.displayName(account)) {
+                                store.moveMarked(toMailbox: account, appState: appState)
+                            }
+                        }
+                    } label: {
+                        menuLabel("Naar postvak", systemImage: "tray.and.arrow.up")
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(MailModeButtonStyle())
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                }
+                Button { store.clearMarks() } label: { Image(systemName: "xmark") }
+                    .buttonStyle(MailModeButtonStyle())
+                    .help("Selectie opheffen (Esc)")
+                    .accessibilityLabel("Selectie opheffen")
+            }
+        }
+    }
+
+    private func menuLabel(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 5) {
+            Label(title, systemImage: systemImage)
+            Image(systemName: "chevron.down").font(.werk(size: 8, weight: .semibold))
+        }
+    }
+
     private func row(_ item: GmailMailItem, following: Set<String>) -> some View {
         GmailRow(message: store.rowSummary(item),
                  isBusy: gmail.busyMessageIDs.contains(item.id),
-                 isSelected: store.selectedID == item.id,
+                 isSelected: store.isChosen(item),
                  accountLabel: store.showsAccounts ? gmail.account(for: item.id).map(gmail.displayName) : nil,
                  tags: tags(for: item, following: following),
                  onOpen: { store.select(item) },
-                 onSelect: { store.select(item) },
+                 showsActionsWhenSelected: !store.isMarking,
+                 // ⌘-klik: erbij of eraf; ⇧-klik: een reeks.
+                 onSelect: { store.click(item) },
                  onArchive: {
-                     store.select(item)
-                     store.archiveSelected(appState: appState)
+                     // Alleen deze mail, ook als er meer gekozen zijn (daarvoor is de balk boven de lijst).
+                     if store.isMarking { store.unmark(item) } else { store.select(item) }
+                     store.archive(item, announcing: nil, appState: appState)
                  },
                  // Laat de mailmodus ook wegzwiepen.
                  onDragStarted: { MailDragState.shared.begin(account: gmail.account(for: item.id)) })
@@ -541,7 +615,17 @@ private struct MailModeReader: View {
     private func shows(_ action: MailModeAction) -> Bool { MailModeKeys.showsButton(action, hidden: hiddenButtons) }
 
     var body: some View {
-        if let item = store.selected {
+        if store.isMarking {
+            VStack(spacing: 8) {
+                Image(systemName: "tray.full")
+                    .font(.werk(size: 34, weight: .light))
+                    .foregroundStyle(ThingsColor.textTertiary)
+                Text("\(store.markedIDs.count) mails geselecteerd")
+                    .thingsFont(.metadata)
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let item = store.selected {
             VStack(alignment: .leading, spacing: 0) {
                 header(item)
                 if let proposal = store.proposalsByID[item.id]?.first {

@@ -55,6 +55,10 @@ final class MailModeStore {
     private(set) var isLoading = false
     private(set) var loadError: String?
     var selectedID: String?
+    /// Meer mails tegelijk gekozen (⌘-klik, ⇧-klik); leeg als er één mail gekozen is (`selectedID`).
+    private(set) var markedIDs: Set<String> = []
+    /// Waar een reeks met ⇧-klik begint: de laatst aangeklikte mail.
+    private var markAnchor: String?
     var bundleOpen = false
     var clientQuery = ""
     private(set) var ranking: [ClientActivity.Rank] = []
@@ -344,6 +348,7 @@ final class MailModeStore {
     func toggle(_ filter: Filter) {
         if filters.contains(filter) { filters.remove(filter) } else { filters.insert(filter) }
         selectedID = nil
+        markedIDs = []
         if filter != .noTask { Task { await reload() } }
     }
 
@@ -366,6 +371,7 @@ final class MailModeStore {
         let key = listKey
         guard key != shownKey else { return }
         shownKey = key
+        markedIDs = []
         items = MailListCache.shared.items(for: key) ?? []
         loadError = nil
     }
@@ -417,7 +423,10 @@ final class MailModeStore {
         }
         reportedFailure = false
         // Alleen toewijzen als er iets veranderde: elke twee minuten verversen tekent anders de hele lijst opnieuw.
-        if items != result.items { items = result.items }
+        if items != result.items {
+            items = result.items
+            keepMarks(in: items)
+        }
         if result.error == nil { MailListCache.shared.store(result.items, for: key) }
         loadError = items.isEmpty ? result.error : nil
         refreshTaskThreads()
@@ -584,13 +593,18 @@ final class MailModeStore {
         bundleOpen = false
         Task {
             let done = await gmail.archiveBulk(threadIDs: threads)
-            let failed = threads.count - done.count
-            if failed > 0 {
-                appState.showToast("\(done.count) gearchiveerd; \(failed) mislukt", seconds: 5)
-                await reload()
-            } else {
-                appState.announce(done.count == 1 ? "1 mail gearchiveerd" : "\(done.count) mails gearchiveerd", seconds: 3)
-            }
+            await report(done.count, of: threads.count, "gearchiveerd", appState: appState)
+        }
+    }
+
+    /// Meldt hoe het ging met een handeling op meer gesprekken; mislukte er een, dan wordt de lijst opnieuw geladen.
+    private func report(_ done: Int, of total: Int, _ what: String, appState: AppState) async {
+        let failed = total - done
+        if failed > 0 {
+            appState.showToast("\(done) \(what); \(failed) mislukt", seconds: 5)
+            await reload()
+        } else {
+            appState.announce(done == 1 ? "1 mail \(what)" : "\(done) mails \(what)", seconds: 3)
         }
     }
 
@@ -625,7 +639,191 @@ final class MailModeStore {
     }
 
     func select(_ item: GmailMailItem) {
+        markedIDs = []
+        markAnchor = item.id
         selectedID = item.id
+    }
+
+    // MARK: Meer mails tegelijk
+
+    /// Meer dan één mail gekozen: de balk boven de lijst geldt dan voor allemaal.
+    var isMarking: Bool { markedIDs.count > 1 }
+
+    /// Of de mail in de lijst gekozen staat (alleen, of samen met andere).
+    func isChosen(_ item: GmailMailItem) -> Bool {
+        isMarking ? markedIDs.contains(item.id) : selectedID == item.id
+    }
+
+    /// De gekozen mails, in de volgorde van de lijst.
+    var marked: [GmailMailItem] {
+        guard isMarking else { return [] }
+        return listed.filter { markedIDs.contains($0.id) }
+    }
+
+    /// Een klik in de lijst: met ⌘ gaat de mail erbij (of eraf), met ⇧ alles vanaf de vorige klik; zonder toets alleen
+    /// deze mail.
+    func click(_ item: GmailMailItem) {
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.shift), let anchor = markAnchor ?? selectedID {
+            let order = listed.map(\.id)
+            if let from = order.firstIndex(of: anchor), let to = order.firstIndex(of: item.id) {
+                let range = Set(order[min(from, to)...max(from, to)])
+                markedIDs = flags.contains(.command) ? markedIDs.union(range) : range
+                settleMarks(focus: item.id)
+                return
+            }
+        }
+        if flags.contains(.command) {
+            if markedIDs.isEmpty, let selectedID { markedIDs = [selectedID] }
+            if markedIDs.contains(item.id) { markedIDs.remove(item.id) } else { markedIDs.insert(item.id) }
+            markAnchor = item.id
+            settleMarks(focus: item.id)
+            return
+        }
+        select(item)
+    }
+
+    /// Nog maar één mail over: dan is dat gewoon de gekozen mail. Anders volgt de lijst de laatst aangeklikte.
+    private func settleMarks(focus id: String) {
+        switch markedIDs.count {
+        case 0: break
+        case 1:
+            selectedID = markedIDs.first
+            markAnchor = selectedID
+            markedIDs = []
+        default:
+            if markedIDs.contains(id) {
+                selectedID = id
+            } else if let current = selectedID, !markedIDs.contains(current) {
+                selectedID = listed.first { markedIDs.contains($0.id) }?.id
+            }
+        }
+    }
+
+    /// Terug naar één mail (Esc, j/k): de laatst aangeklikte.
+    func clearMarks() {
+        markedIDs = []
+    }
+
+    /// Eén mail uit de selectie (hij wordt los gearchiveerd).
+    func unmark(_ item: GmailMailItem) {
+        markedIDs.remove(item.id)
+        if markedIDs.count < 2 {
+            if let only = markedIDs.first { selectedID = only }
+            markedIDs = []
+        } else if selectedID == item.id {
+            selectedID = listed.first { markedIDs.contains($0.id) }?.id
+        }
+    }
+
+    /// Na bijwerken: gekozen mails die er niet meer zijn vallen weg.
+    private func keepMarks(in list: [GmailMailItem]) {
+        guard !markedIDs.isEmpty else { return }
+        markedIDs.formIntersection(list.map(\.id))
+        if markedIDs.count < 2 { markedIDs = [] }
+    }
+
+    /// De gesprekken van de gekozen mails, elk één keer (in de volgorde van de lijst); daarna is er weer één mail
+    /// gekozen. `except`: gesprekken die niet meegaan.
+    private func takeMarked(except skip: (GmailMailItem) -> Bool = { _ in false }) -> [GmailMailItem] {
+        var seen = Set<String>()
+        let chosen = marked.filter { !skip($0) && seen.insert($0.threadID).inserted }
+        markedIDs = []
+        return chosen
+    }
+
+    /// Archiveert de gekozen mails; één keer ⌘Z zet ze terug.
+    func archiveMarked(appState: AppState) {
+        let chosen = takeMarked()
+        guard !chosen.isEmpty else { return }
+        let threads = chosen.map(\.threadID)
+        for thread in threads {
+            takeOut(threadID: thread)
+            FollowUpStore.shared.clearReturned(threadID: thread)
+        }
+        Task {
+            let done = await gmail.archiveBulk(threadIDs: threads)
+            await report(done.count, of: threads.count, "gearchiveerd", appState: appState)
+        }
+    }
+
+    /// De gekozen mails naar de prullenbak (het hele gesprek, zoals in Gmail); één keer ⌘Z haalt ze er weer uit.
+    func trashMarked(appState: AppState) {
+        let chosen = takeMarked()
+        guard !chosen.isEmpty else { return }
+        let threads = chosen.map(\.threadID)
+        for thread in threads {
+            remove(threadID: thread)
+            FollowUpStore.shared.clearReturned(threadID: thread)
+        }
+        Task {
+            let done = await gmail.trashBulk(threadIDs: threads)
+            await report(done.count, of: threads.count, "naar de prullenbak", appState: appState)
+        }
+    }
+
+    /// De mappen (labels) waar de gekozen mails heen kunnen: van hun mailboxen, op naam (dezelfde naam in twee
+    /// mailboxen is één keuze); de map die open staat niet.
+    func labelNames(for marked: [GmailMailItem]) -> [String] {
+        let accounts = Set(marked.compactMap { gmail.account(for: $0.id) })
+        var current: String?
+        if case .label(_, _, let name) = folder { current = name }
+        var seen = Set<String>()
+        return MailFolders.userTree(accounts.sorted().flatMap { labelsByAccount[$0] ?? [] })
+            .map(\.name)
+            .filter { $0 != current && seen.insert($0).inserted }
+    }
+
+    /// Verplaatst de gekozen mails naar de map `name`, zoals "Verplaatsen naar" in Gmail: het label erbij, Postvak IN
+    /// (en de map waar ze nu staan) eraf. Mails uit een mailbox zonder die map blijven staan.
+    func moveMarked(toLabel name: String, appState: AppState) {
+        var changes: [GmailSession.LabelChange] = []
+        var missing = 0
+        for item in takeMarked() {
+            guard let account = gmail.account(for: item.id),
+                  let label = labelsByAccount[account]?.first(where: { $0.name == name }) else {
+                missing += 1
+                continue
+            }
+            var leaving = item.labels.filter { $0 == "INBOX" }
+            if case .label(let owner, let id, _) = folder, owner == account { leaving.append(id) }
+            let adding = item.labels.contains(label.id) ? [] : [label.id]
+            changes.append(GmailSession.LabelChange(threadID: item.threadID, account: account, add: adding, remove: leaving))
+        }
+        let leaf = name.split(separator: "/").last.map(String.init) ?? name
+        guard !changes.isEmpty else {
+            if missing > 0 { appState.announce("Geen map \(leaf) in die mailbox", seconds: 3) }
+            return
+        }
+        // Uit een map of Postvak IN weg; in Alle mail, Verstuurd of bij zoeken blijft de mail staan.
+        for change in changes {
+            if folder.account != nil { remove(threadID: change.threadID) } else { takeOut(threadID: change.threadID) }
+        }
+        Task {
+            let done = await gmail.relabelBulk(changes)
+            await report(done.count, of: changes.count, "verplaatst naar \(leaf)", appState: appState)
+            if missing > 0 { appState.announce("\(missing) niet verplaatst: geen map \(leaf) in die mailbox", seconds: 4) }
+        }
+    }
+
+    /// De mailboxen waar de gekozen mails heen kunnen: alle gekoppelde, behalve als ze er allemaal al in staan.
+    func targetMailboxes(for marked: [GmailMailItem]) -> [String] {
+        let sources = Set(marked.compactMap { gmail.account(for: $0.id) })
+        return gmail.accounts.filter { sources != [$0] }
+    }
+
+    /// Verplaatst de gekozen mails naar een andere gekoppelde mailbox (één voor één ingevoegd, daarna in de oude
+    /// mailbox naar de prullenbak); één keer ⌘Z zet ze terug. Mails die er al staan blijven staan.
+    func moveMarked(toMailbox target: String, appState: AppState) {
+        let chosen = takeMarked { gmail.account(for: $0.id) == target }
+        guard !chosen.isEmpty else { return }
+        let name = gmail.displayName(target)
+        Task {
+            let done = await gmail.moveThreads(chosen.map { (threadID: $0.threadID, messageID: $0.id) }, to: target) { [weak self] thread in
+                self?.remove(threadID: thread)
+            }
+            await report(done.count, of: chosen.count, "verplaatst naar \(name)", appState: appState)
+        }
     }
 
     /// Na het kiezen van een mail: de volgende twee alvast ophalen en klaarzetten, zodat j/k direct is.
@@ -648,6 +846,7 @@ final class MailModeStore {
     func selectPrevious() { step(-1) }
 
     private func step(_ delta: Int) {
+        markedIDs = []
         let order = listed
         guard !order.isEmpty else { return }
         guard let current = order.firstIndex(where: { $0.id == selectedID }) else {
@@ -694,6 +893,7 @@ final class MailModeStore {
     func remove(threadID: String) {
         let order = listed
         let index = order.firstIndex { $0.threadID == threadID }
+        if !markedIDs.isEmpty { keepMarks(in: items.filter { $0.threadID != threadID }) }
         items.removeAll { $0.threadID == threadID }
         MailListCache.shared.remove(threadID: threadID)
         guard selected == nil else { return }
@@ -707,6 +907,10 @@ final class MailModeStore {
 
     /// Archiveert het gekozen gesprek en opent de volgende mail.
     func archiveSelected(appState: AppState) {
+        if isMarking {
+            archiveMarked(appState: appState)
+            return
+        }
         guard let item = selected else { return }
         archive(item, announcing: nil, appState: appState)
     }
@@ -776,7 +980,8 @@ final class MailModeStore {
     // MARK: Bladen
 
     func openSheet(_ kind: MailModeSheet) {
-        guard selected != nil || !kind.needsMail else { return }
+        // Een blad voor één mail niet als er meer gekozen zijn.
+        guard !kind.needsMail || (selected != nil && !isMarking) else { return }
         sheet = kind
     }
 
