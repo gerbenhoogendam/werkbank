@@ -85,6 +85,17 @@ final class MailModeStore {
     @ObservationIgnored private var rankingTask: Task<Void, Never>?
     /// Bijwerken mislukte en is gemeld: niet bij elke volgende poging opnieuw.
     @ObservationIgnored private var reportedFailure = false
+    /// Gesprekken waarin een antwoord met tekst openstaat (de mailweergave meldt het): die gaan niet weg bij een
+    /// handeling die archiveert, anders is het concept kwijt. Versturen archiveert daarna gewoon.
+    @ObservationIgnored private var openReplies: Set<String> = []
+    /// Antwoorden die nog openstonden toen je naar een andere mail ging (of de mailmodus sloot), per gesprek.
+    @ObservationIgnored private var keptReplies: [String: KeptReply] = [:]
+
+    struct KeptReply {
+        var ref: ComposeRef
+        var body: String
+        var attachments: [MailAttachment]
+    }
     /// De klant bij een mail, onthouden per mail (met de grootte van de klantenlijst, om te zien of die veranderde).
     @ObservationIgnored private var clientCache: [String: (mapSize: Int, name: String?)] = [:]
     @ObservationIgnored private var returnTask: Task<Void, Never>?
@@ -702,6 +713,7 @@ final class MailModeStore {
 
     /// Na versturen in de mailmodus: het gesprek archiveren en de volgende mail openen (de melding komt van het versturen).
     func archiveAfterSending(threadID: String, appState: AppState) {
+        openReplies.remove(threadID)   // verstuurd: er staat geen antwoord meer open
         guard let item = items.first(where: { $0.threadID == threadID }) else { return }
         archive(item, announcing: "", appState: appState)
     }
@@ -709,10 +721,44 @@ final class MailModeStore {
     /// Archiveert een gesprek na een handeling en opent de volgende mail. `announcing`: de melding (leeg: geen,
     /// `nil`: de gewone van archiveren).
     func archive(_ item: GmailMailItem, announcing text: String?, appState: AppState) {
+        if hasOpenReply(item.threadID) {
+            appState.announce(Self.keepingReply(text), seconds: 4)
+            return
+        }
         takeOut(threadID: item.threadID)
         FollowUpStore.shared.clearReturned(threadID: item.threadID)
         if let text, !text.isEmpty { appState.announce(text, seconds: 3) }
         Task { await gmail.archiveMessage(item.summary, appState: appState, announce: text == nil) }
+    }
+
+    // MARK: Open antwoorden
+
+    func replyChanged(threadID: String, open: Bool) {
+        if open { openReplies.insert(threadID) } else { openReplies.remove(threadID) }
+    }
+
+    func hasOpenReply(_ threadID: String) -> Bool { openReplies.contains(threadID) }
+
+    /// De mailweergave gaat weg (andere mail, mailmodus dicht): een antwoord met tekst bewaren voor als je terugkomt.
+    func leaveReply(threadID: String, keeping reply: KeptReply?) {
+        openReplies.remove(threadID)
+        keptReplies[threadID] = reply
+        if keptReplies.count > 30, let any = keptReplies.keys.first(where: { $0 != threadID }) { keptReplies[any] = nil }
+    }
+
+    /// Het bewaarde antwoord van een gesprek, één keer (daarna staat het weer in de weergave).
+    func takeKeptReply(threadID: String) -> KeptReply? {
+        keptReplies.removeValue(forKey: threadID)
+    }
+
+    /// De melding als een gesprek blijft staan omdat er een antwoord openstaat: wat er gedaan is, zonder "gearchiveerd".
+    private static func keepingReply(_ text: String?) -> String {
+        let note = "niet gearchiveerd: je antwoord staat nog open"
+        let done = (text ?? "")
+            .replacingOccurrences(of: " · gearchiveerd", with: "")
+            .replacingOccurrences(of: "Gearchiveerd · ", with: "")
+        guard !done.isEmpty else { return "Niet gearchiveerd: je antwoord staat nog open" }
+        return String(done.prefix(1)).uppercased() + String(done.dropFirst()) + " · " + note
     }
 
     // MARK: Bladen

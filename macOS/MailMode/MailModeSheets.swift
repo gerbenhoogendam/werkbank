@@ -215,9 +215,12 @@ private struct MailTaskSheet: View {
         }
     }
 
-    private func make(archive: Bool) {
+    private func make(archive wanted: Bool) {
         let column = columns.first { $0.id == columnKey } ?? .inbox
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Staat er een antwoord open, dan blijft het gesprek staan (anders is het concept kwijt).
+        let keepsReply = wanted && store.hasOpenReply(item.threadID)
+        let archive = wanted && !keepsReply
         store.closeSheet()
         if archive {
             store.takeOut(threadID: item.threadID)
@@ -227,6 +230,7 @@ private struct MailTaskSheet: View {
             await GmailSession.shared.createTask(from: item.summary, title: name.isEmpty ? item.subject : name, minutes: 0,
                                                  column: column, archive: archive, context: context, appState: appState)
             store.refreshTasks()
+            if keepsReply { appState.announce("Taak gemaakt · niet gearchiveerd: je antwoord staat nog open", seconds: 4) }
         }
     }
 }
@@ -734,11 +738,17 @@ private struct MailFollowSheet: View {
         FollowUpStore.shared.add(threadID: item.threadID, account: account, subject: item.subject, kind: .noReply, due: due)
         let waiting = BoardService.columns(in: context).first { $0.id == "waiting" }
         if card, let waiting {
-            store.takeOut(threadID: item.threadID)
+            // Staat er een antwoord open, dan blijft het gesprek staan (anders is het concept kwijt).
+            let keepsReply = store.hasOpenReply(item.threadID)
+            if !keepsReply { store.takeOut(threadID: item.threadID) }
             Task {
                 await GmailSession.shared.createTask(from: item.summary, title: plainSubject(item.subject), minutes: 0,
-                                                     column: waiting, context: context, appState: appState)
+                                                     column: waiting, archive: !keepsReply, context: context,
+                                                     appState: appState)
                 store.refreshTasks()
+                if keepsReply {
+                    appState.announce("Kaart in Wacht op klant · niet gearchiveerd: je antwoord staat nog open", seconds: 4)
+                }
             }
         } else {
             store.archive(item, announcing: "Gearchiveerd · terug als er geen antwoord is op \(DutchDate.weekdayAndDay(due))",

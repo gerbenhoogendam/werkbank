@@ -173,18 +173,22 @@ private struct MailModeKeysSection: View {
     @State private var monitor: Any?
     @State private var error: String?
     @State private var revision = 0
+    @AppStorage(MailModeKeys.hiddenButtonsKey) private var hiddenButtons = ""
 
     var body: some View {
-        Section("Sneltoetsen in de mailmodus") {
+        Section("Knoppen en sneltoetsen in de mailmodus") {
             ForEach(MailModeAction.allCases) { action in
-                LabeledContent(action.title) {
-                    if recording == action {
-                        Button("…") { stop() }
-                            .buttonStyle(.borderedProminent)
-                            .frame(minWidth: 54)
+                LabeledContent {
+                    keyButton(action)
+                } label: {
+                    if MailModeKeys.buttons.contains(action) {
+                        // Aangevinkt: de knop staat in de mail. De sneltoets werkt hoe dan ook.
+                        Toggle(action.title, isOn: Binding(
+                            get: { MailModeKeys.showsButton(action, hidden: hiddenButtons) },
+                            set: { hiddenButtons = MailModeKeys.hidden(hiddenButtons, showing: $0, action) }))
+                            .toggleStyle(.checkbox)
                     } else {
-                        Button(MailModeKeys.key(for: action)) { record(action) }
-                            .frame(minWidth: 54)
+                        Text(action.title)
                     }
                 }
             }
@@ -202,6 +206,17 @@ private struct MailModeKeysSection: View {
         .onDisappear(perform: stop)
     }
 
+    @ViewBuilder private func keyButton(_ action: MailModeAction) -> some View {
+        if recording == action {
+            Button("…") { stop() }
+                .buttonStyle(.borderedProminent)
+                .frame(minWidth: 54)
+        } else {
+            Button(MailModeKeys.key(for: action)) { record(action) }
+                .frame(minWidth: 54)
+        }
+    }
+
     private func record(_ action: MailModeAction) {
         stop()
         recording = action
@@ -215,9 +230,12 @@ private struct MailModeKeysSection: View {
     private func capture(_ event: NSEvent, for action: MailModeAction) {
         defer { stop() }
         if event.keyCode == 53 { return }
-        guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-              let key = MailModeKeys.key(from: event) else {
-            error = "Kies een letter, cijfer, leesteken of Tab, zonder ⌘, ⌃ of ⌥."
+        guard let key = MailModeKeys.key(from: event) else {
+            error = "Kies een letter, cijfer, leesteken of Tab, eventueel met ⌘, ⌃, ⌥ of ⇧."
+            return
+        }
+        if MailModeKeys.reserved.contains(key) {
+            error = "\(key) is al van macOS of Werkbank."
             return
         }
         if let other = MailModeKeys.conflict(key, excluding: action) {

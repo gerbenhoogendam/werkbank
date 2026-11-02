@@ -100,6 +100,18 @@ struct MailWindowView: View {
         }
         .background(ThingsColor.backgroundContent)
         .task(id: ref.messageID) { await start() }
+        // Mailmodus: een antwoord met tekst melden (dan archiveert een handeling het gesprek niet) en bewaren als deze
+        // weergave weggaat, zodat het er weer staat als je terugkomt.
+        .onChange(of: hasUnsentReply) { _, open in
+            if embedded { MailModeStore.shared.replyChanged(threadID: ref.threadID, open: open) }
+        }
+        .onDisappear {
+            guard embedded else { return }
+            let kept = hasUnsentReply
+                ? replyRef.map { MailModeStore.KeptReply(ref: $0, body: replyBody, attachments: replyAttachments) }
+                : nil
+            MailModeStore.shared.leaveReply(threadID: ref.threadID, keeping: kept)
+        }
         // Begonnen aan een antwoord, analyse of taak: niet meer sluiten bij een klik ernaast.
         .onChange(of: replyRef) { _, new in if new != nil { markEngaged() } }
         .onChange(of: model.analyses.count) { _, _ in markEngaged() }
@@ -114,7 +126,18 @@ struct MailWindowView: View {
 
     private func markEngaged() { PanelStore.shared.markEngaged(PanelKind.mail(ref).id) }
 
+    /// Een antwoord met tekst of een bijlage dat nog niet verstuurd is.
+    private var hasUnsentReply: Bool {
+        replyRef != nil && (!replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !replyAttachments.isEmpty)
+    }
+
     private func start() async {
+        // Mailmodus: het antwoord dat nog openstond toen je wegging, weer neerzetten.
+        if embedded, replyRef == nil, let kept = MailModeStore.shared.takeKeptReply(threadID: ref.threadID) {
+            replyAttachments = kept.attachments
+            replyBody = kept.body
+            replyRef = kept.ref
+        }
         taskTitle = ref.subject
         wasInList = gmail.messages.contains { $0.threadID == ref.threadID }
         await model.load(notBefore: embedded ? nil : ContinuousClock.now + .seconds(FoldSpeed.mailOpen.duration))

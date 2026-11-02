@@ -21,8 +21,8 @@ final class PreferencesSync {
         calendarColorsKey, "mail.signatureHTML", "mail.signatureLogo", "mail.senderName", MailSettings.newestAtBottomKey,
         "gmail.displayNames", ClaudeSettings.modelKey, ClaudeSettings.contextKey,
         FoldSpeed.windowOpen.key, FoldSpeed.windowClose.key, FoldSpeed.mailOpen.key, FoldSpeed.mailClose.key,
-        FoldSpeed.send.key, MailModeKeys.storageKey, FollowUpStore.itemsKey, FollowUpStore.returnedKey,
-        MailModeStore.bulkRulesKey, MailClientSettings.accountsKey, MailClientSettings.excludedKey,
+        FoldSpeed.send.key, MailModeKeys.storageKey, MailModeKeys.hiddenButtonsKey, FollowUpStore.itemsKey,
+        FollowUpStore.returnedKey, MailModeStore.bulkRulesKey, MailClientSettings.accountsKey, MailClientSettings.excludedKey,
     ]).union(ThemeStore.Key.all)
     private static let calendarColorsKey = "calendar.colors"
     /// Alleen op deze Mac.

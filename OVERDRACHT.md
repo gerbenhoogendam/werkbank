@@ -224,8 +224,17 @@ beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet to
   een mailbox zet hem erbij of haalt hem eruit (`MailModeStore.toggleInScope`), net als in het Mail-paneel; de
   mailboxen van de combinatie staan dan aan, zonder aparte knop.
 - **Toetsen** (`MailModeKeys.swift`): E archiveren, T taak, S tijd schrijven, P inplannen, R beantwoorden, F opvolgen,
-  C concept, Tab bereik, / zoeken, J/K volgende/vorige. Aan te passen in Voorkeuren › Mail; gaan mee naar je andere
-  Macs. Versturen vanuit de mailmodus archiveert meteen en opent de volgende mail.
+  C concept, Tab bereik, / zoeken, J/K volgende/vorige. Aan te passen in Voorkeuren › Mail, ook als combinatie
+  (⌃⌥⇧⌘ voor de toets, bijvoorbeeld "⇧⌘R"; ⇧ alleen naast een andere); combinaties die van macOS of de app zijn
+  (`MailModeKeys.reserved`) kunnen niet. Een losse toets werkt niet in een tekstveld, een combinatie met ⌘/⌃/⌥ wel.
+  De toetsen staan niet meer naast de knoppen (alleen in de tooltip). Per knop in de mail een vinkje in dezelfde lijst
+  (`MailModeKeys.hiddenButtonsKey`); uit = geen knop, de sneltoets werkt wel. Gaat mee naar je andere Macs. Versturen
+  vanuit de mailmodus archiveert meteen en opent de volgende mail.
+- **Open antwoord**: met tekst of een bijlage in het antwoord archiveren Archiveren, Tijd schrijven, Inplannen,
+  Opvolgen en Taak maken het gesprek niet (melding "niet gearchiveerd: je antwoord staat nog open"); versturen
+  archiveert daarna wel. Ga je naar een andere mail of sluit je de mailmodus, dan wordt het antwoord per gesprek
+  bewaard (`MailModeStore.keptReplies`, alleen in het geheugen, tekst zonder opmaak) en staat het er weer als je
+  terugkomt.
 - **Bladen** (`MailModeSheets.swift`): taak, tijd schrijven, inplannen (datums uit de mail via `DateProposals`, vrije
   momenten via `FreeSlots`, de week met overlap; uitnodiging als .ics-bijlage in een antwoord dat je zelf verstuurt),
   opvolgen (`FollowUps.swift`: terug als er geen antwoord kwam, eventueel met een kaart in Wacht op klant, of later

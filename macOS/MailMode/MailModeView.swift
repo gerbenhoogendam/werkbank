@@ -85,8 +85,8 @@ struct MailModeView: View {
 
     // MARK: Toetsen
 
-    /// Toetsen zonder ⌘ werken overal in de mailmodus, behalve in een tekstveld (zoeken, antwoord) of als er een
-    /// paneel open staat.
+    /// De toetsen werken overal in de mailmodus, behalve als er een paneel open staat; in een tekstveld (zoeken,
+    /// antwoord) alleen combinaties met ⌘, ⌃ of ⌥.
     private func installKeys() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -117,12 +117,14 @@ struct MailModeView: View {
             store.openSheet(.search)
             return true
         }
-        if window.firstResponder is NSText { return false }
-        if event.keyCode == 53 {
+        let typing = window.firstResponder is NSText
+        if !typing, event.keyCode == 53 {
             store.close()
             return true
         }
         guard let action = MailModeKeys.action(for: event) else { return false }
+        // In een tekstveld is een losse toets gewoon tekst; een combinatie met ⌘, ⌃ of ⌥ werkt ook daar.
+        if typing, !MailModeKeys.hasModifiers(MailModeKeys.key(for: action)) { return false }
         return perform(action)
     }
 
@@ -202,12 +204,6 @@ private struct MailModeToolbar: View {
                             RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Puls.track)
                         }
                     }
-                    Button { store.cycleScope() } label: {
-                        KeyCap(key: MailModeKeys.key(for: .scope))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Volgende mailbox of combinatie")
-                    .accessibilityLabel("Volgende mailbox of combinatie")
                 }
                 .padding(.leading, 8)
             }
@@ -282,7 +278,6 @@ private struct MailModeList: View {
                         .font(.werk(size: 13))
                         .focused($searchFocused)
                         .onExitCommand { searchFocused = false }
-                    KeyCap(key: MailModeKeys.key(for: .search))
                     Button { store.openSheet(.search) } label: {
                         Image(systemName: "slider.horizontal.3")
                             .font(.werk(size: 12, weight: .medium))
@@ -539,7 +534,10 @@ struct MailModeFolders: View {
 
 private struct MailModeReader: View {
     @Environment(AppState.self) private var appState
+    @AppStorage(MailModeKeys.hiddenButtonsKey) private var hiddenButtons = ""
     private let store = MailModeStore.shared
+
+    private func shows(_ action: MailModeAction) -> Bool { MailModeKeys.showsButton(action, hidden: hiddenButtons) }
 
     var body: some View {
         if let item = store.selected {
@@ -601,37 +599,48 @@ private struct MailModeReader: View {
                 Spacer(minLength: 8)
                 HStack(spacing: 6) {
                     Button { store.selectPrevious() } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.up")
-                            KeyCap(key: MailModeKeys.key(for: .previous))
-                        }
+                        Image(systemName: "chevron.up")
                     }
                     .buttonStyle(MailModeButtonStyle())
+                    .help("Vorige mail (\(MailModeKeys.key(for: .previous)))")
                     .accessibilityLabel("Vorige mail")
                     Button { store.selectNext() } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.down")
-                            KeyCap(key: MailModeKeys.key(for: .next))
-                        }
+                        Image(systemName: "chevron.down")
                     }
+                    .help("Volgende mail (\(MailModeKeys.key(for: .next)))")
                     .buttonStyle(MailModeButtonStyle())
                     .accessibilityLabel("Volgende mail")
                 }
             }
+            // Welke knoppen er staan, kies je in Voorkeuren › Mail; de sneltoetsen werken altijd.
             WrapStack(spacing: 6) {
-                MailActionButton(title: "Archiveren", systemImage: "archivebox", action: .archive, prominent: true) {
-                    store.archiveSelected(appState: appState)
+                if shows(.archive) {
+                    MailActionButton(title: "Archiveren", systemImage: "archivebox", action: .archive, prominent: true) {
+                        store.archiveSelected(appState: appState)
+                    }
                 }
-                MailActionButton(title: "Beantwoorden", systemImage: "arrowshape.turn.up.left", action: .reply) {
-                    store.replyTrigger.reply()
+                if shows(.reply) {
+                    MailActionButton(title: "Beantwoorden", systemImage: "arrowshape.turn.up.left", action: .reply) {
+                        store.replyTrigger.reply()
+                    }
                 }
-                MailActionButton(title: "Taak", systemImage: "checkmark.circle", action: .task) { store.openSheet(.task) }
-                MailActionButton(title: "Tijd schrijven", systemImage: "clock", action: .time) { store.openSheet(.time) }
-                MailActionButton(title: "Inplannen", systemImage: "calendar", action: .plan) { store.openSheet(.plan) }
-                MailActionButton(title: "Opvolgen", systemImage: "arrow.uturn.backward.circle", action: .follow) {
-                    store.openSheet(.follow)
+                if shows(.task) {
+                    MailActionButton(title: "Taak", systemImage: "checkmark.circle", action: .task) { store.openSheet(.task) }
                 }
-                MailActionButton(title: "Concept", systemImage: "sparkles", action: .claude) { store.openSheet(.concept) }
+                if shows(.time) {
+                    MailActionButton(title: "Tijd schrijven", systemImage: "clock", action: .time) { store.openSheet(.time) }
+                }
+                if shows(.plan) {
+                    MailActionButton(title: "Inplannen", systemImage: "calendar", action: .plan) { store.openSheet(.plan) }
+                }
+                if shows(.follow) {
+                    MailActionButton(title: "Opvolgen", systemImage: "arrow.uturn.backward.circle", action: .follow) {
+                        store.openSheet(.follow)
+                    }
+                }
+                if shows(.claude) {
+                    MailActionButton(title: "Concept", systemImage: "sparkles", action: .claude) { store.openSheet(.concept) }
+                }
             }
         }
         .padding(.horizontal, 22)
@@ -829,29 +838,7 @@ enum MailModeMetrics {
     static var radius: CGFloat { min(8, max(2, ThingsMetrics.cardRadius)) }
 }
 
-/// Een toets zoals op het toetsenbord, naast een knop.
-struct KeyCap: View {
-    let key: String
-    var inverted = false
-
-    var body: some View {
-        // Puls: zonder rand, op een grijs vlakje; op de groene knop zwart doorschijnend.
-        let puls = ThemeStore.shared.look == .puls
-        Text(key)
-            .font(.werk(size: 10, weight: .semibold))
-            .foregroundStyle(inverted ? (puls ? Color.black.opacity(0.7) : ThingsColor.backgroundContent) : ThingsColor.textSecondary)
-            .padding(.horizontal, 4)
-            .frame(minWidth: 18, minHeight: 18)
-            .background(RoundedRectangle(cornerRadius: puls ? 5 : 4, style: .continuous)
-                .fill(inverted ? (puls ? Color.black.opacity(0.14) : Color.white.opacity(0.14))
-                      : (puls ? Puls.track : ThingsColor.backgroundContent)))
-            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(puls ? Color.clear : (inverted ? Color.white.opacity(0.28) : ThingsColor.separator)))
-            .accessibilityHidden(true)
-    }
-}
-
-/// Een handeling op de gekozen mail: naam, en de toets erachter. Archiveren is de volle knop.
+/// Een handeling op de gekozen mail: icoon en naam (de toets staat alleen in de tooltip). Archiveren is de volle knop.
 struct MailActionButton: View {
     let title: String
     let systemImage: String
@@ -865,11 +852,9 @@ struct MailActionButton: View {
             HStack(spacing: 6) {
                 Image(systemName: systemImage).font(.werk(size: 12, weight: .medium))
                 Text(title).font(.werk(size: 12.5, weight: prominent ? .semibold : .medium))
-                KeyCap(key: MailModeKeys.key(for: action), inverted: prominent)
             }
             .foregroundStyle(prominent ? (puls ? Color.black : ThingsColor.backgroundContent) : ThingsColor.textPrimary)
-            .padding(.leading, puls ? 11 : 10)
-            .padding(.trailing, 6)
+            .padding(.horizontal, puls ? 13 : 11)
             .frame(height: 30)
             // Puls: glazen capsules; Archiveren felgroen met zwarte letters.
             .background(RoundedRectangle(cornerRadius: puls ? 15 : MailModeMetrics.radius, style: .continuous)

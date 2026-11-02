@@ -132,7 +132,6 @@ struct MainView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "envelope.fill")
                                 Text("Mail")
-                                KeyCap(key: "esc", inverted: true)
                             }
                         }
                         .buttonStyle(MailModeButtonStyle(prominent: true))
