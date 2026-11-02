@@ -1,8 +1,8 @@
 import SwiftUI
 
 // Puls: zwart als een sporthorloge, grijze tegels en per soort een felle kleur die zacht in de achtergrond doorschemert.
-// Kleur betekent altijd hetzelfde: groen is werk, geel loopt nu, rood is nu en vandaag, blauw is mail, cyaan is agenda,
-// paars (licht: fuchsia) zijn klanten, oranje is te laat. Roze komt zo min mogelijk voor.
+// Kleur betekent altijd hetzelfde: groen is werk, geel loopt nu, rood is nu, vandaag en klanten, blauw is mail, cyaan is
+// agenda, oranje is te laat. Roze (paars is in licht fuchsia) komt zo min mogelijk voor.
 
 /// Een felle kleur van Puls, in licht en donker.
 struct PulsHue {

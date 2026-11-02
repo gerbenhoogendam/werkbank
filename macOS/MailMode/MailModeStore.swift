@@ -209,9 +209,45 @@ final class MailModeStore {
     var scopes: [Scope] {
         let accounts = gmail.accounts
         var list: [Scope] = accounts.map { .account($0) }
-        if gmail.isCombined, !gmail.isAllCombined { list.append(.combination(gmail.combinedAccounts)) }
+        // De eigen combinatie (⌘-klik hier), anders die van het Mail-paneel.
+        if case .combination(let emails) = scope {
+            list.append(.combination(emails))
+        } else if gmail.isCombined, !gmail.isAllCombined {
+            list.append(.combination(gmail.combinedAccounts))
+        }
         if accounts.count != 1 { list.append(.all) }
         return list
+    }
+
+    /// Staat deze mailbox aan: als enige, of in de combinatie.
+    func includes(_ email: String) -> Bool {
+        switch scope {
+        case .account(let current): current == email
+        case .combination(let emails): emails.contains(email)
+        case .all: false
+        }
+    }
+
+    /// ⌘-klik op een mailbox: erbij zetten of eruit halen, zoals in het Mail-paneel. Blijft er één over, dan is dat
+    /// gewoon die mailbox; staan ze allemaal aan, dan is het Alle mail.
+    func toggleInScope(_ email: String) {
+        let accounts = gmail.accounts
+        guard accounts.contains(email) else { return }
+        var selection: [String]
+        switch scope {
+        case .account(let current): selection = [current]
+        case .combination(let emails): selection = emails
+        case .all: selection = accounts
+        }
+        if selection.contains(email) { selection.removeAll { $0 == email } } else { selection.append(email) }
+        selection = accounts.filter(selection.contains)   // vaste volgorde, zoals de knoppen
+        if selection.count > 1, selection.count == accounts.count {
+            select(scope: .all)
+        } else if selection.count > 1 {
+            select(scope: .combination(selection))
+        } else if let only = selection.first {
+            select(scope: .account(only))
+        }
     }
 
     func title(of scope: Scope) -> String {

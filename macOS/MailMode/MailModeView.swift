@@ -183,11 +183,17 @@ private struct MailModeToolbar: View {
                     // Puls: de mailboxen als gesegmenteerde keuze op een grijs spoor.
                     HStack(spacing: ThemeStore.shared.look == .puls ? 0 : 6) {
                         ForEach(store.scopes, id: \.self) { scope in
-                            MailboxTab(title: store.title(of: scope), isOn: store.client == nil && scope == store.scope,
-                                       fitsContent: true) {
-                                store.select(scope: scope)
+                            // De eigen combinatie staat al als aangevinkte mailboxen; geen aparte knop.
+                            if case .combination = scope, scope == store.scope {
+                                EmptyView()
+                            } else {
+                                MailboxTab(title: store.title(of: scope), isOn: store.client == nil && isOn(scope),
+                                           fitsContent: true) {
+                                    tap(scope)
+                                }
+                                .fixedSize()
+                                .help(scopeHelp(scope))
                             }
-                            .fixedSize()
                         }
                     }
                     .padding(ThemeStore.shared.look == .puls ? 2 : 0)
@@ -228,6 +234,27 @@ private struct MailModeToolbar: View {
         // Lichte tekst op een donkere kop (ook als alleen de mail donker is, zoals bij Tischsuper).
         .darkScheme(ThemeStore.shared.theme.darkMailHeader || ThemeStore.shared.theme.darkMail
                     || ThemeStore.shared.look == .tischsuper)
+    }
+
+    /// Een mailbox staat aan als hij gekozen is of in de combinatie zit; Alle mail en de combinatie van het
+    /// Mail-paneel alleen als die zelf gekozen zijn.
+    private func isOn(_ scope: MailModeStore.Scope) -> Bool {
+        if case .account(let email) = scope { return store.includes(email) }
+        return scope == store.scope
+    }
+
+    /// Klik: alleen deze mailbox (of Alle mail). ⌘-klik op een mailbox: erbij zetten of eruit halen.
+    private func tap(_ scope: MailModeStore.Scope) {
+        if case .account(let email) = scope, NSEvent.modifierFlags.contains(.command) {
+            store.toggleInScope(email)
+        } else {
+            store.select(scope: scope)
+        }
+    }
+
+    private func scopeHelp(_ scope: MailModeStore.Scope) -> String {
+        if case .account(let email) = scope { return "\(email) · ⌘-klik om te combineren" }
+        return store.title(of: scope)
     }
 }
 
@@ -730,7 +757,7 @@ private struct ClientActivityRow: View {
                         Spacer(minLength: 4)
                         if puls {
                             PulsValue(value: "\(rank.count)", unit: rank.count == 1 ? "MAIL" : "MAILS", size: 15,
-                                      color: Puls.paars.big)
+                                      color: Puls.rood.big)
                         } else {
                             Text(rank.count == 1 ? "1 mail" : "\(rank.count) mails")
                                 .font(.werk(size: 11))
@@ -740,7 +767,7 @@ private struct ClientActivityRow: View {
                         }
                     }
                     PulsMonthStrip(days: rank.recentDays.isEmpty ? Array(repeating: false, count: 30) : rank.recentDays,
-                                   filled: puls ? Puls.paars.solid : ThingsColor.accent,
+                                   filled: puls ? Puls.rood.solid : ThingsColor.accent,
                                    empty: puls ? Puls.emptyDay : ThingsColor.separator,
                                    height: 6)
                 }

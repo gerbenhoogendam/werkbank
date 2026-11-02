@@ -162,8 +162,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     **Puls** (1 nov, naar screenshots van een fitnessapp; concept in de Claude-canvas "Werkbank thema Puls"): zwart met
     grijze tegels (#1C1C1E, kaarten #2C2C2E; licht #F2F2F7 met witte tegels en #F2F2F7-kaarten), losse vlakken met 10 pt
     tussenruimte en hoek 18. Felle kleuren met één betekenis (`Puls` in `Shared/Design/PulsParts.swift`): groen werk en
-    hoofdknop, geel loopt nu, rood nu en vandaag (geen roze), blauw mail, cyaan agenda, paars klanten (licht fuchsia,
-    spaarzaam), oranje te laat. Per kleur een vlak, tekstinkt (4,5:1), inkt voor grote cijfers (3:1) en een label (licht
+    hoofdknop, geel loopt nu, rood nu, vandaag en klanten (de klantenkolom was paars/fuchsia; op verzoek rood),
+    blauw mail, cyaan agenda, paars alleen nog in de kolomkleuren van het bord (licht fuchsia), oranje te laat. Per kleur een vlak, tekstinkt (4,5:1), inkt voor grote cijfers (3:1) en een label (licht
     een vol vlak, donker een tint). Cijfers rond (`.system(design: .rounded)` via `werkNumbers`) met de eenheid erachter
     in hoofdletters (`PulsValue`: "5 KAARTEN", "6:15 /8 U", "7 ONGELEZEN"). Gloed: het licht valt op de achtergrond
     (`PulsGlow`); in de agenda staat het op de lijn van nu in de kolom van vandaag (`PulsAgendaGlow`), onder Tijd
@@ -220,7 +220,9 @@ beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet to
 - **Schil** (`macOS/MailMode/MailModeView.swift`, `MailModeStore.swift`): lijst links met zoeken in de Gmail-zoektaal
   en filters (met bijlage, ongelezen, zonder taak, wacht op antwoord), de bundel nieuwsbrieven en meldingen, de mail in
   het midden (`MailWindowView` met `embedded`), klanten rechts op volgorde van mail in dertig dagen
-  (`MailActivityStore`, `ClientActivity` in WerkbankCore). Tab wisselt mailbox › combinatie › alle mail.
+  (`MailActivityStore`, `ClientActivity` in WerkbankCore). Tab wisselt mailbox › combinatie › alle mail. ⌘-klik op
+  een mailbox zet hem erbij of haalt hem eruit (`MailModeStore.toggleInScope`), net als in het Mail-paneel; de
+  mailboxen van de combinatie staan dan aan, zonder aparte knop.
 - **Toetsen** (`MailModeKeys.swift`): E archiveren, T taak, S tijd schrijven, P inplannen, R beantwoorden, F opvolgen,
   C concept, Tab bereik, / zoeken, J/K volgende/vorige. Aan te passen in Voorkeuren › Mail; gaan mee naar je andere
   Macs. Versturen vanuit de mailmodus archiveert meteen en opent de volgende mail.
