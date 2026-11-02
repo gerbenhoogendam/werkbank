@@ -658,6 +658,55 @@ final class RichNSTextView: NSTextView {
 
     // MARK: Afbeeldingen in de tekst
 
+    /// Een hoekje van de gekozen afbeelding vastpakken: schalen. Klik op een afbeelding: die kiezen (dan verschijnen de
+    /// hoekjes). Anders gewoon tekst.
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if let selected = selectedImage(), let corner = InlineImageCell.corner(near: point, of: selected.frame) {
+            window?.makeFirstResponder(self)
+            selected.cell.resize(in: self, at: selected.index, frame: selected.frame, corner: corner)
+            return
+        }
+        if let hit = imageHit(at: point), hit.frame.insetBy(dx: -2, dy: -2).contains(point) {
+            window?.makeFirstResponder(self)
+            setSelectedRange(NSRange(location: hit.index, length: 1))
+            needsDisplay = true
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
+    /// De afbeelding als de selectie precies die ene afbeelding is.
+    private func selectedImage() -> (index: Int, cell: InlineImageCell, frame: NSRect)? {
+        let selection = selectedRange()
+        guard selection.length == 1 else { return nil }
+        return imageHit(atCharacter: selection.location)
+    }
+
+    /// De afbeelding onder `point` (in het tekstvak).
+    private func imageHit(at point: NSPoint) -> (index: Int, cell: InlineImageCell, frame: NSRect)? {
+        guard let layoutManager, let textContainer else { return nil }
+        let inContainer = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+        let glyph = layoutManager.glyphIndex(for: inContainer, in: textContainer)
+        guard glyph < layoutManager.numberOfGlyphs else { return nil }
+        return imageHit(atCharacter: layoutManager.characterIndexForGlyph(at: glyph))
+    }
+
+    /// De afbeelding op teken `index`, met waar hij staat: onderkant op de grondlijn van zijn regel.
+    private func imageHit(atCharacter index: Int) -> (index: Int, cell: InlineImageCell, frame: NSRect)? {
+        guard let storage = textStorage, index >= 0, index < storage.length, let layoutManager,
+              let attachment = storage.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment,
+              let cell = attachment.attachmentCell as? InlineImageCell else { return nil }
+        let glyph = layoutManager.glyphIndexForCharacter(at: index)
+        let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let location = layoutManager.location(forGlyphAt: glyph)
+        let size = cell.displaySize
+        let frame = NSRect(x: textContainerOrigin.x + line.minX + location.x,
+                           y: textContainerOrigin.y + line.minY + location.y - size.height,
+                           width: size.width, height: size.height)
+        return (index, cell, frame)
+    }
+
     /// Een afbeelding losgelaten op de tekst komt op die plek in de tekst (eerder kwam het pad van het bestand er);
     /// andere bestanden worden bijlagen.
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {

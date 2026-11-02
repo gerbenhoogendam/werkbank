@@ -101,6 +101,8 @@ struct ReplyTextView: NSViewRepresentable {
             parent.onTyped()
             parent.controller?.textDidChange()
             updatePlaceholder()
+            // De hoogte opnieuw laten meten (ook als alleen een afbeelding van grootte veranderde).
+            textView.invalidateIntrinsicContentSize()
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {

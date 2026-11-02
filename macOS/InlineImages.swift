@@ -4,14 +4,14 @@ import UniformTypeIdentifiers
 import WerkbankCore
 
 /// Een afbeelding in de tekst van een mail die je opstelt: getekend op de gekozen grootte. Klik erop en er komen vier
-/// hoekjes; sleep aan een hoekje om hem groter of kleiner te maken (de verhouding blijft), zoals in Outlook. De grootte
-/// gaat mee naar de mail (`width` en `height` op de afbeelding).
+/// hoekjes; sleep aan een hoekje om hem groter of kleiner te maken (de verhouding blijft), zoals in Outlook. De klikken
+/// vangt het tekstvak zelf af (`RichNSTextView.mouseDown`). De grootte gaat mee naar de mail (`width` en `height`).
 final class InlineImageCell: NSTextAttachmentCell {
     /// De getoonde grootte, in punten.
     var displaySize: NSSize
     /// De grootte van de afbeelding zelf (in punten; een scherm-afbeelding op 2× is half zo groot als in pixels).
     let naturalSize: NSSize
-    private static let handle: CGFloat = 8
+    private static let handle: CGFloat = 10
     private static let minimumWidth: CGFloat = 24
 
     init(image: NSImage, displaySize: NSSize) {
@@ -58,39 +58,29 @@ final class InlineImageCell: NSTextAttachmentCell {
                     hints: [.interpolation: NSImageInterpolation.high.rawValue])
     }
 
-    override func wantsToTrackMouse() -> Bool { true }
-
-    override func wantsToTrackMouse(for theEvent: NSEvent, in cellFrame: NSRect, of controlView: NSView?,
-                                    atCharacterIndex charIndex: Int) -> Bool { true }
-
-    /// Klik: de afbeelding kiezen (dan verschijnen de hoekjes). Slepen aan een hoekje: schalen.
-    override func trackMouse(with theEvent: NSEvent, in cellFrame: NSRect, of controlView: NSView?,
-                             atCharacterIndex charIndex: Int, untilMouseUp flag: Bool) -> Bool {
-        guard let textView = controlView as? NSTextView, let window = textView.window else { return false }
-        window.makeFirstResponder(textView)
-        textView.setSelectedRange(NSRange(location: charIndex, length: 1))
-        textView.needsDisplay = true
-        let start = textView.convert(theEvent.locationInWindow, from: nil)
-        guard let corner = Self.corners(of: cellFrame).firstIndex(where: { hypot($0.x - start.x, $0.y - start.y) <= 10 })
-        else { return true }
-        // Hoekjes rechts (1 en 2) groeien naar rechts, links (0 en 3) naar links; de verhouding blijft.
+    /// Sleept aan hoekje `corner` (0 linksboven, dan met de klok mee) tot de muis loslaat; de verhouding blijft. Hoekjes
+    /// rechts groeien naar rechts, links naar links. `frame`: waar de afbeelding nu staat (in het tekstvak).
+    func resize(in textView: NSTextView, at charIndex: Int, frame: NSRect, corner: Int) {
+        guard let window = textView.window else { return }
         let growsRight = corner == 1 || corner == 2
         let ratio = naturalSize.width > 0 ? naturalSize.height / naturalSize.width : 1
         let maximum = Self.maximumWidth(in: textView)
+        let range = NSRange(location: charIndex, length: 1)
+        NSCursor.crosshair.push()
+        defer { NSCursor.pop() }
         while let event = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
             let point = textView.convert(event.locationInWindow, from: nil)
-            let dragged = growsRight ? point.x - cellFrame.minX : cellFrame.maxX - point.x
+            let dragged = growsRight ? point.x - frame.minX : frame.maxX - point.x
             let width = min(max(Self.minimumWidth, dragged), maximum)
             displaySize = NSSize(width: width.rounded(), height: (width * ratio).rounded())
-            let range = NSRange(location: charIndex, length: 1)
             textView.layoutManager?.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
             textView.layoutManager?.invalidateDisplay(forCharacterRange: range)
+            textView.needsDisplay = true
             textView.invalidateIntrinsicContentSize()
             if event.type == .leftMouseUp { break }
         }
         // Gewijzigd: het tekstvak (en de hoogte eromheen) bijwerken.
         textView.didChangeText()
-        return true
     }
 
     // MARK: Hulp
@@ -98,6 +88,11 @@ final class InlineImageCell: NSTextAttachmentCell {
     static func isSelected(_ charIndex: Int, in textView: NSTextView) -> Bool {
         let selection = textView.selectedRange()
         return selection.length > 0 && NSLocationInRange(charIndex, selection)
+    }
+
+    /// Het hoekje bij `point` (ruim genomen: ook net ernaast, waar het hoekje buiten de afbeelding uitsteekt).
+    static func corner(near point: NSPoint, of frame: NSRect) -> Int? {
+        corners(of: frame).firstIndex { hypot($0.x - point.x, $0.y - point.y) <= 12 }
     }
 
     /// Linksboven, rechtsboven, rechtsonder, linksonder (het tekstvak is omgedraaid: y loopt naar beneden).
