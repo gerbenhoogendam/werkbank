@@ -119,6 +119,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     de handtekening staat er direct onder. Na te gaan: hoe het eruitziet bij de ontvanger (Gmail, Outlook, Apple Mail),
     lijsten met Return en Backspace, ⌘Z na lijst en inspringen, plakken van opgemaakte tekst uit een website, opmaak na
     loshalen van het opstelvenster.
+    Afbeeldingen in de tekst (`macOS/InlineImages.swift`): een afbeelding slepen of plakken (⌘V, ook een
+    schermafbeelding op het klembord) zet hem op die plek in de tekst; andere bestanden worden bijlagen. Klik erop voor
+    vier hoekjes, sleep aan een hoekje om te schalen (`InlineImageCell`, verhouding blijft, niet breder dan het
+    tekstvak). Bij versturen: `<img src="cid:…" width height>` en een inline-deel in multipart/related
+    (`ComposedMail.inlineImages`); PNG/JPEG/GIF blijven, de rest wordt PNG; tot 10 MB per afbeelding. Loshalen gaat via
+    RTFD (de afbeelding gaat mee, de geschaalde maat niet). Een antwoord dat in de mailmodus bewaard wordt bij wisselen
+    van mail, bewaart alleen de tekst.
 18. **Afspraken verslepen** (`macOS/EventDrag.swift`, `WerkbankCore/…/EventDragMath.swift`, `DayColumn`). In de week-
     en dagagenda: het blok optillen en naar een andere tijd of dag slepen (per kwartier, de duur blijft gelijk), de
     boven- of onderrand voor begin of eind, of naar de kop (agendafilters en de rij met de dagen); daar klapt

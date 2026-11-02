@@ -51,6 +51,25 @@ final class MailComposerTests: XCTestCase {
         XCTAssertTrue(parsed.quotableText.contains("punt"))
     }
 
+    func testInlineImagesInBody() {
+        var mail = sample()
+        mail.bodyHTML = "<div>Zie <img src=\"cid:afbeelding-1@werkbank\" width=\"200\" height=\"100\"></div>"
+        mail.inlineImages = [MailAttachment(name: "scherm.png", mediaType: "image/png",
+                                            data: Data(repeating: 3, count: 3000), contentID: "afbeelding-1@werkbank")]
+        mail.signatureHTML = "<div>Groet<img src=\"cid:LOGO\"></div>"
+        mail.signatureImage = MailAttachment(name: "logo.png", mediaType: "image/png",
+                                             data: Data(repeating: 1, count: 2000), contentID: nil)
+        let raw = MailComposer.build(mail)
+        let text = String(data: raw, encoding: .utf8) ?? ""
+        XCTAssertTrue(text.contains("multipart/related"))
+        XCTAssertTrue(text.contains("Content-ID: <afbeelding-1@werkbank>"))
+        XCTAssertTrue(text.contains("Content-ID: <\(MailComposer.signatureContentID)>"))
+        let parsed = MailContentParser.parse(raw)
+        // In de tekst, niet als losse bijlage; de weergave zet ze op hun plek.
+        XCTAssertTrue(parsed.files.isEmpty)
+        XCTAssertEqual(parsed.displayHTML.components(separatedBy: "data:image/png;base64,").count - 1, 2)
+    }
+
     func testSignatureImageDroppedWithoutLogo() {
         var mail = sample()
         mail.signatureHTML = "<div>Groet<img src=\"cid:ABC\"></div>"

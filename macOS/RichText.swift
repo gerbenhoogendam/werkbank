@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import WerkbankCore
 
 /// Opmaak in het opstelveld (`ReplyTextView`): de werkbalk (`RichTextToolbar`) stuurt dit aan, en bij versturen levert
 /// het de HTML (`RichHTML`). Opsommingen en nummering zijn eigen alinea's met een teken ("•" of "1.") en een tab
@@ -49,9 +50,10 @@ final class RichTextController {
 
     func attach(_ textView: NSTextView) {
         self.textView = textView
-        if let pendingRTF, let rich = NSAttributedString(rtf: pendingRTF, documentAttributes: nil),
-           rich.string == textView.string {
-            textView.textStorage?.setAttributedString(rich)
+        if let pendingRTF, let rich = Self.attributed(from: pendingRTF), rich.string == textView.string,
+           let storage = textView.textStorage {
+            storage.setAttributedString(rich)
+            InlineImages.adopt(in: storage, maxWidth: 600)
         }
         pendingRTF = nil
         refreshState()
@@ -64,8 +66,9 @@ final class RichTextController {
             pendingRTF = rtf
             return
         }
-        guard let rich = NSAttributedString(rtf: rtf, documentAttributes: nil), rich.string == text else { return }
+        guard let rich = Self.attributed(from: rtf), rich.string == text else { return }
         storage.setAttributedString(rich)
+        InlineImages.adopt(in: storage, maxWidth: InlineImageCell.maximumWidth(in: textView))
         refreshState()
     }
 
@@ -474,13 +477,28 @@ final class RichTextController {
     // MARK: Uitvoer
 
     func html() -> String? {
-        guard let storage = textView?.textStorage else { return nil }
-        return RichHTML.html(from: storage)
+        content()?.html
     }
 
+    /// De HTML en de afbeeldingen die er als `cid:` in staan, voor het versturen.
+    func content() -> (html: String, images: [MailAttachment])? {
+        guard let storage = textView?.textStorage else { return nil }
+        var images: [MailAttachment] = []
+        let html = RichHTML.html(from: storage, images: &images)
+        return (html, images)
+    }
+
+    /// Met afbeeldingen (RTFD) als die er zijn, anders gewone RTF.
     func rtf() -> Data? {
         guard let storage = textView?.textStorage else { return nil }
-        return storage.rtf(from: NSRange(location: 0, length: storage.length), documentAttributes: [:])
+        let range = NSRange(location: 0, length: storage.length)
+        if storage.containsAttachments(in: range) { return storage.rtfd(from: range, documentAttributes: [:]) }
+        return storage.rtf(from: range, documentAttributes: [:])
+    }
+
+    /// RTFD (met afbeeldingen) of RTF.
+    nonisolated static func attributed(from data: Data) -> NSAttributedString? {
+        NSAttributedString(rtfd: data, documentAttributes: nil) ?? NSAttributedString(rtf: data, documentAttributes: nil)
     }
 
     func refreshState() {
@@ -512,6 +530,13 @@ final class RichTextController {
 enum RichHTML {
     @MainActor
     static func html(from text: NSAttributedString) -> String {
+        var images: [MailAttachment] = []
+        return html(from: text, images: &images)
+    }
+
+    /// `images`: de afbeeldingen in de tekst, met het Content-ID waaronder de HTML ze aanroept (`cid:`).
+    @MainActor
+    static func html(from text: NSAttributedString, images: inout [MailAttachment]) -> String {
         let string = text.string as NSString
         var output = ""
         var openList: (tag: String, level: Int)?
@@ -535,11 +560,11 @@ enum RichHTML {
                     .range(of: #"^(•|\d+\.)\t"#, options: .regularExpression)
                 let skip = marker.location == NSNotFound ? 0 : marker.length
                 let item = NSRange(location: content.location + skip, length: max(0, content.length - skip))
-                output += "<li>" + inline(text, range: item) + "</li>"
+                output += "<li>" + inline(text, range: item, images: &images) + "</li>"
             } else {
                 if let openList { output += "</\(openList.tag)>" }
                 openList = nil
-                let inner = inline(text, range: content)
+                let inner = inline(text, range: content, images: &images)
                 let style = level > 0 ? " style=\"margin-left: \(level)px;\"" : ""
                 output += "<div\(style)>" + (inner.isEmpty ? "<br>" : inner) + "</div>"
             }
@@ -549,10 +574,22 @@ enum RichHTML {
     }
 
     @MainActor
-    private static func inline(_ text: NSAttributedString, range: NSRange) -> String {
+    private static func inline(_ text: NSAttributedString, range: NSRange, images: inout [MailAttachment]) -> String {
         guard range.length > 0 else { return "" }
         var html = ""
+        var found: [MailAttachment] = []
         text.enumerateAttributes(in: range) { attributes, run, _ in
+            // Een afbeelding in de tekst: als cid-verwijzing, op de grootte waarop hij staat.
+            if let attachment = attributes[.attachment] as? NSTextAttachment {
+                if let image = InlineImages.mailImage(from: attachment, number: images.count + found.count + 1),
+                   let contentID = image.image.contentID {
+                    found.append(image.image)
+                    html += "<img src=\"cid:\(contentID)\" width=\"\(Int(image.size.width.rounded()))\" "
+                        + "height=\"\(Int(image.size.height.rounded()))\" alt=\"\(escape(image.image.name))\" "
+                        + "style=\"max-width: 100%; height: auto;\">"
+                }
+                return
+            }
             var piece = escape((text.string as NSString).substring(with: run))
             var styles: [String] = []
             var bold = false, italic = false
@@ -582,6 +619,7 @@ enum RichHTML {
             if let link { piece = "<a href=\"\(escape(link))\">\(piece)</a>" }
             html += piece
         }
+        images += found
         return html
     }
 
@@ -615,6 +653,67 @@ enum RichHTML {
 /// uitkomen (er kunnen twee opstelvelden open staan).
 final class RichNSTextView: NSTextView {
     weak var controller: RichTextController?
+    /// Bestanden die geen afbeelding zijn, losgelaten op de tekst: die worden gewone bijlagen.
+    var onDropFiles: (([URL]) -> Void)?
+
+    // MARK: Afbeeldingen in de tekst
+
+    /// Een afbeelding losgelaten op de tekst komt op die plek in de tekst (eerder kwam het pad van het bestand er);
+    /// andere bestanden worden bijlagen.
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        let point = convert(sender.draggingLocation, from: nil)
+        if !urls.isEmpty {
+            setSelectedRange(NSRange(location: characterIndexForInsertion(at: point), length: 0))
+            urls.filter(InlineImages.isImage).forEach(insertImage(from:))
+            let others = urls.filter { !InlineImages.isImage($0) }
+            if !others.isEmpty { onDropFiles?(others) }
+            return true
+        }
+        if let data = InlineImages.imageData(from: pasteboard) {
+            setSelectedRange(NSRange(location: characterIndexForInsertion(at: point), length: 0))
+            insertImage(data: data, name: "afbeelding.png")
+            return true
+        }
+        return super.performDragOperation(sender)
+    }
+
+    /// ⌘V met een afbeelding (een gekopieerd bestand of een schermafbeelding op het klembord): in de tekst.
+    override func paste(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        if !urls.isEmpty, urls.allSatisfy(InlineImages.isImage) {
+            urls.forEach(insertImage(from:))
+            return
+        }
+        if pasteboard.string(forType: .string) == nil, let data = InlineImages.imageData(from: pasteboard) {
+            insertImage(data: data, name: "afbeelding.png")
+            return
+        }
+        super.paste(sender)
+    }
+
+    private func insertImage(from url: URL) {
+        guard let data = try? Data(contentsOf: url) else { return }
+        insertImage(data: data, name: url.lastPathComponent)
+    }
+
+    /// Op de plek van de cursor, op ware grootte maar niet breder dan het tekstvak.
+    func insertImage(data: Data, name: String) {
+        guard let attachment = InlineImages.attachment(data: data, name: name,
+                                                       maxWidth: InlineImageCell.maximumWidth(in: self)) else {
+            NSSound.beep()
+            return
+        }
+        let image = NSMutableAttributedString(attachment: attachment)
+        image.addAttributes(typingAttributes, range: NSRange(location: 0, length: image.length))
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: image.string) else { return }
+        textStorage?.replaceCharacters(in: range, with: image)
+        didChangeText()
+        setSelectedRange(NSRange(location: range.location + image.length, length: 0))
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self, let controller,

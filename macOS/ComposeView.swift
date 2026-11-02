@@ -249,7 +249,8 @@ struct ComposeView: View {
                           focusOnAppear: isReply,
                           minHeight: ReplyTextView.twoLines,
                           onTab: acceptSuggestion,
-                          onTyped: { if activeSuggestion != nil { dismissSuggestion() } })
+                          onTyped: { if activeSuggestion != nil { dismissSuggestion() } },
+                          onDropFiles: { addFiles($0) })
                 .padding(.horizontal, 15)
                 .padding(.top, 10)
             if !bodyText.isEmpty, let activeSuggestion {
@@ -678,8 +679,12 @@ struct ComposeView: View {
     private func send() async {
         let to = MailAddress.parse(toText).valid, cc = MailAddress.parse(ccText).valid, bcc = MailAddress.parse(bccText).valid
         let name = MailSignatures.senderName(for: fromAccount).flatMap { $0.isEmpty ? nil : $0 }
-        var mail = ComposedMail(from: MailAddress(name: name, address: fromAccount), subject: subject, bodyText: bodyText)
-        mail.bodyHTML = rich.html()
+        // Afbeeldingen in de tekst gaan als cid-bijlage mee; in de tekstversie staan ze niet.
+        let plain = bodyText.replacingOccurrences(of: "\u{FFFC}", with: "")
+        var mail = ComposedMail(from: MailAddress(name: name, address: fromAccount), subject: subject, bodyText: plain)
+        let content = rich.content()
+        mail.bodyHTML = content?.html
+        mail.inlineImages = content?.images ?? []
         mail.to = to
         mail.cc = cc
         mail.bcc = bcc

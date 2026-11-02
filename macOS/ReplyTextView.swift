@@ -14,6 +14,8 @@ struct ReplyTextView: NSViewRepresentable {
     var onTab: () -> Bool
     /// De gebruiker typte zelf iets (geen overname van de suggestie).
     var onTyped: () -> Void
+    /// Bestanden (geen afbeelding) losgelaten op de tekst: als bijlage. Afbeeldingen komen in de tekst.
+    var onDropFiles: (([URL]) -> Void)?
 
     private static let inset = NSSize(width: 0, height: 4)
 
@@ -28,6 +30,7 @@ struct ReplyTextView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSTextView {
         let textView = RichNSTextView(frame: .zero)
         textView.controller = controller
+        textView.onDropFiles = onDropFiles
         textView.delegate = context.coordinator
         textView.isRichText = true
         textView.importsGraphics = false
@@ -102,6 +105,11 @@ struct ReplyTextView: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             parent.controller?.refreshState()
+            // Een afbeelding in de tekst krijgt hoekjes als hij gekozen is: opnieuw tekenen.
+            if let textView, let storage = textView.textStorage,
+               storage.containsAttachments(in: NSRange(location: 0, length: storage.length)) {
+                textView.needsDisplay = true
+            }
         }
 
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {

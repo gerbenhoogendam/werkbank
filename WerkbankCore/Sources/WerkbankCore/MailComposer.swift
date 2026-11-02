@@ -82,6 +82,8 @@ public struct ComposedMail {
     public var signatureHTML: String?
     /// Het plaatje dat de handtekening als `cid:` aanroept.
     public var signatureImage: MailAttachment?
+    /// Afbeeldingen in de tekst: `bodyHTML` roept ze aan als `cid:` + hun `contentID`.
+    public var inlineImages: [MailAttachment] = []
     public var attachments: [MailAttachment] = []
     public var inReplyTo: String?
     public var references: String?
@@ -113,21 +115,28 @@ public enum MailComposer {
                 .map { $0.isEmpty ? ">" : "> " + $0 }.joined(separator: "\n")
         }
 
-        let hasInline = mail.signatureImage != nil && (mail.signatureHTML?.contains("cid:") ?? false)
+        let logo = mail.signatureHTML?.contains("cid:") == true ? mail.signatureImage : nil
+        let inlineImages = mail.inlineImages.filter { $0.contentID != nil }
         let alternativeBoundary = boundary("alt")
         let relatedBoundary = boundary("rel")
         let mixedBoundary = boundary("mix")
 
-        // multipart/alternative( text, [multipart/related( html, logo )] )
+        // multipart/alternative( text, [multipart/related( html, logo, afbeeldingen in de tekst )] )
         var htmlEntity: Data
-        if hasInline, let image = mail.signatureImage {
+        if logo != nil || !inlineImages.isEmpty {
             var related = Data()
             related.append(line("Content-Type: multipart/related; boundary=\"\(relatedBoundary)\"; type=\"text/html\""))
             related.append(line(""))
             related.append(line("--\(relatedBoundary)"))
             related.append(textPart(html, type: "text/html"))
-            related.append(line("--\(relatedBoundary)"))
-            related.append(filePart(image, contentID: signatureContentID, inline: true))
+            if let logo {
+                related.append(line("--\(relatedBoundary)"))
+                related.append(filePart(logo, contentID: signatureContentID, inline: true))
+            }
+            for image in inlineImages {
+                related.append(line("--\(relatedBoundary)"))
+                related.append(filePart(image, contentID: image.contentID, inline: true))
+            }
             related.append(line("--\(relatedBoundary)--"))
             htmlEntity = related
         } else {

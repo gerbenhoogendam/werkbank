@@ -135,7 +135,8 @@ struct MailWindowView: View {
         // Mailmodus: het antwoord dat nog openstond toen je wegging, weer neerzetten.
         if embedded, replyRef == nil, let kept = MailModeStore.shared.takeKeptReply(threadID: ref.threadID) {
             replyAttachments = kept.attachments
-            replyBody = kept.body
+            // Zonder opmaak bewaard: afbeeldingen in de tekst gaan niet mee (hun teken wel; dat eruit).
+            replyBody = kept.body.replacingOccurrences(of: "\u{FFFC}", with: "")
             replyRef = kept.ref
         }
         taskTitle = ref.subject
