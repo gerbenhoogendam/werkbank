@@ -215,6 +215,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`MainView`). Een mail (`ThreadMailCard`) en het opstelvenster (`ComposeView`) zijn in de lichte weergave altijd wit
     (`ThingsColor.mailPaper`). Losse webadressen in de tekst van een mail worden links (`MailLinks` in WerkbankCore,
     zowel in platte tekst als in HTML, niet in tags, bestaande links, stijlen of scripts), zoals Spark.
+25. **Alles in Tijd schrijven aanpassen met dubbelklik** (3 nov, `TimeEntryRow`, `BookingDetails`, `OpenGestures` in
+    `TimeListView.swift`). Dubbelklik op de klant, de datum, de case of de uren in een regel klapt hem open en zet dat
+    veld in bewerkmodus; een klik klapt open of dicht, ook op de uren. Opengeklapt: Klant, Case, Uitgevoerd, Uren en
+    Datum, elk met dubbelklik (Return bewaart, Esc annuleert, ⌘Z draait terug). De datum leest `EntryDateText` in
+    WerkbankCore ("di 3-11-2026 16:27", "4-11", "4 nov 10:00", "9:30", "gisteren 14:00"); een andere datum schuift
+    start en einde even ver mee (`TimerService.move`), zodat de week, de dagafsluiting en de export hem op de nieuwe dag
+    tellen. Ook gepauzeerde en niet gestarte regels klappen nu open (zonder Uren). Niet aan te passen: een lopende
+    timer (`RunningTimerRow`), het totaal en de staafjes (uitgerekend). Na te gaan: dubbelklik op een veld wint van de
+    klik op de hele regel, en een ongeldige datum of uren geven de melding "niet herkend".
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

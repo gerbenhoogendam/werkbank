@@ -488,7 +488,7 @@ struct TimeEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             summaryRow
-            if expanded, entry.status == .finished {
+            if expanded, entry.status != .running {
                 BookingDetails(entry: entry, editing: $editingField)
                     .padding(.leading, 30)
                     .padding(.bottom, 10)
@@ -534,6 +534,7 @@ struct TimeEntryRow: View {
                         .strikethrough(entry.isWritten)
                         .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
                         .lineLimit(1)
+                        .modifier(gestures(.client))
                     if !entry.dictatedFields.isEmpty { DictatedMark() }
                     Text(entryDate)
                         .font(.werk(size: dateSize))
@@ -541,6 +542,7 @@ struct TimeEntryRow: View {
                         .monospacedDigit()
                         .lineLimit(1)
                         .layoutPriority(-1)
+                        .modifier(gestures(.date))
                 }
                 Group {
                     if ThemeStore.shared.look == .tischsuper {
@@ -552,14 +554,17 @@ struct TimeEntryRow: View {
                     }
                 }
                 .lineLimit(1)
+                .modifier(gestures(.caseTitle))
             }
             .contentShape(Rectangle())
-            .modifier(OpenGestures(entry: entry, expanded: $expanded, editingField: $editingField))
+            .modifier(gestures(.caseTitle))
             Spacer(minLength: 4)
 
             if entry.status == .finished { expandButton }
 
             trailingTimeView
+                .contentShape(Rectangle())
+                .modifier(gestures(.hours))
 
             if entry.status == .finished { copyButton }
 
@@ -632,6 +637,7 @@ struct TimeEntryRow: View {
                         .strikethrough(entry.isWritten)
                         .foregroundStyle(entry.isWritten ? ThingsColor.textSecondary : ThingsColor.textPrimary)
                         .lineLimit(1)
+                        .modifier(gestures(.client))
                     if !entry.dictatedFields.isEmpty { DictatedMark() }
                     Text(entryDate)
                         .font(.werk(size: 10))
@@ -639,14 +645,16 @@ struct TimeEntryRow: View {
                         .monospacedDigit()
                         .lineLimit(1)
                         .layoutPriority(-1)
+                        .modifier(gestures(.date))
                 }
                 Text(caseLine)
                     .font(.werk(size: 11.5))
                     .foregroundStyle(ThingsColor.textSecondary)
                     .lineLimit(1)
+                    .modifier(gestures(.caseTitle))
             }
             .contentShape(Rectangle())
-            .modifier(OpenGestures(entry: entry, expanded: $expanded, editingField: $editingField))
+            .modifier(gestures(.caseTitle))
             Spacer(minLength: 4)
 
             if entry.status == .finished {
@@ -657,6 +665,8 @@ struct TimeEntryRow: View {
             Text(trailingTime)
                 .font(.werkSerif(size: 17))
                 .foregroundStyle(ThingsColor.textPrimary)
+                .contentShape(Rectangle())
+                .modifier(gestures(.hours))
 
             controls
         }
@@ -690,6 +700,11 @@ struct TimeEntryRow: View {
         .disabled(!canMark)
         .help(canMark ? "Geschreven in het facturatiesysteem" : "Stop eerst de timer")
         .accessibilityLabel(entry.isWritten ? "Geschreven" : "Markeer als geschreven")
+    }
+
+    /// Klik klapt open of dicht; dubbelklik klapt open en zet `field` meteen in bewerkmodus.
+    private func gestures(_ field: BookingField) -> OpenGestures {
+        OpenGestures(entry: entry, field: field, expanded: $expanded, editingField: $editingField)
     }
 
     private var expandButton: some View {
@@ -760,9 +775,11 @@ struct TimeEntryRow: View {
     }
 }
 
-/// Klik klapt een afgeronde regel open; dubbelklik klapt open en zet de case meteen in bewerkmodus.
+/// Klik klapt een regel open; dubbelklik klapt open en zet het aangeklikte veld (klant, datum, case, uren) meteen in
+/// bewerkmodus. Een lopende timer niet (die staat in `RunningTimerRow`); uren alleen bij een afgeronde regel.
 private struct OpenGestures: ViewModifier {
     let entry: TimeEntry
+    let field: BookingField
     @Binding var expanded: Bool
     @Binding var editingField: BookingField?
 
@@ -770,12 +787,12 @@ private struct OpenGestures: ViewModifier {
         content
             // Eerst dubbelklik, dan enkele klik: anders wint de enkele klik altijd.
             .onTapGesture(count: 2) {
-                guard entry.status == .finished else { return }
+                guard entry.status != .running else { return }
                 withAnimation(.easeOut(duration: 0.15)) { expanded = true }
-                editingField = .caseTitle
+                editingField = BookingDetails.canEdit(field, of: entry) ? field : nil
             }
             .onTapGesture {
-                guard entry.status == .finished else { return }
+                guard entry.status != .running else { return }
                 withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
             }
     }
@@ -786,7 +803,7 @@ private struct OpenGestures: ViewModifier {
 /// Klant, case en uitgevoerd van een afgeronde regel: aan te passen en per veld te kopiëren.
 /// Velden van een afgeronde regel die je met een dubbelklik aanpast.
 enum BookingField: Hashable {
-    case client, caseTitle, performed, hours
+    case client, caseTitle, performed, hours, date
 
     /// Het ingesproken veld dat hierbij hoort.
     var dictated: DictatedField? {
@@ -794,7 +811,7 @@ enum BookingField: Hashable {
         case .client: .client
         case .caseTitle: .caseTitle
         case .performed: .performed
-        case .hours: nil
+        case .hours, .date: nil
         }
     }
 
@@ -804,16 +821,18 @@ enum BookingField: Hashable {
         case .caseTitle: "Case"
         case .performed: "Uitgevoerd"
         case .hours: "Uren"
+        case .date: "Datum"
         }
     }
 }
 
-/// Klant, case, uitgevoerd en uren: dubbelklik om aan te passen (Return bewaart, Esc annuleert, ⌘Z draait terug),
-/// per regel kopiëren.
+/// Klant, case, uitgevoerd, uren en datum: dubbelklik om aan te passen (Return bewaart, Esc annuleert, ⌘Z draait
+/// terug), per regel kopiëren. Uren alleen bij een afgeronde regel (een gepauzeerde timer meet nog).
 private struct BookingDetails: View {
     @Bindable var entry: TimeEntry
     @Binding var editing: BookingField?
     @Environment(\.modelContext) private var context
+    @Environment(AppState.self) private var appState
     @State private var draft = ""
     @State private var cancelled = false
     @FocusState private var focused: Bool
@@ -821,6 +840,10 @@ private struct BookingDetails: View {
     /// Zoals het in het documentatiepakket komt.
     static func documentationText(_ entry: TimeEntry) -> String {
         "Case: \(entry.title)\nUitgevoerd: \(entry.workDescription)"
+    }
+
+    static func canEdit(_ field: BookingField, of entry: TimeEntry) -> Bool {
+        field != .hours || entry.status == .finished
     }
 
     var body: some View {
@@ -842,7 +865,8 @@ private struct BookingDetails: View {
                 }
                 .offset(x: -30)
             }
-            row(.hours, copy: value(.hours))
+            if Self.canEdit(.hours, of: entry) { row(.hours, copy: value(.hours)) }
+            row(.date, copy: value(.date))
         }
         .thingsFont(.notes)
         .onChange(of: editing, initial: true) { old, new in
@@ -863,6 +887,7 @@ private struct BookingDetails: View {
         case .caseTitle: entry.title
         case .performed: entry.workDescription
         case .hours: Billing.formatHours(TimerService.billedHours(entry))
+        case .date: EntryDateText.text(entry.createdAt)
         }
     }
 
@@ -883,7 +908,8 @@ private struct BookingDetails: View {
                 } else {
                     let text = value(field)
                     Text(text.isEmpty ? "—" : text)
-                        .foregroundStyle(text.isEmpty || field == .hours ? ThingsColor.textSecondary : ThingsColor.textPrimary)
+                        .foregroundStyle(text.isEmpty || field == .hours || field == .date
+                                         ? ThingsColor.textSecondary : ThingsColor.textPrimary)
                         .monospacedDigit()
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -909,7 +935,7 @@ private struct BookingDetails: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
                 .onSubmit { editing = nil }
-        case .caseTitle, .hours:
+        case .caseTitle, .hours, .date:
             TextField("", text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
@@ -930,8 +956,19 @@ private struct BookingDetails: View {
         case .performed:
             entry.workDescription = trimmed
         case .hours:
-            guard let hours = Self.parseHours(trimmed) else { return }
+            guard let hours = Self.parseHours(trimmed) else {
+                if !trimmed.isEmpty { appState.announce("Uren niet herkend: \(trimmed)", seconds: 3) }
+                return
+            }
             entry.accumulated = hours * 3600 + entry.correctionSeconds
+        case .date:
+            guard let date = EntryDateText.parse(trimmed, base: entry.createdAt) else {
+                if !trimmed.isEmpty { appState.announce("Datum niet herkend: \(trimmed)", seconds: 3) }
+                return
+            }
+            // Op de minuut gelijk: niets veranderd (anders zou ⌘Z een lege stap krijgen).
+            guard EntryDateText.text(date) != EntryDateText.text(entry.createdAt) else { return }
+            TimerService.move(entry, to: date)
         }
         // Zelf aangepast: nagelezen, dus geen microfoon meer.
         if Values(entry) != before, let dictated = field.dictated { entry.dictatedFields.remove(dictated) }
@@ -966,6 +1003,10 @@ private struct BookingDetails: View {
         var performed: String
         var accumulated: TimeInterval
         var dictated: String
+        var createdAt: Date
+        var firstStart: Date?
+        var lastStart: Date?
+        var finishedAt: Date?
 
         init(_ entry: TimeEntry) {
             client = entry.client
@@ -973,6 +1014,10 @@ private struct BookingDetails: View {
             performed = entry.workDescription
             accumulated = entry.accumulated
             dictated = entry.dictatedRaw
+            createdAt = entry.createdAt
+            firstStart = entry.firstStart
+            lastStart = entry.lastStart
+            finishedAt = entry.finishedAt
         }
 
         func apply(to entry: TimeEntry) {
@@ -981,6 +1026,10 @@ private struct BookingDetails: View {
             entry.workDescription = performed
             entry.accumulated = accumulated
             entry.dictatedRaw = dictated
+            entry.createdAt = createdAt
+            entry.firstStart = firstStart
+            entry.lastStart = lastStart
+            entry.finishedAt = finishedAt
         }
     }
 }

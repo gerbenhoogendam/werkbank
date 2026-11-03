@@ -223,6 +223,18 @@ enum TimerService {
         try? context.save()
     }
 
+    /// Zet een regel op een andere dag of tijd (`createdAt`, wat de lijst toont): start en einde schuiven even ver mee,
+    /// zodat de week, de dagafsluiting en de export hem op de nieuwe dag tellen. De gemeten tijd blijft gelijk. Het
+    /// pauzemoment van een gepauzeerde timer blijft staan (daarmee wordt bij hervatten de pauze uitgerekend).
+    static func move(_ entry: TimeEntry, to date: Date) {
+        let delta = date.timeIntervalSince(entry.createdAt)
+        guard delta != 0, entry.status != .running else { return }
+        entry.createdAt = date
+        entry.firstStart = entry.firstStart?.addingTimeInterval(delta)
+        entry.lastStart = entry.lastStart?.addingTimeInterval(delta)
+        entry.finishedAt = entry.finishedAt?.addingTimeInterval(delta)
+    }
+
     /// Te factureren uren van een afgeronde regel.
     static func billedHours(_ entry: TimeEntry) -> Double {
         Billing.billedHours(seconds: max(0, entry.accumulated - entry.correctionSeconds),
