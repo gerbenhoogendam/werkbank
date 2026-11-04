@@ -79,6 +79,9 @@ public struct ComposedMail {
     /// Het oorspronkelijke bericht bij beantwoorden of doorsturen, met de aanhef ("Op … schreef …:").
     public var quote: String?
     public var quoteIntro: String?
+    /// Doorsturen: het oorspronkelijke bericht als HTML (met opmaak en afbeeldingen, die in `inlineImages` meegaan);
+    /// `quote` blijft de tekstversie.
+    public var quoteHTML: String?
     public var signatureHTML: String?
     /// Het plaatje dat de handtekening als `cid:` aanroept.
     public var signatureImage: MailAttachment?
@@ -326,7 +329,12 @@ public enum MailComposer {
             // Elk ouder bericht in het citaat een eigen, dieper citaat: Apple Mail en Werkbank kleuren ze per niveau.
             let style = "margin: 6px 0 0 0; padding-left: 10px; border-left: 2px solid #c8c8cc; color: #55555a;"
             let open = "<blockquote type=\"cite\" style=\"\(style)\">"
-            html += QuoteLevels.nestFlatQuotes(open + paragraphs(quote) + "</blockquote>", openTag: open) + "</div>"
+            if let quoteHTML = mail.quoteHTML {
+                // De oudere berichten in een Outlook-gesprek ook als eigen citaat.
+                html += open + QuoteLevels.nestOutlookHistory(quoteHTML, openTag: open) + "</blockquote></div>"
+            } else {
+                html += QuoteLevels.nestFlatQuotes(open + paragraphs(quote) + "</blockquote>", openTag: open) + "</div>"
+            }
         }
         html += "</body></html>"
         return html

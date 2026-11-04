@@ -52,6 +52,7 @@ struct SignaturePreferences: View {
                     Text("Nieuwste mail onderaan").tag(true)
                     Text("Nieuwste mail bovenaan").tag(false)
                 }
+                QuoteColorsSection()
             }
 
             DefaultMailAppSection()

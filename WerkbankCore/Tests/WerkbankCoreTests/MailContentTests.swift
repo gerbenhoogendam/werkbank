@@ -166,6 +166,48 @@ final class MailContentTests: XCTestCase {
         XCTAssertEqual(plain.displayHTML, "<pre class=\"plain\">1 &lt; 2 &amp; 3 &gt; 2</pre>")
     }
 
+    /// Doorsturen: de inhoud van <body> met de stijlen uit de kop, zonder scripts; cid-afbeeldingen gaan mee, een
+    /// afbeelding met alleen een naam krijgt een Content-ID.
+    func testForwardableHTMLKeepsImagesAndStyles() {
+        let png = b64(7)
+        let gif = b64(9)
+        let raw = """
+        From: a@example.com
+        Subject: Offerte
+        Content-Type: multipart/related; boundary="R"
+
+        --R
+        Content-Type: text/html; charset=utf-8
+
+        <html><head><style>p.MsoNormal{margin:0}</style><title>x</title></head><body lang=NL><p class=MsoNormal>Zie:</p><img src="cid:shot"><img src="logo.gif"><script>alert(1)</script></body></html>
+        --R
+        Content-Type: image/png
+        Content-ID: <shot>
+        Content-Transfer-Encoding: base64
+
+        \(png)
+        --R
+        Content-Type: image/gif
+        Content-Location: logo.gif
+        Content-Transfer-Encoding: base64
+
+        \(gif)
+        --R--
+        """
+        let mail = MailContentParser.parse(Data(raw.utf8))
+        let html = mail.forwardHTML ?? ""
+        XCTAssertTrue(html.hasPrefix("<style>p.MsoNormal{margin:0}</style><p class=MsoNormal>Zie:</p>"), html)
+        XCTAssertTrue(html.contains(#"<img src="cid:shot">"#))
+        XCTAssertFalse(html.contains("<script"))
+        XCTAssertFalse(html.contains("<title>"))
+        XCTAssertEqual(mail.forwardImages.count, 2)
+        let logo = mail.forwardImages.first { $0.mediaType == "image/gif" }
+        XCTAssertNotNil(logo?.contentID)
+        XCTAssertTrue(html.contains("src=\"cid:\(logo?.contentID ?? "-")\""), html)
+        // Platte tekst: niets om door te sturen als HTML.
+        XCTAssertNil(MailContentParser.parse(Data("From: a@b.nl\nSubject: x\n\nHoi".utf8)).forwardHTML)
+    }
+
     /// Een handtekening die met de bestandsnaam naar zijn plaatje verwijst (Content-Location, geen cid): in de tekst, geen
     /// bijlage. Een klein ingesloten plaatje met cid waar de tekst niet naar verwijst: ook geen bijlage. Een gewone
     /// bijlage blijft.

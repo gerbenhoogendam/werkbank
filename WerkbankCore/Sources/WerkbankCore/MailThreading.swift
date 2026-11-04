@@ -6,87 +6,103 @@ public enum QuoteLevels {
     /// Platte tekst (`<pre class="plain">`) en citaten van platte tekst met `<br>` (zoals Werkbank en veel doorgestuurde
     /// mail ze maken) krijgen hun niveaus als geneste citaten; de rest van de HTML blijft zoals hij is.
     public static func nest(_ html: String) -> String {
-        html.contains(#"<pre class="plain">"#) ? nestPlainQuotes(html) : nestFlatQuotes(html)
+        html.contains(#"<pre class="plain">"#) ? nestPlainQuotes(html) : nestFlatQuotes(nestOutlookHistory(html))
     }
 
-    /// Werkt alleen binnen `<pre class="plain">…</pre>` (de weergave van platte tekst); de tekens zijn daar al als
-    /// `&gt;` geschreven. Regels met ">" gaan een niveau dieper per ">", en een ouder bericht zonder ">" (na
-    /// "On … wrote:", vanaf "-----Oorspronkelijk bericht-----") ook. De rest van de HTML blijft zoals hij is.
-    public static func nestPlainQuotes(_ html: String) -> String {
-        let open = #"<pre class="plain">"#
-        guard let start = html.range(of: open), let end = html.range(of: "</pre>", options: .backwards),
-              start.upperBound <= end.lowerBound else { return html }
-        let text = String(html[start.upperBound..<end.lowerBound])
-        let lines = text.components(separatedBy: "\n").map { split($0) }
-        let extra = headerLevels(lines.map { plainText($0.rest) }, depths: lines.map(\.depth))
-        guard lines.contains(where: { $0.depth > 0 }) || extra.contains(where: { $0 > 0 }) else { return html }
-        var output = ""
-        var level = 0
-        var segment: [String] = []
-        for (line, more) in zip(lines, extra) {
-            let target = line.depth + more
-            if target != level {
-                output += segment.joined(separator: "\n")
-                segment = []
-                while level < target { output += #"<blockquote type="cite">"#; level += 1 }
-                while level > target { output += "</blockquote>"; level -= 1 }
-            }
-            segment.append(line.rest)
+    // MARK: Outlook
+
+    /// De kop van een ouder bericht in Outlook-HTML: een blok met een lijn erboven (Word, Outlook voor Mac) of
+    /// `divRplyFwdMsg` (Outlook op het web en de nieuwe Outlook).
+    private static let outlookHeader = try! NSRegularExpression(
+        pattern: #"<div\b[^>]*(?:\bid\s*=\s*["']?divRplyFwdMsg\b|style\s*=\s*["'][^"']*border-top\s*:\s*solid)[^>]*>"#,
+        options: [.caseInsensitive])
+    /// De tags die een blok openen of sluiten (om het einde van het blok rond een kop te vinden).
+    private static let blockTag = try! NSRegularExpression(
+        pattern: #"<(/?)(div|blockquote|table|tbody|thead|tr|td|th|ul|ol|li|body|html)\b[^>]*?(/?)>"#,
+        options: [.caseInsensitive])
+
+    /// Outlook zet oudere berichten niet in een citaat maar plat onder elkaar, elk onder een kop ("Van: … Verzonden: …").
+    /// Vanaf elke kop tot het einde van het blok eromheen wordt het een citaat (`openTag`), zodat de berichten per niveau
+    /// gekleurd worden en inspringen. Zonder zo'n kop blijft de HTML zoals hij is.
+    public static func nestOutlookHistory(_ html: String, openTag: String = #"<blockquote type="cite">"#) -> String {
+        guard html.range(of: "border-top", options: .caseInsensitive) != nil
+                || html.range(of: "divRplyFwdMsg", options: .caseInsensitive) != nil else { return html }
+        let text = html as NSString
+        var inserts: [(at: Int, tag: String)] = []
+        for match in outlookHeader.matches(in: html, range: NSRange(location: 0, length: text.length)) {
+            guard isOutlookHeader(text, after: NSMaxRange(match.range)) else { continue }
+            let start = wrapperStart(text, header: match.range) ?? match.range.location
+            guard let end = blockEnd(text, from: start) else { continue }
+            inserts.append((start, openTag))
+            inserts.append((end, "</blockquote>"))
         }
-        output += segment.joined(separator: "\n")
-        output += String(repeating: "</blockquote>", count: level)
-        return String(html[..<start.upperBound]) + output + String(html[end.lowerBound...])
+        guard !inserts.isEmpty else { return html }
+        // Van achteren naar voren invoegen, zodat de plaatsen ervoor blijven kloppen.
+        let result = NSMutableString(string: html)
+        for insert in inserts.sorted(by: { $0.at > $1.at }) { result.insert(insert.tag, at: insert.at) }
+        return result as String
     }
 
-    /// Een citaat dat platte tekst met `<br>` is (geen eigen blokken erin): de oudere berichten erin een niveau dieper,
-    /// elk in een eigen `openTag`. Andere citaten blijven zoals ze zijn.
-    public static func nestFlatQuotes(_ html: String, openTag: String = #"<blockquote type="cite">"#) -> String {
-        guard html.range(of: "<blockquote", options: .caseInsensitive) != nil else { return html }
-        var output = ""
-        var cursor = html.startIndex
-        var search = html.startIndex
-        while let open = html.range(of: "<blockquote", options: .caseInsensitive, range: search..<html.endIndex) {
-            guard let tagEnd = html.range(of: ">", range: open.upperBound..<html.endIndex),
-                  let close = html.range(of: "</blockquote", options: .caseInsensitive,
-                                         range: tagEnd.upperBound..<html.endIndex) else { break }
-            // Alleen het binnenste citaat: staat er nog een in, dan daar verder.
-            if let inner = html.range(of: "<blockquote", options: .caseInsensitive, range: tagEnd.upperBound..<close.lowerBound) {
-                search = inner.lowerBound
-                continue
-            }
-            if let nested = nestedFlat(String(html[tagEnd.upperBound..<close.lowerBound]), openTag: openTag) {
-                output += String(html[cursor..<tagEnd.upperBound]) + nested
-                cursor = close.lowerBound
-            }
-            search = close.upperBound
-        }
-        guard cursor != html.startIndex else { return html }
-        return output + String(html[cursor...])
+    /// Begint de tekst na de tag met "Van:" of "From:", met kort daarna "Verzonden:", "Sent:", "Datum:" of "Date:"?
+    private static func isOutlookHeader(_ text: NSString, after offset: Int) -> Bool {
+        let length = min(2_000, text.length - offset)
+        guard length > 0 else { return false }
+        let visible = plainText(text.substring(with: NSRange(location: offset, length: length))
+            .replacingOccurrences(of: "<[^>]*>", with: " ", options: .regularExpression))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard visible.range(of: #"(?i)^(van|from)\s*:"#, options: .regularExpression) != nil else { return false }
+        return String(visible.prefix(600)).range(of: #"(?i)\b(verzonden|sent|datum|date)\s*:"#, options: .regularExpression) != nil
     }
 
-    private static let blockTags = #"(?i)<(div|p|table|ul|ol|pre|blockquote|h[1-6])\b"#
+    /// Staat de kop als enige in een kaal `<div>` (zo doet Word het), dan begint het citaat bij dat `<div>`: anders
+    /// zou het `</div>` erna het citaat al sluiten.
+    private static func wrapperStart(_ text: NSString, header: NSRange) -> Int? {
+        let lookBack = min(200, header.location)
+        let before = text.substring(with: NSRange(location: header.location - lookBack, length: lookBack))
+        guard let open = before.range(of: #"<div\b[^>]*>\s*$"#, options: [.regularExpression, .caseInsensitive]),
+              let close = elementEnd(text, openTag: header) else { return nil }
+        // Na het einde van de kop meteen het `</div>` van de omhulling?
+        let rest = text.substring(with: NSRange(location: close, length: min(40, text.length - close)))
+        guard rest.range(of: #"^\s*</div\s*>"#, options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
+        return header.location - (String(before[open.lowerBound...]) as NSString).length
+    }
 
-    private static func nestedFlat(_ inner: String, openTag: String) -> String? {
-        guard inner.range(of: blockTags, options: .regularExpression) == nil else { return nil }
-        let lines = inner.replacingOccurrences(of: #"(?i)<br\s*/?>\n?"#, with: "\u{1}", options: .regularExpression)
-            .components(separatedBy: "\u{1}")
-        let levels = headerLevels(lines.map(plainText))
-        guard let top = levels.max(), top > 0 else { return nil }
-        var output = ""
-        var level = 0
-        var segment: [String] = []
-        for (line, target) in zip(lines, levels) {
-            if target != level {
-                output += segment.joined(separator: "<br>\n")
-                segment = []
-                while level < target { output += openTag; level += 1 }
-                while level > target { output += "</blockquote>"; level -= 1 }
+    /// Het einde (na de sluittag) van het element dat met `openTag` begint.
+    private static func elementEnd(_ text: NSString, openTag: NSRange) -> Int? {
+        var depth = 1
+        var end: Int?
+        let from = NSMaxRange(openTag)
+        blockTag.enumerateMatches(in: text as String, range: NSRange(location: from, length: text.length - from)) { match, _, stop in
+            guard let match else { return }
+            if match.range(at: 1).length > 0 { depth -= 1 } else if match.range(at: 3).length == 0 { depth += 1 }
+            if depth == 0 {
+                end = NSMaxRange(match.range)
+                stop.pointee = true
             }
-            segment.append(line)
         }
-        output += segment.joined(separator: "<br>\n")
-        output += String(repeating: "</blockquote>", count: level)
-        return output
+        return end
+    }
+
+    /// Waar het blok eindigt waarin `start` staat: de eerste sluittag zonder bijbehorende opening vanaf daar, of
+    /// `</body>`, of het einde van de HTML.
+    private static func blockEnd(_ text: NSString, from start: Int) -> Int? {
+        var depth = 0
+        var end = text.length
+        blockTag.enumerateMatches(in: text as String, range: NSRange(location: start, length: text.length - start)) { match, _, stop in
+            guard let match else { return }
+            let closing = match.range(at: 1).length > 0
+            let name = text.substring(with: match.range(at: 2)).lowercased()
+            let outer = name == "body" || name == "html"
+            if closing, outer || depth == 0 {
+                end = match.range.location
+                stop.pointee = true
+            } else if closing {
+                depth -= 1
+            } else if match.range(at: 3).length == 0, !outer {
+                depth += 1
+            }
+        }
+        return end
     }
 
     // MARK: Waar een ouder bericht begint

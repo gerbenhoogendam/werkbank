@@ -816,6 +816,9 @@ struct AutoHeightMailWebView: NSViewRepresentable {
     @Binding var height: CGFloat
     /// Ruimte rond de inhoud (CSS-marge van de body).
     var margin = "0"
+    // Andere citaatkleuren in Voorkeuren: opnieuw tekenen.
+    @AppStorage(QuoteColors.enabledKey) private var quoteColorsOn = true
+    @AppStorage(QuoteColors.colorsKey) private var quoteColors = ""
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -834,14 +837,17 @@ struct AutoHeightMailWebView: NSViewRepresentable {
     func updateNSView(_ view: PassthroughWebView, context: Context) {
         context.coordinator.parent = self
         // Vergelijk de HTML zelf; het document eromheen pas bouwen als er echt iets anders te tonen is.
-        guard context.coordinator.lastHTML != html else { return }
+        let style = QuoteColors.signature
+        guard context.coordinator.lastHTML != html || context.coordinator.lastStyle != style else { return }
         context.coordinator.lastHTML = html
+        context.coordinator.lastStyle = style
         view.loadHTMLString(MailWebView.document(html, allowRemote: true, margin: margin, fitsContent: true), baseURL: nil)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var parent: AutoHeightMailWebView
         var lastHTML: String?
+        var lastStyle: String?
         private weak var webView: WKWebView?
         private var lastWidth: CGFloat = 0
         private var observer: NSObjectProtocol?
@@ -909,6 +915,9 @@ final class PassthroughWebView: WKWebView {
 struct MailWebView: NSViewRepresentable {
     let html: String
     let allowRemote: Bool
+    // Andere citaatkleuren in Voorkeuren: opnieuw tekenen.
+    @AppStorage(QuoteColors.enabledKey) private var quoteColorsOn = true
+    @AppStorage(QuoteColors.colorsKey) private var quoteColors = ""
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -923,26 +932,16 @@ struct MailWebView: NSViewRepresentable {
 
     func updateNSView(_ view: WKWebView, context: Context) {
         // De invoer vergelijken; het document (met bewerkingen over de hele HTML) alleen bouwen als die anders is.
-        if let last = context.coordinator.lastInput, last.html == html, last.allowRemote == allowRemote { return }
-        context.coordinator.lastInput = (html, allowRemote)
+        let style = QuoteColors.signature
+        if let last = context.coordinator.lastInput, last.html == html, last.allowRemote == allowRemote, last.style == style {
+            return
+        }
+        context.coordinator.lastInput = (html, allowRemote, style)
         view.loadHTMLString(Self.document(html, allowRemote: allowRemote), baseURL: nil)
     }
 
     /// Een citaat: `blockquote type="cite"` (Apple Mail, Werkbank, platte tekst met ">") of `blockquote.gmail_quote`.
     private static let quote = #":is(blockquote[type="cite" i], blockquote.gmail_quote)"#
-
-    private static let quoteLevels: String = {
-        // Streep en tekst per niveau: paars, groenblauw, groen, zoals ingesteld in Apple Mail. De tekstkleuren zijn
-        // donker genoeg voor wit (minstens 4,5:1). Ook over een grijze tekstkleur van de afzender heen; tekst die zelf
-        // een kleur heeft, houdt die.
-        let colors = [("#5856D6", "#5856D6"), ("#4AA9C9", "#1E7A99"), ("#5ABE32", "#2E7D1A")]
-        return (1...6).map { level -> String in
-            let selector = Array(repeating: MailWebView.quote, count: level).joined(separator: " ")
-            let (bar, text) = colors[(level - 1) % colors.count]
-            return "\(selector) { margin: 8px 0 8px 2px !important; padding: 0 0 0 12px !important; "
-                + "border: none !important; border-left: 2px solid \(bar) !important; color: \(text) !important; }"
-        }.joined(separator: "\n")
-    }()
 
     static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
         let images = allowRemote ? "img-src data: https: http: \(MailImageLoader.scheme):" : "img-src data:"
@@ -959,9 +958,9 @@ struct MailWebView: NSViewRepresentable {
         img { max-width: 100%; height: auto; }
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }
         blockquote { margin: 8px 0 8px 4px; padding-left: 12px; border-left: 3px solid #d0d0d5; color: #55555a; }
-        /* Citaten per niveau in een eigen kleur en ingesprongen, zoals in Apple Mail: paars, groenblauw, groen, en weer
-           van voren af. Ook als de afzender er zelf een grijze streep aan gaf (Gmail, Outlook op het web). */
-        \(Self.quoteLevels)
+        /* Citaten per niveau in een eigen kleur en ingesprongen, zoals in Apple Mail (Voorkeuren › Mail: standaard paars,
+           groenblauw, groen, en weer van voren af). Ook als de afzender er zelf een grijze streep aan gaf. */
+        \(QuoteColors.css(quote: Self.quote))
         table { max-width: 100%; }
         \(fitsContent ? "html, body { overflow: hidden; }" : "")
         </style></head><body>\(body)</body></html>
@@ -969,7 +968,7 @@ struct MailWebView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var lastInput: (html: String, allowRemote: Bool)?
+        var lastInput: (html: String, allowRemote: Bool, style: String)?
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

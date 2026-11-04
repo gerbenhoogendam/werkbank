@@ -461,15 +461,22 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 
 ## Open punten
 
-- Citaten in de weergave per niveau gekleurd en ingesprongen zoals in Apple Mail (paars, groenblauw, groen, de kleuren
-  uit Apple Mail van de eigenaar; `MailWebView.quoteLevels`, voor `blockquote type="cite"` en `blockquote.gmail_quote`,
-  ook over de grijze streep en tekstkleur van de afzender heen). `QuoteLevels.nest` zet vooraf de niveaus: platte tekst
-  met ">" en een citaat dat platte tekst met `<br>` is (zo stuurde Werkbank door) krijgen per ouder bericht een dieper
-  citaat, na een aanhef ("On … wrote:", "Op … heeft … het volgende geschreven:") en vanaf een kop
-  ("-----Oorspronkelijk bericht-----", "Van: … Verzonden: …"); `QuoteLevels.headerLevels`. Werkbank verstuurt een
-  citaat nu zelf zo genest (en met ">>" in de tekstversie), en de kop van een doorgestuurde mail staat op eigen regels.
-  Niet gedaan: Outlook-HTML, waar de oudere berichten plat onder elkaar in eigen blokken staan (geen citaat), blijft
-  zonder kleur; doorsturen citeert nog de tekst van de mail, niet de HTML (afbeeldingen en opmaak gaan verloren).
+- Citaten in de weergave per niveau gekleurd en ingesprongen zoals in Apple Mail (`MailWebView.document` met
+  `QuoteColors.css`, voor `blockquote type="cite"` en `blockquote.gmail_quote`, ook over de grijze streep en tekstkleur
+  van de afzender heen). Voorkeuren › Mail › Gesprekken: "Ken kleur toe aan geciteerde tekst" en per niveau een kleur
+  (`QuoteColors`, standaard paars, groenblauw, groen; uit: grijze streep, tekst in de kleur van de mail; gaat mee naar
+  je andere Macs). `QuoteLevels.nest` zet vooraf de niveaus:
+  - platte tekst met ">" en een citaat dat platte tekst met `<br>` is: per ouder bericht een dieper citaat, na een
+    aanhef ("On … wrote:", "Op … heeft … het volgende geschreven:") en vanaf een kop ("-----Oorspronkelijk bericht-----",
+    "Van: … Verzonden: …"); `QuoteLevels.headerLevels`.
+  - Outlook-HTML (`nestOutlookHistory`): vanaf elk kopblok (Word/Outlook voor Mac: `div` met `border-top:solid`,
+    Outlook op het web: `divRplyFwdMsg`, met "Van:/From:" en "Verzonden:/Sent:" erin) tot het einde van het blok eromheen
+    wordt het een citaat. Staat de kop als enige in een kaal `<div>` (Word), dan begint het daar. Na te gaan met echte
+    Outlook-mails: sluit het citaat op de goede plek, en geen vreemde inspringing bij nieuwsbrieven met een lijn.
+  Werkbank verstuurt een citaat zelf genest (en met ">>" in de tekstversie); de kop van een doorgestuurde mail staat op
+  eigen regels. Doorsturen stuurt de mail zelf als HTML mee (`MailContent.forwardHTML`: de inhoud van `<body>` met de
+  stijlen uit de kop, zonder scripts; `forwardImages`: de afbeeldingen met cid, en met alleen een naam een eigen
+  Content-ID), als die samen met de bijlagen binnen 18 MB blijft; anders de tekst. Beantwoorden citeert nog de tekst.
 - Handtekeningafbeeldingen: een afbeelding telt als "in de tekst" bij cid, Content-Location of bestandsnaam
   (`MailContentParser.imageReferences`/`isReferenced`, `inlineNamedImages` zet hem op zijn plek); een ingesloten
   afbeelding met cid tot 100 KB waar de tekst niet naar verwijst, is geen bijlage (`embeddedImageLimit`). In de

@@ -54,6 +54,23 @@ final class MailComposerTests: XCTestCase {
         XCTAssertTrue(parsed.quotableText.contains(">> Dag Jan"), parsed.quotableText)
     }
 
+    func testForwardWithHTMLKeepsImages() {
+        var mail = sample()
+        mail.quoteIntro = ReplyBuilder.quoteIntro(date: "1 nov 2026", from: "Jan Jansen", forward: true, subject: "Offerte")
+        mail.quote = "Zie bijlage"
+        mail.quoteHTML = #"<p class=MsoNormal>Zie <b>bijlage</b></p><img src="cid:shot@x">"#
+        mail.inlineImages = [MailAttachment(name: "shot.png", mediaType: "image/png", data: Data(repeating: 1, count: 4000),
+                                            contentID: "shot@x")]
+        let raw = MailComposer.build(mail)
+        let text = String(data: raw, encoding: .utf8) ?? ""
+        XCTAssertTrue(text.contains("Content-ID: <shot@x>"))
+        let parsed = MailContentParser.parse(raw)
+        XCTAssertTrue(parsed.displayHTML.contains("Zie <b>bijlage</b>"), parsed.displayHTML)
+        XCTAssertTrue(parsed.displayHTML.contains("data:image/png;base64,"))
+        // De tekstversie blijft de tekst.
+        XCTAssertTrue(parsed.quotableText.contains("> Zie bijlage"), parsed.quotableText)
+    }
+
     func testBodyHTMLReplacesPlainParagraphs() {
         var mail = sample()
         mail.bodyText = "Hoi,\n•\tpunt"

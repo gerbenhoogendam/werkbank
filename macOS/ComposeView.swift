@@ -797,6 +797,15 @@ struct ComposeView: View {
             mail.quote = original.quotableText
             mail.quoteIntro = ReplyBuilder.quoteIntro(date: original.date, from: original.from, forward: ref.mode == .forward,
                                                       subject: original.subject)
+            // Doorsturen: de mail zelf met opmaak en afbeeldingen, als dat samen met de bijlagen binnen de grens blijft
+            // (anders de tekst).
+            if ref.mode == .forward, let html = original.forwardHTML {
+                let imageBytes = original.forwardImages.reduce(0) { $0 + $1.data.count }
+                if totalAttachmentBytes + imageBytes <= Self.maxAttachmentBytes {
+                    mail.quoteHTML = html
+                    mail.inlineImages += original.forwardImages
+                }
+            }
         }
         if isReply, let original {
             mail.inReplyTo = original.messageID

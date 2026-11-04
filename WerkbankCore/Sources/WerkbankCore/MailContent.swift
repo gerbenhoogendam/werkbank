@@ -51,6 +51,10 @@ public struct MailContent: Equatable {
     public var quotableText: String = ""
     /// Echte bijlagen: alles wat niet als afbeelding in de tekst staat (`cid:`), in de volgorde van de mail.
     public var files: [MailAttachment] = []
+    /// Voor doorsturen: de HTML van de mail om in een andere mail te zetten (de inhoud van `<body>`, met de stijlen
+    /// en zonder scripts; afbeeldingen als `cid:`), en de afbeeldingen waar die naar verwijst. `nil` bij platte tekst.
+    public var forwardHTML: String?
+    public var forwardImages: [MailAttachment] = []
 
     /// Kop van de mail als platte tekst (alleen ingevulde regels).
     public var headerText: String {
@@ -115,6 +119,7 @@ public enum MailContentParser {
             blocks.append(contentsOf: block(for: attachments[index]))
         }
 
+        let forward = walked.html.map { forwardable(html: $0, attachments: attachments) }
         let quotable: String
         if let plain = walked.plain {
             quotable = MIMEBody.tidy(plain)
@@ -128,7 +133,8 @@ public enum MailContentParser {
                            displayHTML: displayHTML(html: walked.html, plain: walked.plain, attachments: attachments),
                            messageID: field("message-id"), references: field("references"),
                            replyTo: field("reply-to"), quotableText: quotable,
-                           files: files(attachments, html: walked.html))
+                           files: files(attachments, html: walked.html),
+                           forwardHTML: forward?.html, forwardImages: forward?.images ?? [])
     }
 
     // MARK: - Structuur
@@ -351,6 +357,70 @@ public enum MailContentParser {
         }
         return result
     }
+
+    // MARK: Doorsturen
+
+    /// De HTML om in een doorgestuurde mail te zetten en de afbeeldingen erbij: met `cid:` aangeroepen afbeeldingen gaan
+    /// mee, en een afbeelding die met zijn naam wordt aangeroepen (Content-Location) krijgt een Content-ID.
+    static func forwardable(html: String, attachments: [MailAttachment]) -> (html: String, images: [MailAttachment]) {
+        var result = embeddable(html)
+        var images: [MailAttachment] = []
+        let references = imageReferences(in: result)
+        for attachment in attachments where attachment.mediaType.hasPrefix("image/") && !attachment.data.isEmpty {
+            if let cid = attachment.contentID?.lowercased(), references.cids.contains(cid) { images.append(attachment) }
+        }
+        // Afbeeldingen met een naam in plaats van cid: een eigen Content-ID en `cid:` in de HTML.
+        var named = attachments.filter { $0.mediaType.hasPrefix("image/") && !$0.data.isEmpty }
+        if !named.isEmpty {
+            let ns = NSString(string: result)
+            for match in srcAttribute.matches(in: result, range: NSRange(location: 0, length: ns.length)).reversed() {
+                let group = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+                guard group.location != NSNotFound else { continue }
+                let value = ns.substring(with: group).trimmingCharacters(in: .whitespaces)
+                guard !value.isEmpty, !value.contains(":") else { continue }
+                let decoded = (value.removingPercentEncoding ?? value).lowercased()
+                let names: Set<String> = [decoded, (decoded as NSString).lastPathComponent]
+                guard let index = named.firstIndex(where: { isReferenced($0, ([], names)) }),
+                      let range = Range(group, in: result) else { continue }
+                // Eén Content-ID per afbeelding, ook als hij vaker in de tekst staat.
+                if named[index].contentID == nil { named[index].contentID = "doorgestuurd-\(index + 1)@werkbank" }
+                let image = named[index]
+                if !images.contains(where: { $0.contentID == image.contentID }) { images.append(image) }
+                result.replaceSubrange(range, with: "cid:" + (image.contentID ?? ""))
+            }
+        }
+        return (result, images)
+    }
+
+    /// De inhoud van `<body>`, met de `<style>`-blokken uit de kop ervoor en zonder scripts: om in een andere mail te
+    /// zetten.
+    static func embeddable(_ html: String) -> String {
+        let ns = NSString(string: html)
+        let all = NSRange(location: 0, length: ns.length)
+        var styles = ""
+        if let head = headBlock.firstMatch(in: html, range: all) {
+            let headText = ns.substring(with: head.range)
+            let headNS = NSString(string: headText)
+            styles = styleBlock.matches(in: headText, range: NSRange(location: 0, length: headNS.length))
+                .map { headNS.substring(with: $0.range) }.joined()
+        }
+        var body: String
+        if let match = bodyBlock.firstMatch(in: html, range: all), match.range(at: 1).location != NSNotFound {
+            body = ns.substring(with: match.range(at: 1))
+        } else {
+            body = headBlock.stringByReplacingMatches(in: html, range: all, withTemplate: "")
+                .replacingOccurrences(of: #"(?is)<!doctype[^>]*>|</?html\b[^>]*>"#, with: "", options: .regularExpression)
+        }
+        body = body.replacingOccurrences(of: #"(?is)<script\b.*?</script\s*>"#, with: "", options: .regularExpression)
+        return styles + body
+    }
+
+    private static let headBlock = try! NSRegularExpression(pattern: #"<head\b.*?</head\s*>"#,
+                                                            options: [.caseInsensitive, .dotMatchesLineSeparators])
+    private static let styleBlock = try! NSRegularExpression(pattern: #"<style\b.*?</style\s*>"#,
+                                                             options: [.caseInsensitive, .dotMatchesLineSeparators])
+    private static let bodyBlock = try! NSRegularExpression(pattern: #"<body\b[^>]*>(.*)</body\s*>"#,
+                                                            options: [.caseInsensitive, .dotMatchesLineSeparators])
 
     static func escapeHTML(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")

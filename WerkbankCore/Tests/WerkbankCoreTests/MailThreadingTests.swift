@@ -109,4 +109,38 @@ final class MailThreadingTests: XCTestCase {
                      "From: Piet", "Sent: Monday", "", "Ouder"]
         XCTAssertEqual(QuoteLevels.headerLevels(lines), [0, 0, 0, 1, 2, 2, 2, 2, 2])
     }
+
+    func testOutlookWordHistoryBecomesNestedQuotes() {
+        let header1 = #"<div><div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>"#
+            + #"<p class=MsoNormal><b>Van:</b> Jan<br><b>Verzonden:</b> maandag<br><b>Onderwerp:</b> X</p></div></div>"#
+        let header2 = #"<div><div style="border:none;border-top:solid #E1E1E1 1.0pt"><p class=MsoNormal>"#
+            + #"<b>From:</b> Piet<br><b>Sent:</b> Monday</p></div></div>"#
+        let html = "<html><body><div class=WordSection1><p class=MsoNormal>Nieuw</p>" + header1
+            + "<p class=MsoNormal>Oud</p>" + header2 + "<p class=MsoNormal>Ouder</p></div></body></html>"
+        let quote = #"<blockquote type="cite">"#
+        XCTAssertEqual(QuoteLevels.nest(html),
+                       "<html><body><div class=WordSection1><p class=MsoNormal>Nieuw</p>" + quote + header1
+                       + "<p class=MsoNormal>Oud</p>" + quote + header2
+                       + "<p class=MsoNormal>Ouder</p></blockquote></blockquote></div></body></html>")
+    }
+
+    func testOutlookWebHistoryBecomesAQuote() {
+        let header = #"<div id="divRplyFwdMsg" dir="ltr"><font face="Calibri"><b>From:</b> Jan<br><b>Sent:</b> Monday"#
+            + #"<br><b>Subject:</b> X</font><div>&nbsp;</div></div>"#
+        let html = #"<div>Nieuw</div><hr style="display:inline-block;width:98%" tabindex="-1">"# + header + "<div>Oud</div>"
+        XCTAssertEqual(QuoteLevels.nest(html),
+                       #"<div>Nieuw</div><hr style="display:inline-block;width:98%" tabindex="-1"><blockquote type="cite">"#
+                       + header + "<div>Oud</div></blockquote>")
+    }
+
+    func testBorderTopWithoutHeaderStaysTheSame() {
+        let html = #"<div style="border-top: solid 1px #ccc">Nieuwsbrief</div><div>Tekst</div>"#
+        XCTAssertEqual(QuoteLevels.nest(html), html)
+        // In een tabelcel: het citaat sluit aan het einde van de cel.
+        let cell = #"<table><tr><td><div style="border-top:solid #ccc 1pt">Van: Jan<br>Verzonden: ma</div>"#
+            + "<p>Oud</p></td></tr></table>"
+        XCTAssertEqual(QuoteLevels.nest(cell),
+                       #"<table><tr><td><blockquote type="cite"><div style="border-top:solid #ccc 1pt">Van: Jan<br>"#
+                       + "Verzonden: ma</div><p>Oud</p></blockquote></td></tr></table>")
+    }
 }
