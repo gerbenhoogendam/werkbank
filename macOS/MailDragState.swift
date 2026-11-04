@@ -7,6 +7,9 @@ import Observation
 ///
 /// Afgebroken (Esc, of losgelaten zonder dat iets de mail aannam): de mailmodus komt meteen terug, alsof er niets is
 /// gebeurd. Neergezet: de werkbank blijft staan tot Esc.
+///
+/// In de mailmodus beslist het begin van het slepen: naar boven zwiept de mailmodus weg naar de werkbank; naar beneden
+/// of opzij blijft hij staan (`staysInMail`) en laat je de mail los op een map of een andere mailbox.
 @MainActor
 @Observable
 final class MailDragState {
@@ -15,6 +18,10 @@ final class MailDragState {
     private(set) var isDragging = false
     /// Mailbox van de mail die gesleept wordt (die staat niet tussen de mailboxen om naartoe te verplaatsen).
     private(set) var sourceAccount: String?
+    /// In de mailmodus naar beneden of opzij begonnen: de mailmodus blijft staan.
+    private(set) var staysInMail = false
+    /// Zoveel punten bewegen voordat de richting telt.
+    private static let decisionDistance: CGFloat = 12
     /// Een doel heeft de mail aangenomen (kolom, agenda, Claude, andere mailbox).
     @ObservationIgnored private var dropped = false
     /// Telt op per sleepactie, zodat de afloop van een vorige een nieuwe niet beëindigt.
@@ -25,20 +32,29 @@ final class MailDragState {
         isDragging = true
         sourceAccount = account
         dropped = false
+        staysInMail = false
         session += 1
         let current = session
-        // Pas na het begin van het slepen (niet midden in de opbouw ervan), zodat de animatie gewoon loopt.
+        let mailMode = MailModeStore.shared
+        let start = NSEvent.mouseLocation
         Task { @MainActor in
-            guard current == session else { return }
-            MailModeStore.shared.recede()
-        }
-        Task { @MainActor in
+            // Buiten de mailmodus (of al weggezwiept) hoeft er niets beslist te worden.
+            var decided = !mailMode.isActive || mailMode.isReceded
             while NSEvent.pressedMouseButtons & 1 != 0 {
                 guard current == session else { return }
                 // Esc breekt het slepen af; die toets komt dan niet bij de app aan, dus kijken we zelf.
                 if Self.escapeIsDown {
                     cancel()
                     return
+                }
+                if !decided {
+                    // Schermcoördinaten: y loopt naar boven.
+                    let now = NSEvent.mouseLocation
+                    let dx = now.x - start.x, dy = now.y - start.y
+                    if hypot(dx, dy) >= Self.decisionDistance {
+                        decided = true
+                        if dy > 0, dy >= abs(dx) { mailMode.recede() } else { staysInMail = true }
+                    }
                 }
                 try? await Task.sleep(for: .milliseconds(25))
             }
@@ -64,6 +80,7 @@ final class MailDragState {
         session += 1
         isDragging = false
         sourceAccount = nil
+        staysInMail = false
         guard cancelled else { return }
         AppState.shared.isDropTargeted = false
         MailModeStore.shared.restore()

@@ -374,9 +374,14 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   zet terug. De mail in het midden neemt de rest (minstens 320 pt).
 - `MailboxTab(fitsContent:)`: in de werkbalk van de mailmodus zo breed als de naam met ruimte ernaast (Calculator,
   Wandklok, Sneeuwwitje en Tischsuper deelden anders de breedte en kwamen tegen de tekst aan).
-- **Slepen uit de mailmodus**: zodra je een mail sleept (uit de lijst of uit een mailvenster) zwiept de mailmodus naar
-  beneden weg en staat de werkbank erachter (board, agenda, Tijd schrijven). `MailDragState.begin` start het, één
-  runloop later (`MailModeStore.recede`), zodat het niet midden in het opbouwen van de sleepactie gebeurt.
+- **Slepen uit de mailmodus**: de richting waarin je begint beslist (`MailDragState.begin`, na 12 pt beweging):
+  naar boven zwiept de mailmodus naar beneden weg en staat de werkbank erachter (board, agenda, Tijd schrijven;
+  `MailModeStore.recede`); naar beneden of opzij blijft de mailmodus staan (`staysInMail`) en laat je de mail los op
+  een map in de kolom Mappen (eigen mappen; Postvak IN; Alle mail = archiveren; Prullenbak), op de naam van een
+  mailbox boven zijn mappen, of op een mailbox in de werkbalk (naar de inbox daar). Een map van een andere mailbox:
+  de mail verhuist naar die mailbox, in die map (`moveThreads(label:)`). Hoort de gesleepte mail bij meer gekozen
+  mails, dan gaan ze allemaal mee (`MailModeStore.drop`, `MailModeDropTarget` in `MailModeView.swift`). Alles met ⌘Z
+  terug. Na te gaan: komt de richting goed door (`NSEvent.mouseLocation` tijdens het slepen), en lichten de doelen op.
   - Animatie (`MainView.swoop`): klein optillen, dan versnellend omlaag (0,32 s); terug een veer (0,42 s). Een
     schaduw boven de bovenrand van de mail en de werkbank die oplicht (`mailShade`). Alleen verschuiven: schalen,
     kantelen en vervagen werken niet op de webweergave van de mail.

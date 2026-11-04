@@ -793,8 +793,9 @@ final class GmailSession {
     }
 
     /// Verplaatst gesprekken naar een andere mailbox, één voor één (zoals `moveThread`); `onMoved` na elk gesprek dat
-    /// lukte. Eén keer ⌘Z zet ze allemaal terug. Geeft de gesprekken terug waarbij het lukte.
-    func moveThreads(_ threads: [(threadID: String, messageID: String)], to target: String,
+    /// lukte. `label`: in die mailbox in deze map (label) in plaats van de inbox. Eén keer ⌘Z zet ze allemaal terug.
+    /// Geeft de gesprekken terug waarbij het lukte.
+    func moveThreads(_ threads: [(threadID: String, messageID: String)], to target: String, label: String? = nil,
                      onMoved: @MainActor (String) -> Void) async -> [String] {
         guard accounts.contains(target) else { return [] }
         var moves: [Transfer] = []
@@ -802,7 +803,7 @@ final class GmailSession {
             let source = messageAccount[thread.threadID] ?? activeAccount
             guard source != target else { continue }
             busyMessageIDs.insert(thread.messageID)
-            if let move = try? await transfer(threadID: thread.threadID, from: source, to: target) {
+            if let move = try? await transfer(threadID: thread.threadID, from: source, to: target, label: label) {
                 moves.append(move)
                 onMoved(thread.threadID)
             }
@@ -826,21 +827,27 @@ final class GmailSession {
     }
 
     /// Zet elke mail van het gesprek in `target` (alsof hij daar binnenkwam; er gaat niets de deur uit) en daarna het
-    /// gesprek in `source` in de prullenbak. `nil` als er niets te verplaatsen was.
-    private func transfer(threadID: String, from source: String?, to target: String) async throws -> Transfer? {
+    /// gesprek in `source` in de prullenbak. Met `label`: in die map, niet in de inbox. `nil` als er niets te verplaatsen
+    /// was.
+    private func transfer(threadID: String, from source: String?, to target: String,
+                          label: String? = nil) async throws -> Transfer? {
         // Concepten en wat al in de prullenbak of spam ligt gaan niet mee.
         let items = try await threadMessages(threadID: threadID, account: source)
             .filter { Set($0.labels).isDisjoint(with: ["DRAFT", "TRASH", "SPAM"]) }
         guard let newest = items.last else { return nil }
-        let keep: Set<String> = ["INBOX", "UNREAD", "STARRED", "IMPORTANT"]
+        let keep: Set<String> = label == nil ? ["INBOX", "UNREAD", "STARRED", "IMPORTANT"] : ["UNREAD", "STARRED", "IMPORTANT"]
         let inInbox = items.contains { $0.labels.contains("INBOX") }
         var inserted: [String] = []
         var targetThread: String?
         for item in items {
             let raw = try await rawMessage(id: item.id)
             var labels = item.labels.filter(keep.contains)
-            // Een gearchiveerd gesprek komt in de andere mailbox gewoon in de inbox terecht.
-            if !inInbox, item.id == newest.id { labels.append("INBOX") }
+            if let label {
+                labels.append(label)
+            } else if !inInbox, item.id == newest.id {
+                // Een gearchiveerd gesprek komt in de andere mailbox gewoon in de inbox terecht.
+                labels.append("INBOX")
+            }
             let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
             inserted.append(result.id)
             targetThread = targetThread ?? result.threadID

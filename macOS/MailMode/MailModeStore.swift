@@ -733,8 +733,12 @@ final class MailModeStore {
     }
 
     /// Archiveert de gekozen mails; één keer ⌘Z zet ze terug.
-    func archiveMarked(appState: AppState) {
-        let chosen = takeMarked()
+    func archiveMarked(appState: AppState) { archiveAll(takeMarked(), appState: appState) }
+
+    /// De gekozen mails naar de prullenbak (het hele gesprek, zoals in Gmail); één keer ⌘Z haalt ze er weer uit.
+    func trashMarked(appState: AppState) { trashAll(takeMarked(), appState: appState) }
+
+    private func archiveAll(_ chosen: [GmailMailItem], appState: AppState) {
         guard !chosen.isEmpty else { return }
         let threads = chosen.map(\.threadID)
         for thread in threads {
@@ -747,9 +751,7 @@ final class MailModeStore {
         }
     }
 
-    /// De gekozen mails naar de prullenbak (het hele gesprek, zoals in Gmail); één keer ⌘Z haalt ze er weer uit.
-    func trashMarked(appState: AppState) {
-        let chosen = takeMarked()
+    private func trashAll(_ chosen: [GmailMailItem], appState: AppState) {
         guard !chosen.isEmpty else { return }
         let threads = chosen.map(\.threadID)
         for thread in threads {
@@ -785,17 +787,29 @@ final class MailModeStore {
                 missing += 1
                 continue
             }
-            var leaving = item.labels.filter { $0 == "INBOX" }
-            if case .label(let owner, let id, _) = folder, owner == account { leaving.append(id) }
-            let adding = item.labels.contains(label.id) ? [] : [label.id]
-            changes.append(GmailSession.LabelChange(threadID: item.threadID, account: account, add: adding, remove: leaving))
+            if let change = labelChange(item, account: account, labelID: label.id) { changes.append(change) }
         }
-        let leaf = name.split(separator: "/").last.map(String.init) ?? name
+        let leaf = Self.leaf(name)
         guard !changes.isEmpty else {
             if missing > 0 { appState.announce("Geen map \(leaf) in die mailbox", seconds: 3) }
             return
         }
-        // Uit een map of Postvak IN weg; in Alle mail, Verstuurd of bij zoeken blijft de mail staan.
+        moveToLabel(changes, leaf: leaf, missing: missing, appState: appState)
+    }
+
+    /// Naar map `labelID` van `account`: het label erbij, Postvak IN en de map die open staat eraf. `nil`: niets te doen.
+    private func labelChange(_ item: GmailMailItem, account: String, labelID: String) -> GmailSession.LabelChange? {
+        var leaving = item.labels.filter { $0 == "INBOX" }
+        if case .label(let owner, let id, _) = folder, owner == account, id != labelID { leaving.append(id) }
+        let adding = item.labels.contains(labelID) ? [] : [labelID]
+        guard !adding.isEmpty || !leaving.isEmpty else { return nil }
+        return GmailSession.LabelChange(threadID: item.threadID, account: account, add: adding, remove: leaving)
+    }
+
+    /// Voert de verplaatsing naar een map uit: uit een map of Postvak IN weg; in Alle mail, Verstuurd of bij zoeken
+    /// blijft de mail staan.
+    private func moveToLabel(_ changes: [GmailSession.LabelChange], leaf: String, missing: Int = 0, appState: AppState) {
+        guard !changes.isEmpty else { return }
         for change in changes {
             if folder.account != nil { remove(threadID: change.threadID) } else { takeOut(threadID: change.threadID) }
         }
@@ -806,6 +820,8 @@ final class MailModeStore {
         }
     }
 
+    private static func leaf(_ name: String) -> String { name.split(separator: "/").last.map(String.init) ?? name }
+
     /// De mailboxen waar de gekozen mails heen kunnen: alle gekoppelde, behalve als ze er allemaal al in staan.
     func targetMailboxes(for marked: [GmailMailItem]) -> [String] {
         let sources = Set(marked.compactMap { gmail.account(for: $0.id) })
@@ -815,14 +831,81 @@ final class MailModeStore {
     /// Verplaatst de gekozen mails naar een andere gekoppelde mailbox (één voor één ingevoegd, daarna in de oude
     /// mailbox naar de prullenbak); één keer ⌘Z zet ze terug. Mails die er al staan blijven staan.
     func moveMarked(toMailbox target: String, appState: AppState) {
-        let chosen = takeMarked { gmail.account(for: $0.id) == target }
-        guard !chosen.isEmpty else { return }
-        let name = gmail.displayName(target)
+        moveAll(takeMarked(), toMailbox: target, label: nil, appState: appState)
+    }
+
+    /// Naar een andere mailbox, in de inbox of (`label`) in een map daar.
+    private func moveAll(_ chosen: [GmailMailItem], toMailbox target: String, label: (id: String, name: String)?,
+                         appState: AppState) {
+        let moving = chosen.filter { gmail.account(for: $0.id) != target }
+        guard !moving.isEmpty else { return }
+        let name = label.map { "\(gmail.displayName(target)) › \(Self.leaf($0.name))" } ?? gmail.displayName(target)
         Task {
-            let done = await gmail.moveThreads(chosen.map { (threadID: $0.threadID, messageID: $0.id) }, to: target) { [weak self] thread in
+            let done = await gmail.moveThreads(moving.map { (threadID: $0.threadID, messageID: $0.id) }, to: target,
+                                               label: label?.id) { [weak self] thread in
                 self?.remove(threadID: thread)
             }
-            await report(done.count, of: chosen.count, "verplaatst naar \(name)", appState: appState)
+            await report(done.count, of: moving.count, "verplaatst naar \(name)", appState: appState)
+        }
+    }
+
+    // MARK: Slepen naar een map of mailbox
+
+    /// De mails die meegaan als `payload` wordt losgelaten: alle gekozen mails als hij daarbij hoort, anders alleen hij.
+    private func dragged(_ payload: GmailDragPayload) -> [GmailMailItem] {
+        if isMarking, markedIDs.contains(payload.messageID) { return takeMarked() }
+        guard let item = items.first(where: { $0.id == payload.messageID }) else { return [] }
+        return [item]
+    }
+
+    /// Of een map een gesleepte mail aanneemt: Postvak IN, Alle mail (archiveren), Prullenbak en de eigen mappen.
+    static func acceptsDrop(_ folder: MailFolder) -> Bool {
+        switch folder {
+        case .inbox, .all, .trash, .label: true
+        default: false
+        }
+    }
+
+    /// Een mail (of de gekozen mails) losgelaten op een map in de kolom links. Een map van een andere mailbox: de mail
+    /// verhuist naar die mailbox, in die map.
+    func drop(_ payload: GmailDragPayload, on target: MailFolder, appState: AppState) {
+        guard Self.acceptsDrop(target), target != folder else { return }
+        let chosen = dragged(payload)
+        guard !chosen.isEmpty else { return }
+        switch target {
+        case .all: archiveAll(chosen, appState: appState)
+        case .trash: trashAll(chosen, appState: appState)
+        case .inbox: backToInbox(chosen, appState: appState)
+        case .label(let account, let id, let name):
+            let here = chosen.filter { gmail.account(for: $0.id) == account }
+            moveToLabel(here.compactMap { labelChange($0, account: account, labelID: id) }, leaf: Self.leaf(name),
+                        appState: appState)
+            moveAll(chosen.filter { gmail.account(for: $0.id) != account }, toMailbox: account, label: (id, name),
+                    appState: appState)
+        default: break
+        }
+    }
+
+    /// Een mail (of de gekozen mails) losgelaten op een mailbox: naar de inbox daar.
+    func drop(_ payload: GmailDragPayload, onMailbox account: String, appState: AppState) {
+        moveAll(dragged(payload), toMailbox: account, label: nil, appState: appState)
+    }
+
+    /// Terug in Postvak IN; uit een map komend gaat die map eraf.
+    private func backToInbox(_ chosen: [GmailMailItem], appState: AppState) {
+        let changes = chosen.compactMap { item -> GmailSession.LabelChange? in
+            let account = gmail.account(for: item.id)
+            var leaving: [String] = []
+            if case .label(let owner, let id, _) = folder, owner == account { leaving.append(id) }
+            let adding = item.labels.contains("INBOX") ? [] : ["INBOX"]
+            guard !adding.isEmpty || !leaving.isEmpty else { return nil }
+            return GmailSession.LabelChange(threadID: item.threadID, account: account, add: adding, remove: leaving)
+        }
+        guard !changes.isEmpty else { return }
+        if folder.account != nil { for change in changes { remove(threadID: change.threadID) } }
+        Task {
+            let done = await gmail.relabelBulk(changes)
+            await report(done.count, of: changes.count, "terug in Postvak IN", appState: appState)
         }
     }
 

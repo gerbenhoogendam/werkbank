@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import WerkbankCore
 
 /// De mailmodus: het hele venster als mailclient (dubbelklik op Mail). Links de lijst met zoeken en filters, in het
@@ -163,6 +164,7 @@ struct MailModeView: View {
 // MARK: - Werkbalk
 
 private struct MailModeToolbar: View {
+    @Environment(AppState.self) private var appState
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
     @AppStorage(MailModeFolders.visibleKey) private var showsFolders = true
@@ -200,6 +202,10 @@ private struct MailModeToolbar: View {
                                 }
                                 .fixedSize()
                                 .help(scopeHelp(scope))
+                                // Een mail erop loslaten: naar de inbox van die mailbox.
+                                .modifier(MailModeDropTarget(isEnabled: mailbox(of: scope) != nil) { payload in
+                                    if let account = mailbox(of: scope) { store.drop(payload, onMailbox: account, appState: appState) }
+                                })
                             }
                         }
                     }
@@ -265,6 +271,12 @@ private struct MailModeToolbar: View {
         } else {
             store.select(scope: scope)
         }
+    }
+
+    /// De mailbox van een tab (niet de combinatie of Alle mail).
+    private func mailbox(of scope: MailModeStore.Scope) -> String? {
+        if case .account(let email) = scope { return email }
+        return nil
     }
 
     private func scopeHelp(_ scope: MailModeStore.Scope) -> String {
@@ -554,6 +566,7 @@ private struct MailModeList: View {
 /// De mappen van Gmail voor het bereik (Postvak IN, Verstuurd …) en per mailbox de eigen labels, als boom.
 struct MailModeFolders: View {
     static let visibleKey = "mailMode.showsFolders"
+    @Environment(AppState.self) private var appState
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
 
@@ -568,8 +581,14 @@ struct MailModeFolders: View {
                     if !labels.isEmpty {
                         ThemedHeading(title: gmail.displayName(account))
                             .padding(.horizontal, 8)
-                            .padding(.top, 16)
-                            .padding(.bottom, 4)
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            // Een mail erop loslaten: naar de inbox van deze mailbox.
+                            .modifier(MailModeDropTarget(isEnabled: true) { payload in
+                                store.drop(payload, onMailbox: account, appState: appState)
+                            })
+                            .padding(.top, 12)
                         ForEach(labels) { label in
                             row(.label(account: account, id: label.id, name: label.name), depth: label.depth)
                         }
@@ -607,6 +626,10 @@ struct MailModeFolders: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Een mail erop loslaten: naar die map (Alle mail: archiveren; Prullenbak: weggooien).
+        .modifier(MailModeDropTarget(isEnabled: MailModeStore.acceptsDrop(folder)) { payload in
+            store.drop(payload, on: folder, appState: appState)
+        })
     }
 
     private static func icon(_ folder: MailFolder) -> String {
@@ -1107,6 +1130,44 @@ private extension View {
             clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         } else {
             self
+        }
+    }
+}
+
+// MARK: - Een mail loslaten op een map of mailbox
+
+/// Een plek in de mailmodus waar je een gesleepte mail loslaat (een map, een mailbox); licht op zolang hij erboven hangt.
+private struct MailModeDropTarget: ViewModifier {
+    let isEnabled: Bool
+    let perform: @MainActor (GmailDragPayload) -> Void
+    @State private var isTargeted = false
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .overlay {
+                    if isTargeted {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(ThingsColor.accent.opacity(0.12))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(ThingsColor.accent, lineWidth: 2))
+                            .allowsHitTesting(false)
+                    }
+                }
+                .onDrop(of: [.gmailMessage], isTargeted: $isTargeted) { providers in
+                    guard let provider = providers.first(where: {
+                        $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier)
+                    }) else { return false }
+                    MailDragState.shared.noteDropped()
+                    let perform = perform
+                    provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
+                        guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
+                        Task { @MainActor in perform(payload) }
+                    }
+                    return true
+                }
+        } else {
+            content
         }
     }
 }
