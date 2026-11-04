@@ -12,6 +12,7 @@ struct MailModeView: View {
     @State private var window: NSWindow?
     @State private var keyMonitor: Any?
     @AppStorage(MailModeFolders.visibleKey) private var showsFolders = true
+    @AppStorage(MailModeClients.visibleKey) private var showsClients = true
     // De breedte van de kolommen: te verslepen aan de lijn ertussen, dubbelklik zet terug.
     @AppStorage("mailMode.foldersWidth") private var foldersWidth = Self.defaultFolders
     @AppStorage("mailMode.listWidth") private var listWidth = Self.defaultList
@@ -49,12 +50,14 @@ struct MailModeView: View {
                 MailModeReader()
                     .pulsTile()
                     .frame(minWidth: 320, maxWidth: .infinity)
-                ColumnResizer(onChanged: { clientsWidth = resized(clientsWidth, by: -$0, Self.clientsRange) },
-                              onEnded: { dragStart = nil },
-                              onReset: { clientsWidth = Self.defaultClients })
-                MailModeClients()
-                    .pulsTile()
-                    .frame(width: clamp(clientsWidth, Self.clientsRange))
+                if showsClients {
+                    ColumnResizer(onChanged: { clientsWidth = resized(clientsWidth, by: -$0, Self.clientsRange) },
+                                  onEnded: { dragStart = nil },
+                                  onReset: { clientsWidth = Self.defaultClients })
+                    MailModeClients()
+                        .pulsTile()
+                        .frame(width: clamp(clientsWidth, Self.clientsRange))
+                }
                 if ThemeStore.shared.look == .tischsuper { Veneer(vertical: true).frame(width: 7) }
             }
         }
@@ -163,6 +166,7 @@ private struct MailModeToolbar: View {
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
     @AppStorage(MailModeFolders.visibleKey) private var showsFolders = true
+    @AppStorage(MailModeClients.visibleKey) private var showsClients = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -210,6 +214,20 @@ private struct MailModeToolbar: View {
             }
             Spacer(minLength: 8)
             if store.isLoading { ProgressView().controlSize(.small) }
+            if !showsClients {
+                // De klantenkolom is weggeklikt: een blauw rondje haalt hem terug.
+                Button { showsClients = true } label: {
+                    Image(systemName: "person.2.fill")
+                        .font(.werk(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(ThemeStore.shared.look == .puls ? Puls.blauw.solid : ThingsColor.accent))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Klanten tonen")
+                .accessibilityLabel("Klanten tonen")
+            }
             Button {
                 PanelStore.shared.open(.compose(ComposeRef(mode: .new, source: nil)))
             } label: {
@@ -765,17 +783,33 @@ private struct MailModeReader: View {
 // MARK: - Klanten
 
 private struct MailModeClients: View {
+    /// De kolom met klanten staat aan (wegklikken met het kruisje, terughalen met het blauwe rondje in de werkbalk).
+    static let visibleKey = "mailMode.showsClients"
+
     private let store = MailModeStore.shared
     private let directory = ClientDirectory.shared
+    @AppStorage(Self.visibleKey) private var showsClients = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
+                HStack(alignment: .top, spacing: 6) {
                     ThemedHeading(title: "Klanten", detail: updatedDetail)
                     if MailActivityStore.shared.isSyncing {
                         ProgressView().controlSize(.mini)
                     }
+                    Spacer(minLength: 4)
+                    Button { showsClients = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.werk(size: 10, weight: .bold))
+                            .foregroundStyle(ThingsColor.textSecondary)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(ThemeStore.shared.look == .puls ? Puls.glass : ThingsColor.backgroundSidebar))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Klanten verbergen")
+                    .accessibilityLabel("Klanten verbergen")
                 }
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")

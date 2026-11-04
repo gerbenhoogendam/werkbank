@@ -267,6 +267,8 @@ beantwoorde of tot taak gemaakte mail wordt gearchiveerd; mappen doen er niet to
   archiveert daarna wel. Ga je naar een andere mail of sluit je de mailmodus, dan wordt het antwoord per gesprek
   bewaard (`MailModeStore.keptReplies`, alleen in het geheugen, tekst zonder opmaak) en staat het er weer als je
   terugkomt.
+- **Klantenkolom wegklikken** (4 nov): het kruisje rechtsboven bij Klanten verbergt de kolom; een blauw rondje links
+  van Nieuwe mail haalt hem terug (`MailModeClients.visibleKey`, per Mac, zoals de mappen).
 - **Meer mails tegelijk** (2 nov): ⌘-klik zet een mail erbij of haalt hem eraf, ⇧-klik kiest alles vanaf de vorige
   klik (`MailModeStore.click`, `markedIDs`; ⌃-klik is op de Mac het contextmenu en doet hier niets). Boven de lijst
   staat dan "N geselecteerd" met Verwijderen (prullenbak, niet in de map Prullenbak), Archiveren, Naar map (de labels
