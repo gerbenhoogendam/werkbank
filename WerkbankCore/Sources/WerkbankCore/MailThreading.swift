@@ -105,6 +105,86 @@ public enum QuoteLevels {
         return end
     }
 
+    /// Werkt alleen binnen `<pre class="plain">…</pre>` (de weergave van platte tekst); de tekens zijn daar al als
+    /// `&gt;` geschreven. Regels met ">" gaan een niveau dieper per ">", en een ouder bericht zonder ">" (na
+    /// "On … wrote:", vanaf "-----Oorspronkelijk bericht-----") ook. De rest van de HTML blijft zoals hij is.
+    public static func nestPlainQuotes(_ html: String) -> String {
+        let open = #"<pre class="plain">"#
+        guard let start = html.range(of: open), let end = html.range(of: "</pre>", options: .backwards),
+              start.upperBound <= end.lowerBound else { return html }
+        let text = String(html[start.upperBound..<end.lowerBound])
+        let lines = text.components(separatedBy: "\n").map { split($0) }
+        let extra = headerLevels(lines.map { plainText($0.rest) }, depths: lines.map(\.depth))
+        guard lines.contains(where: { $0.depth > 0 }) || extra.contains(where: { $0 > 0 }) else { return html }
+        var output = ""
+        var level = 0
+        var segment: [String] = []
+        for (line, more) in zip(lines, extra) {
+            let target = line.depth + more
+            if target != level {
+                output += segment.joined(separator: "\n")
+                segment = []
+                while level < target { output += #"<blockquote type="cite">"#; level += 1 }
+                while level > target { output += "</blockquote>"; level -= 1 }
+            }
+            segment.append(line.rest)
+        }
+        output += segment.joined(separator: "\n")
+        output += String(repeating: "</blockquote>", count: level)
+        return String(html[..<start.upperBound]) + output + String(html[end.lowerBound...])
+    }
+
+    /// Een citaat dat platte tekst met `<br>` is (geen eigen blokken erin): de oudere berichten erin een niveau dieper,
+    /// elk in een eigen `openTag`. Andere citaten blijven zoals ze zijn.
+    public static func nestFlatQuotes(_ html: String, openTag: String = #"<blockquote type="cite">"#) -> String {
+        guard html.range(of: "<blockquote", options: .caseInsensitive) != nil else { return html }
+        var output = ""
+        var cursor = html.startIndex
+        var search = html.startIndex
+        while let open = html.range(of: "<blockquote", options: .caseInsensitive, range: search..<html.endIndex) {
+            guard let tagEnd = html.range(of: ">", range: open.upperBound..<html.endIndex),
+                  let close = html.range(of: "</blockquote", options: .caseInsensitive,
+                                         range: tagEnd.upperBound..<html.endIndex) else { break }
+            // Alleen het binnenste citaat: staat er nog een in, dan daar verder.
+            if let inner = html.range(of: "<blockquote", options: .caseInsensitive, range: tagEnd.upperBound..<close.lowerBound) {
+                search = inner.lowerBound
+                continue
+            }
+            if let nested = nestedFlat(String(html[tagEnd.upperBound..<close.lowerBound]), openTag: openTag) {
+                output += String(html[cursor..<tagEnd.upperBound]) + nested
+                cursor = close.lowerBound
+            }
+            search = close.upperBound
+        }
+        guard cursor != html.startIndex else { return html }
+        return output + String(html[cursor...])
+    }
+
+    private static let blockTags = #"(?i)<(div|p|table|ul|ol|pre|blockquote|h[1-6])\b"#
+
+    private static func nestedFlat(_ inner: String, openTag: String) -> String? {
+        guard inner.range(of: blockTags, options: .regularExpression) == nil else { return nil }
+        let lines = inner.replacingOccurrences(of: #"(?i)<br\s*/?>\n?"#, with: "\u{1}", options: .regularExpression)
+            .components(separatedBy: "\u{1}")
+        let levels = headerLevels(lines.map(plainText))
+        guard let top = levels.max(), top > 0 else { return nil }
+        var output = ""
+        var level = 0
+        var segment: [String] = []
+        for (line, target) in zip(lines, levels) {
+            if target != level {
+                output += segment.joined(separator: "<br>\n")
+                segment = []
+                while level < target { output += openTag; level += 1 }
+                while level > target { output += "</blockquote>"; level -= 1 }
+            }
+            segment.append(line)
+        }
+        output += segment.joined(separator: "<br>\n")
+        output += String(repeating: "</blockquote>", count: level)
+        return output
+    }
+
     // MARK: Waar een ouder bericht begint
 
     /// Per regel (platte tekst) hoeveel niveaus dieper hij hoort omdat er een ouder bericht begint: na een aanhef
