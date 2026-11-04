@@ -55,6 +55,8 @@ struct AgendaView: View {
     @State private var scrollHour = 8
     @State private var agendaSize: CGSize = .zero
     @State private var eventDrag = EventDrag()
+    /// Een afspraak van de hele dag die na een vraag weg moet (rechtermuisknop › Verwijderen).
+    @State private var pendingDelete: AgendaEvent?
 
     private var startHour: Int { min(max(startHourSetting, 0), 23) }
     private var endHour: Int { min(max(endHourSetting, startHour + 1), 24) }
@@ -605,6 +607,13 @@ struct AgendaView: View {
                         AllDayChip(title: event.title, color: event.color)
                             .contentShape(Rectangle())
                             .onTapGesture { PanelStore.shared.open(.event(event)) }
+                            .contextMenu {
+                                if EventDeletion.canDelete(event) {
+                                    Button("Verwijderen", role: .destructive) {
+                                        EventDeletion.request(event, pending: $pendingDelete, appState: appState)
+                                    }
+                                }
+                            }
                     }
                 }
                 .padding(.horizontal, 2)
@@ -613,6 +622,7 @@ struct AgendaView: View {
             Color.clear.frame(width: 4, height: 1)
         }
         .padding(.bottom, 4)
+        .eventDeletionDialog($pendingDelete)
     }
 
     private func hourGutter(_ hourHeight: CGFloat, showsNow: Bool = false) -> some View {
@@ -796,6 +806,8 @@ struct DayColumn: View {
     private let nextDay: Date
     /// Waar een gesleepte mail boven de kolom hangt (voor het stippelblok).
     @State private var mailHoverY: CGFloat?
+    /// Een afspraak die na een vraag weg moet (herhalend of met deelnemers; rechtermuisknop › Verwijderen).
+    @State private var pendingDelete: AgendaEvent?
     /// Het tijdvak dat je nu met de muis opspant.
     @State private var createRange: (start: Date, end: Date)?
     /// Valt terug als het slepen van een afspraak zonder einde stopt (dan gaat alles terug).
@@ -879,6 +891,12 @@ struct DayColumn: View {
                             .contextMenu {
                                 Button("Toevoegen aan Tijd schrijven") { addToTimeList(event) }
                                 moveMenu(for: event)
+                                if EventDeletion.canDelete(event) {
+                                    Divider()
+                                    Button("Verwijderen", role: .destructive) {
+                                        EventDeletion.request(event, pending: $pendingDelete, appState: appState)
+                                    }
+                                }
                             }
                     }
                 }
@@ -925,6 +943,7 @@ struct DayColumn: View {
                 }
             }
             .frame(width: width, height: totalHeight, alignment: .topLeading)
+            .eventDeletionDialog($pendingDelete)
             .animation(.easeOut(duration: 0.18), value: drag.draft?.step)
             .onChange(of: eventGestureActive) { _, active in
                 if !active { eventDrag?.cancel() }

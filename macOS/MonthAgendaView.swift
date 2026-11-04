@@ -202,6 +202,9 @@ private struct WeekPage: View {
     let endHour: Int
     let onTapEvent: (AgendaEvent) -> Void
 
+    @Environment(AppState.self) private var appState
+    /// Een afspraak van de hele dag die na een vraag weg moet (rechtermuisknop › Verwijderen).
+    @State private var pendingDelete: AgendaEvent?
     private let calendar = Calendar(identifier: .iso8601)
     private let gutter: CGFloat = 34
     private let corner: CGFloat = 12
@@ -291,6 +294,13 @@ private struct WeekPage: View {
                 VStack(spacing: 2) {
                     ForEach(allDay.filter { $0.start < dayEnd(day) && $0.end > calendar.startOfDay(for: day) }) { event in
                         AllDayChip(title: event.title, color: event.color, horizontalPadding: 4)
+                            .contextMenu {
+                                if EventDeletion.canDelete(event) {
+                                    Button("Verwijderen", role: .destructive) {
+                                        EventDeletion.request(event, pending: $pendingDelete, appState: appState)
+                                    }
+                                }
+                            }
                     }
                 }
                 .padding(.horizontal, 2)
@@ -298,6 +308,7 @@ private struct WeekPage: View {
             }
             Color.clear.frame(width: 2, height: 1)
         }
+        .eventDeletionDialog($pendingDelete)
         .padding(.bottom, 3)
     }
 

@@ -31,6 +31,11 @@ struct EventDetailView: View {
     @State private var isEditing = false
     @State private var errorText: String?
     @State private var askSpan: SpanAction?
+    /// Verwijderen van een afspraak met deelnemers: eerst bevestigen.
+    @State private var confirmDelete = false
+    /// Delete (⌫) verwijdert de afspraak waarvan de details open staan (alleen in het venster van deze details).
+    @State private var keyMonitor: Any?
+    @State private var window: NSWindow?
 
     private enum SpanAction: Hashable, Identifiable {
         case save, delete
@@ -80,6 +85,46 @@ struct EventDetailView: View {
             }
             Button("Annuleer", role: .cancel) {}
         }
+        .background(WindowReader(window: $window))
+        .onAppear(perform: installDeleteKey)
+        .onDisappear(perform: removeDeleteKey)
+    }
+
+    // MARK: Verwijderen
+
+    private var canDelete: Bool { existing != nil && original?.canModify == true }
+
+    /// Herhalend: alleen deze of ook de volgende; met deelnemers: eerst bevestigen; anders meteen (⌘Z zet hem terug).
+    private func requestDelete() {
+        guard canDelete else { return }
+        switch EventDeletion.question(for: event) {
+        case .span: askSpan = .delete
+        case .confirm: confirmDelete = true
+        case .none: commit(.delete, future: false)
+        }
+    }
+
+    private func installDeleteKey() {
+        guard keyMonitor == nil, existing != nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated { handleDeleteKey(event) } ? nil : event
+        }
+    }
+
+    private func removeDeleteKey() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
+
+    /// ⌫ of ⌦ (ook met ⌘), niet tijdens bewerken, niet als er een vraag open staat en niet in een tekstveld.
+    private func handleDeleteKey(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 51 || event.keyCode == 117,
+              event.modifierFlags.intersection([.shift, .option, .control]).isEmpty,
+              !isEditing, askSpan == nil, !confirmDelete, canDelete,
+              let window, event.window === window, window.attachedSheet == nil else { return false }
+        if let text = window.firstResponder as? NSTextView, text.isEditable { return false }
+        requestDelete()
+        return true
     }
 
     // MARK: Lezen
@@ -140,6 +185,12 @@ struct EventDetailView: View {
                     Label("Toevoegen aan Tijd schrijven", systemImage: "clock.badge.checkmark")
                 }
                 Spacer()
+                if canDelete {
+                    Button(role: .destructive, action: requestDelete) {
+                        Label("Verwijderen", systemImage: "trash")
+                    }
+                    .help("Verwijderen (⌫)")
+                }
                 if let original, original.canModify {
                     Button {
                         draft = original
@@ -153,6 +204,12 @@ struct EventDetailView: View {
             // Zelfde inspringing als de inhoud erboven, zodat de knoppen in de lijn van de tekst staan.
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
+        }
+        .confirmationDialog("Afspraak met deelnemers verwijderen?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Verwijderen", role: .destructive) { commit(.delete, future: false) }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text("\(event.title) · \(event.attendees.count) deelnemers")
         }
     }
 
@@ -213,9 +270,7 @@ struct EventDetailView: View {
                 }
                 HStack {
                     if existing != nil {
-                        Button("Verwijderen", role: .destructive) {
-                            if event.isRecurring { askSpan = .delete } else { commit(.delete, future: false) }
-                        }
+                        Button("Verwijderen", role: .destructive, action: requestDelete)
                     }
                     Spacer()
                     Button("Annuleer") { if existing == nil { onClose() } else { isEditing = false } }
@@ -303,6 +358,11 @@ struct EventDetailView: View {
             }
             return
         }
+        if action == .delete, let existing {
+            // Uit de details (lezen of bewerken); er hoeft niets bewaard te zijn.
+            if EventDeletion.delete(existing, thisAndFuture: future, appState: appState) { onClose() }
+            return
+        }
         guard let action, let draft, let original else { return }
         do {
             switch action {
@@ -312,12 +372,10 @@ struct EventDetailView: View {
                 } else {
                     try service.createEvent(edit: draft)
                 }
-            case .delete:
-                if let existing { try service.deleteEvent(existing, thisAndFuture: future) }
-            case .move:
+            case .delete, .move:
                 return
             }
-            appState.showToast(action == .save ? "Afspraak opgeslagen" : "Afspraak verwijderd")
+            appState.showToast("Afspraak opgeslagen")
             onClose()
         } catch {
             errorText = error.localizedDescription

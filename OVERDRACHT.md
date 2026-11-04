@@ -224,6 +224,12 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     tellen. Ook gepauzeerde en niet gestarte regels klappen nu open (zonder Uren). Niet aan te passen: een lopende
     timer (`RunningTimerRow`), het totaal en de staafjes (uitgerekend). Na te gaan: dubbelklik op een veld wint van de
     klik op de hele regel, en een ongeldige datum of uren geven de melding "niet herkend".
+26. **Afspraak verwijderen** (4 nov, `macOS/EventDeletion.swift`). Rechtermuisknop op een afspraak (week-, dag- en
+    maandagenda, ook hele-dagafspraken) › Verwijderen; in de details een knop Verwijderen (ook zonder eerst Bewerken)
+    en Delete (⌫ of ⌦) zolang de details open staan en je niet in een tekstveld typt (`EventDetailView.handleDeleteKey`,
+    alleen in het venster van die details). Een losse afspraak gaat meteen weg (⌘Z zet hem terug); herhalend: "Alleen
+    deze" of "Deze en alle volgende"; met deelnemers eerst een bevestiging (deelnemers komen met ⌘Z niet terug). Alleen
+    in agenda's die je mag wijzigen. Testen alleen in een testagenda (testregels).
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

@@ -1039,7 +1039,8 @@ struct WrapStack: Layout {
 }
 
 /// Het venster van een view, om toetsen alleen in dat venster af te vangen.
-private struct WindowReader: NSViewRepresentable {
+/// Het venster waarin een weergave staat (voor toetsen die alleen daar moeten werken).
+struct WindowReader: NSViewRepresentable {
     @Binding var window: NSWindow?
 
     func makeNSView(context: Context) -> NSView {
