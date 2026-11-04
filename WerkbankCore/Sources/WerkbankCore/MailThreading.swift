@@ -3,34 +3,182 @@ import Foundation
 /// Citaatniveaus in platte tekst (regels met ">", ">>" of "> >") als geneste citaatblokken, zodat de weergave ze per
 /// niveau kan kleuren en laten inspringen, zoals bij HTML-mail (`blockquote type="cite"`).
 public enum QuoteLevels {
+    /// Platte tekst (`<pre class="plain">`) en citaten van platte tekst met `<br>` (zoals Werkbank en veel doorgestuurde
+    /// mail ze maken) krijgen hun niveaus als geneste citaten; de rest van de HTML blijft zoals hij is.
+    public static func nest(_ html: String) -> String {
+        html.contains(#"<pre class="plain">"#) ? nestPlainQuotes(html) : nestFlatQuotes(html)
+    }
+
     /// Werkt alleen binnen `<pre class="plain">…</pre>` (de weergave van platte tekst); de tekens zijn daar al als
-    /// `&gt;` geschreven. De rest van de HTML blijft zoals hij is.
+    /// `&gt;` geschreven. Regels met ">" gaan een niveau dieper per ">", en een ouder bericht zonder ">" (na
+    /// "On … wrote:", vanaf "-----Oorspronkelijk bericht-----") ook. De rest van de HTML blijft zoals hij is.
     public static func nestPlainQuotes(_ html: String) -> String {
         let open = #"<pre class="plain">"#
         guard let start = html.range(of: open), let end = html.range(of: "</pre>", options: .backwards),
               start.upperBound <= end.lowerBound else { return html }
         let text = String(html[start.upperBound..<end.lowerBound])
-        guard text.contains("&gt;") else { return html }
+        let lines = text.components(separatedBy: "\n").map { split($0) }
+        let extra = headerLevels(lines.map { plainText($0.rest) }, depths: lines.map(\.depth))
+        guard lines.contains(where: { $0.depth > 0 }) || extra.contains(where: { $0 > 0 }) else { return html }
         var output = ""
         var level = 0
         var segment: [String] = []
-        for line in text.components(separatedBy: "\n") {
-            let (depth, rest) = split(line)
-            if depth != level {
+        for (line, more) in zip(lines, extra) {
+            let target = line.depth + more
+            if target != level {
                 output += segment.joined(separator: "\n")
                 segment = []
-                while level < depth { output += #"<blockquote type="cite">"#; level += 1 }
-                while level > depth { output += "</blockquote>"; level -= 1 }
+                while level < target { output += #"<blockquote type="cite">"#; level += 1 }
+                while level > target { output += "</blockquote>"; level -= 1 }
             }
-            segment.append(rest)
+            segment.append(line.rest)
         }
         output += segment.joined(separator: "\n")
         output += String(repeating: "</blockquote>", count: level)
         return String(html[..<start.upperBound]) + output + String(html[end.lowerBound...])
     }
 
+    /// Een citaat dat platte tekst met `<br>` is (geen eigen blokken erin): de oudere berichten erin een niveau dieper,
+    /// elk in een eigen `openTag`. Andere citaten blijven zoals ze zijn.
+    public static func nestFlatQuotes(_ html: String, openTag: String = #"<blockquote type="cite">"#) -> String {
+        guard html.range(of: "<blockquote", options: .caseInsensitive) != nil else { return html }
+        var output = ""
+        var cursor = html.startIndex
+        var search = html.startIndex
+        while let open = html.range(of: "<blockquote", options: .caseInsensitive, range: search..<html.endIndex) {
+            guard let tagEnd = html.range(of: ">", range: open.upperBound..<html.endIndex),
+                  let close = html.range(of: "</blockquote", options: .caseInsensitive,
+                                         range: tagEnd.upperBound..<html.endIndex) else { break }
+            // Alleen het binnenste citaat: staat er nog een in, dan daar verder.
+            if let inner = html.range(of: "<blockquote", options: .caseInsensitive, range: tagEnd.upperBound..<close.lowerBound) {
+                search = inner.lowerBound
+                continue
+            }
+            if let nested = nestedFlat(String(html[tagEnd.upperBound..<close.lowerBound]), openTag: openTag) {
+                output += String(html[cursor..<tagEnd.upperBound]) + nested
+                cursor = close.lowerBound
+            }
+            search = close.upperBound
+        }
+        guard cursor != html.startIndex else { return html }
+        return output + String(html[cursor...])
+    }
+
+    private static let blockTags = #"(?i)<(div|p|table|ul|ol|pre|blockquote|h[1-6])\b"#
+
+    private static func nestedFlat(_ inner: String, openTag: String) -> String? {
+        guard inner.range(of: blockTags, options: .regularExpression) == nil else { return nil }
+        let lines = inner.replacingOccurrences(of: #"(?i)<br\s*/?>\n?"#, with: "\u{1}", options: .regularExpression)
+            .components(separatedBy: "\u{1}")
+        let levels = headerLevels(lines.map(plainText))
+        guard let top = levels.max(), top > 0 else { return nil }
+        var output = ""
+        var level = 0
+        var segment: [String] = []
+        for (line, target) in zip(lines, levels) {
+            if target != level {
+                output += segment.joined(separator: "<br>\n")
+                segment = []
+                while level < target { output += openTag; level += 1 }
+                while level > target { output += "</blockquote>"; level -= 1 }
+            }
+            segment.append(line)
+        }
+        output += segment.joined(separator: "<br>\n")
+        output += String(repeating: "</blockquote>", count: level)
+        return output
+    }
+
+    // MARK: Waar een ouder bericht begint
+
+    /// Per regel (platte tekst) hoeveel niveaus dieper hij hoort omdat er een ouder bericht begint: na een aanhef
+    /// ("On … wrote:", "Op … heeft … het volgende geschreven:") en vanaf een kop ("-----Oorspronkelijk bericht-----",
+    /// "---------- Doorgestuurd bericht ----------", "Van: … Verzonden: …"). `depths`: het niveau dat een regel al heeft
+    /// (">" in platte tekst); staat de tekst na een aanhef al dieper, dan telt de aanhef niet nog eens.
+    static func headerLevels(_ lines: [String], depths: [Int]? = nil) -> [Int] {
+        let trimmed = lines.map { $0.trimmingCharacters(in: .whitespaces) }
+        func depth(_ index: Int) -> Int { depths.map { $0[index] } ?? 0 }
+        func nextContent(after index: Int) -> Int? {
+            (index + 1..<trimmed.count).first { !trimmed[$0].isEmpty }
+        }
+        var result = Array(repeating: 0, count: lines.count)
+        var extra = 0
+        var extraDepth = 0
+        var index = 0
+        while index < trimmed.count {
+            let current = depth(index)
+            // Terug op een lager ">"-niveau dan waar de kop stond: die kop geldt daar niet.
+            if extra > 0, current < extraDepth { extra = 0 }
+            if isBlockStart(trimmed, at: index), let next = nextContent(after: index), depth(next) == current {
+                extra += 1
+                extraDepth = current
+                result[index] = extra
+                index += 1
+                // De rest van de kop (Van, Verzonden, Aan, Onderwerp …) hoort erbij.
+                while index < trimmed.count, isHeaderField(trimmed[index]) {
+                    result[index] = extra
+                    index += 1
+                }
+                continue
+            }
+            if let span = attributionSpan(trimmed, at: index), let next = nextContent(after: index + span - 1),
+               depth(next) == current {
+                for line in index..<index + span { result[line] = extra }
+                extra += 1
+                extraDepth = current
+                index += span
+                continue
+            }
+            result[index] = extra
+            index += 1
+        }
+        return result
+    }
+
+    private static let attribution = #"(?i)^(op|on|am|le)\s.{0,300}?\b(schreef|wrote|geschreven|schrieb|écrit)\b.{0,160}:$"#
+    private static let marker = #"(?i)^(-{2,}\s*(original message|oorspronkelijk bericht|doorgestuurd bericht|forwarded message)|begin (forwarded message|doorgestuurd bericht)\s*:)"#
+    private static let fromField = #"(?i)^\*?(van|from)\s*:\*?\s*\S"#
+    private static let sentField = #"(?i)^\*?(verzonden|sent|datum|date)\s*:"#
+    private static let headerField = #"(?i)^\*?(van|from|verzonden|sent|datum|date|aan|to|cc|bcc|onderwerp|subject|beantwoorden aan|reply-to)\s*:"#
+
+    /// "-----Oorspronkelijk bericht-----", of een kop van Outlook: "Van: …" met binnen vier regels "Verzonden: …".
+    private static func isBlockStart(_ lines: [String], at index: Int) -> Bool {
+        let line = lines[index]
+        if line.range(of: marker, options: .regularExpression) != nil { return true }
+        guard line.range(of: fromField, options: .regularExpression) != nil else { return false }
+        return lines[(index + 1)..<min(lines.count, index + 5)].contains {
+            $0.range(of: sentField, options: .regularExpression) != nil
+        }
+    }
+
+    private static func isHeaderField(_ line: String) -> Bool {
+        line.range(of: headerField, options: .regularExpression) != nil
+    }
+
+    /// Een aanhef op één regel, of over twee regels (lange aanheffen worden in platte tekst afgebroken).
+    private static func attributionSpan(_ lines: [String], at index: Int) -> Int? {
+        let line = lines[index]
+        guard line.count < 500 else { return nil }
+        if line.range(of: attribution, options: .regularExpression) != nil { return 1 }
+        guard index + 1 < lines.count, line.range(of: #"(?i)^(op|on|am|le)\s"#, options: .regularExpression) != nil,
+              (line + " " + lines[index + 1]).range(of: attribution, options: .regularExpression) != nil else { return nil }
+        return 2
+    }
+
+    /// De tekst van een regel HTML, voor het herkennen van een aanhef of kop.
+    private static func plainText(_ html: String) -> String {
+        guard html.contains("<") || html.contains("&") else { return html }
+        return html.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&amp;", with: "&")
+    }
+
     /// Hoeveel ">" er voor de regel staan (spaties ertussen mogen), en de regel zonder die tekens en de spatie erna.
-    private static func split(_ line: String) -> (Int, String) {
+    private static func split(_ line: String) -> (depth: Int, rest: String) {
         var rest = Substring(line)
         var depth = 0
         while true {

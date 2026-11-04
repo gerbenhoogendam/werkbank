@@ -41,6 +41,19 @@ final class MailComposerTests: XCTestCase {
         XCTAssertEqual(parsed.files.first?.data.count, 5000)
     }
 
+    func testForwardHeaderOnOwnLinesAndOlderMessagesNested() {
+        var mail = sample()
+        mail.quoteIntro = ReplyBuilder.quoteIntro(date: "1 nov 2026", from: "Jan Jansen", forward: true, subject: "Offerte")
+        mail.quote = "Hi,\nDank\n\nOn Sep 18, 2026, Support wrote:\nDag Jan"
+        let raw = MailComposer.build(mail)
+        let parsed = MailContentParser.parse(raw)
+        XCTAssertTrue(parsed.displayHTML.contains("Doorgestuurd bericht ----------<br>"))
+        XCTAssertTrue(parsed.displayHTML.contains("Van: Jan Jansen<br>"))
+        XCTAssertEqual(parsed.displayHTML.components(separatedBy: "<blockquote").count - 1, 2)
+        // De tekstversie: het oudere bericht met twee ">".
+        XCTAssertTrue(parsed.quotableText.contains(">> Dag Jan"), parsed.quotableText)
+    }
+
     func testBodyHTMLReplacesPlainParagraphs() {
         var mail = sample()
         mail.bodyText = "Hoi,\n•\tpunt"

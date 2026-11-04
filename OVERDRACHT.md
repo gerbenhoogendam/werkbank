@@ -455,10 +455,15 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
 
 ## Open punten
 
-- Citaten in de weergave per niveau gekleurd en ingesprongen zoals in Apple Mail (blauw, groen, rood;
-  `MailWebView.quoteLevels`, voor `blockquote type="cite"` en `blockquote.gmail_quote`, ook over de grijze streep van de
-  afzender heen). Platte tekst met ">" wordt eerst geneste citaatblokken (`QuoteLevels.nestPlainQuotes`). Outlook zet
-  een doorgestuurd gesprek niet in citaatblokken maar plat onder elkaar: dat blijft zonder kleur.
+- Citaten in de weergave per niveau gekleurd en ingesprongen zoals in Apple Mail (paars, groenblauw, groen, de kleuren
+  uit Apple Mail van de eigenaar; `MailWebView.quoteLevels`, voor `blockquote type="cite"` en `blockquote.gmail_quote`,
+  ook over de grijze streep en tekstkleur van de afzender heen). `QuoteLevels.nest` zet vooraf de niveaus: platte tekst
+  met ">" en een citaat dat platte tekst met `<br>` is (zo stuurde Werkbank door) krijgen per ouder bericht een dieper
+  citaat, na een aanhef ("On … wrote:", "Op … heeft … het volgende geschreven:") en vanaf een kop
+  ("-----Oorspronkelijk bericht-----", "Van: … Verzonden: …"); `QuoteLevels.headerLevels`. Werkbank verstuurt een
+  citaat nu zelf zo genest (en met ">>" in de tekstversie), en de kop van een doorgestuurde mail staat op eigen regels.
+  Niet gedaan: Outlook-HTML, waar de oudere berichten plat onder elkaar in eigen blokken staan (geen citaat), blijft
+  zonder kleur; doorsturen citeert nog de tekst van de mail, niet de HTML (afbeeldingen en opmaak gaan verloren).
 - Handtekeningafbeeldingen: een afbeelding telt als "in de tekst" bij cid, Content-Location of bestandsnaam
   (`MailContentParser.imageReferences`/`isReferenced`, `inlineNamedImages` zet hem op zijn plek); een ingesloten
   afbeelding met cid tot 100 KB waar de tekst niet naar verwijst, is geen bijlage (`embeddedImageLimit`). In de

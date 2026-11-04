@@ -111,8 +111,12 @@ public enum MailComposer {
         if let quote = mail.quote, !quote.isEmpty {
             text += "\n\n"
             if let intro = mail.quoteIntro { text += intro + "\n" }
-            text += quote.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
-                .map { $0.isEmpty ? ">" : "> " + $0 }.joined(separator: "\n")
+            // Elk ouder bericht in het citaat (na "On … wrote:", vanaf "Van: … Verzonden:") een ">" meer.
+            let lines = quote.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+            text += zip(lines, QuoteLevels.headerLevels(lines)).map { line, level in
+                let prefix = String(repeating: ">", count: level + 1)
+                return line.isEmpty ? prefix : prefix + " " + line
+            }.joined(separator: "\n")
         }
 
         let logo = mail.signatureHTML?.contains("cid:") == true ? mail.signatureImage : nil
@@ -317,9 +321,12 @@ public enum MailComposer {
         }
         if let quote = mail.quote, !quote.isEmpty {
             html += "<br><div style=\"font-family: Helvetica, Arial, sans-serif; font-size: 13px;\">"
-            if let intro = mail.quoteIntro { html += escape(intro) + "<br>" }
-            html += "<blockquote type=\"cite\" style=\"margin: 6px 0 0 0; padding-left: 10px; border-left: 2px solid #c8c8cc; color: #55555a;\">"
-            html += paragraphs(quote) + "</blockquote></div>"
+            // De kop van een doorgestuurde mail op eigen regels (Van, Datum, Onderwerp).
+            if let intro = mail.quoteIntro { html += paragraphs(intro.trimmingCharacters(in: .newlines)) + "<br>" }
+            // Elk ouder bericht in het citaat een eigen, dieper citaat: Apple Mail en Werkbank kleuren ze per niveau.
+            let style = "margin: 6px 0 0 0; padding-left: 10px; border-left: 2px solid #c8c8cc; color: #55555a;"
+            let open = "<blockquote type=\"cite\" style=\"\(style)\">"
+            html += QuoteLevels.nestFlatQuotes(open + paragraphs(quote) + "</blockquote>", openTag: open) + "</div>"
         }
         html += "</body></html>"
         return html

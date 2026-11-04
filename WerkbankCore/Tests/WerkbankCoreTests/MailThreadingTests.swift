@@ -59,4 +59,54 @@ final class MailThreadingTests: XCTestCase {
         XCTAssertEqual(ClaudeDraft.extract(from: answer), "Beste Jan,\n\nDank je.")
         XCTAssertNil(ClaudeDraft.extract(from: "## Samenvatting\nIets"))
     }
+
+    func testOlderMessagesInAFlatQuoteGetTheirOwnLevel() {
+        // Zoals Werkbank (en veel doorgestuurde mail) een citaat maakt: platte tekst met <br>.
+        let html = "<div>Zie onder</div><blockquote type=\"cite\" style=\"color: #555\">Hi David,<br>\nDank<br>\n<br>\n"
+            + "On Sep 18, 2026, 9:41 AM, Support &lt;<a href=\"mailto:s@x.nl\">s@x.nl</a>&gt; wrote:<br>\nDag Jan David,<br>\n"
+            + "Op 15 sep 2026, om 14:34 heeft Jan &lt;jan@x.nl&gt; het volgende geschreven:<br>\nGoedemiddag,</blockquote>"
+        let expected = "<div>Zie onder</div><blockquote type=\"cite\" style=\"color: #555\">Hi David,<br>\nDank<br>\n<br>\n"
+            + "On Sep 18, 2026, 9:41 AM, Support &lt;<a href=\"mailto:s@x.nl\">s@x.nl</a>&gt; wrote:"
+            + "<blockquote type=\"cite\">Dag Jan David,<br>\n"
+            + "Op 15 sep 2026, om 14:34 heeft Jan &lt;jan@x.nl&gt; het volgende geschreven:"
+            + "<blockquote type=\"cite\">Goedemiddag,</blockquote></blockquote></blockquote>"
+        XCTAssertEqual(QuoteLevels.nest(html), expected)
+    }
+
+    func testOutlookHeaderStartsTheOlderMessage() {
+        let html = "<blockquote type=\"cite\">Prima<br>\n<br>\n-----Oorspronkelijk bericht-----<br>\nVan: Jan<br>\n"
+            + "Verzonden: maandag<br>\nOnderwerp: Offerte<br>\n<br>\nOude tekst</blockquote>"
+        XCTAssertEqual(QuoteLevels.nest(html),
+                       "<blockquote type=\"cite\">Prima<br>\n<blockquote type=\"cite\">-----Oorspronkelijk bericht-----<br>\n"
+                       + "Van: Jan<br>\nVerzonden: maandag<br>\nOnderwerp: Offerte<br>\n<br>\nOude tekst</blockquote></blockquote>")
+        // Een kop van Outlook zonder streepjesregel.
+        let outlook = "<blockquote type=\"cite\">Ja<br>\nVan: Jan<br>\nVerzonden: ma<br>\nAan: Piet<br>\n<br>\nOud</blockquote>"
+        XCTAssertEqual(QuoteLevels.nest(outlook),
+                       "<blockquote type=\"cite\">Ja<blockquote type=\"cite\">Van: Jan<br>\nVerzonden: ma<br>\nAan: Piet<br>\n<br>\n"
+                       + "Oud</blockquote></blockquote>")
+    }
+
+    func testQuotesThatAreNotFlatOrHaveNoHeaderStayTheSame() {
+        let blocks = "<blockquote type=\"cite\"><div>On Tue, Jan wrote:</div><div>oud</div></blockquote>"
+        XCTAssertEqual(QuoteLevels.nest(blocks), blocks)
+        let plain = "<blockquote type=\"cite\">Gewoon een citaat<br>\nVan: iemand die iets zei</blockquote>"
+        XCTAssertEqual(QuoteLevels.nest(plain), plain)
+        XCTAssertEqual(QuoteLevels.nest("<div>Geen citaat</div>"), "<div>Geen citaat</div>")
+    }
+
+    func testPlainTextHeadersWithoutQuoteMarks() {
+        let html = "<pre class=\"plain\">Prima\nOn Tue, Jan wrote:\nOude tekst</pre>"
+        XCTAssertEqual(QuoteLevels.nest(html),
+                       "<pre class=\"plain\">Prima\nOn Tue, Jan wrote:<blockquote type=\"cite\">Oude tekst</blockquote></pre>")
+        // Staat de tekst na de aanhef al met ">", dan geen extra niveau.
+        let quoted = "<pre class=\"plain\">Prima\nOn Tue, Jan wrote:\n&gt; oud</pre>"
+        XCTAssertEqual(QuoteLevels.nest(quoted),
+                       "<pre class=\"plain\">Prima\nOn Tue, Jan wrote:<blockquote type=\"cite\">oud</blockquote></pre>")
+    }
+
+    func testHeaderLevelsForComposing() {
+        let lines = ["Hoi", "", "Op 1 nov 2026 schreef Jan <jan@x.nl>:", "Oud", "-----Original Message-----",
+                     "From: Piet", "Sent: Monday", "", "Ouder"]
+        XCTAssertEqual(QuoteLevels.headerLevels(lines), [0, 0, 0, 1, 2, 2, 2, 2, 2])
+    }
 }

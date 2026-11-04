@@ -932,20 +932,22 @@ struct MailWebView: NSViewRepresentable {
     private static let quote = #":is(blockquote[type="cite" i], blockquote.gmail_quote)"#
 
     private static let quoteLevels: String = {
-        // Streep en tekst per niveau; de tekstkleuren zijn donker genoeg voor wit (4,5:1).
-        let colors = [("#007AFF", "#1F5FC9"), ("#34C759", "#1E7B34"), ("#FF3B30", "#C0261C")]
+        // Streep en tekst per niveau: paars, groenblauw, groen, zoals ingesteld in Apple Mail. De tekstkleuren zijn
+        // donker genoeg voor wit (minstens 4,5:1). Ook over een grijze tekstkleur van de afzender heen; tekst die zelf
+        // een kleur heeft, houdt die.
+        let colors = [("#5856D6", "#5856D6"), ("#4AA9C9", "#1E7A99"), ("#5ABE32", "#2E7D1A")]
         return (1...6).map { level -> String in
             let selector = Array(repeating: MailWebView.quote, count: level).joined(separator: " ")
             let (bar, text) = colors[(level - 1) % colors.count]
             return "\(selector) { margin: 8px 0 8px 2px !important; padding: 0 0 0 12px !important; "
-                + "border: none !important; border-left: 2px solid \(bar) !important; color: \(text); }"
+                + "border: none !important; border-left: 2px solid \(bar) !important; color: \(text) !important; }"
         }.joined(separator: "\n")
     }()
 
     static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
         let images = allowRemote ? "img-src data: https: http: \(MailImageLoader.scheme):" : "img-src data:"
-        let body = GIFLoop.playOnce(inHTML: allowRemote ? MailImageLoader.route(QuoteLevels.nestPlainQuotes(inner))
-                                                        : QuoteLevels.nestPlainQuotes(inner))
+        let body = GIFLoop.playOnce(inHTML: allowRemote ? MailImageLoader.route(QuoteLevels.nest(inner))
+                                                        : QuoteLevels.nest(inner))
         return """
         <!doctype html><html><head><meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; \(images); style-src 'unsafe-inline'; font-src data:">
@@ -957,8 +959,8 @@ struct MailWebView: NSViewRepresentable {
         img { max-width: 100%; height: auto; }
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }
         blockquote { margin: 8px 0 8px 4px; padding-left: 12px; border-left: 3px solid #d0d0d5; color: #55555a; }
-        /* Citaten per niveau in een eigen kleur en ingesprongen, zoals in Apple Mail: blauw, groen, rood, en weer van
-           voren af. Ook als de afzender er zelf een grijze streep aan gaf (Gmail, Outlook op het web). */
+        /* Citaten per niveau in een eigen kleur en ingesprongen, zoals in Apple Mail: paars, groenblauw, groen, en weer
+           van voren af. Ook als de afzender er zelf een grijze streep aan gaf (Gmail, Outlook op het web). */
         \(Self.quoteLevels)
         table { max-width: 100%; }
         \(fitsContent ? "html, body { overflow: hidden; }" : "")
