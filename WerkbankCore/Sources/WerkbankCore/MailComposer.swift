@@ -79,8 +79,8 @@ public struct ComposedMail {
     /// Het oorspronkelijke bericht bij beantwoorden of doorsturen, met de aanhef ("Op … schreef …:").
     public var quote: String?
     public var quoteIntro: String?
-    /// Doorsturen: het oorspronkelijke bericht als HTML (met opmaak en afbeeldingen, die in `inlineImages` meegaan);
-    /// `quote` blijft de tekstversie.
+    /// Het oorspronkelijke bericht als HTML (met opmaak en afbeeldingen, die in `inlineImages` meegaan), bij
+    /// beantwoorden en doorsturen; `quote` blijft de tekstversie.
     public var quoteHTML: String?
     public var signatureHTML: String?
     /// Het plaatje dat de handtekening als `cid:` aanroept.
@@ -308,6 +308,11 @@ public enum MailComposer {
         escape(text.replacingOccurrences(of: "\r\n", with: "\n")).replacingOccurrences(of: "\n", with: "<br>\n")
     }
 
+    /// De aanhef boven het citaat ("Op … schreef …:", of de kop van een doorgestuurde mail) als HTML, regel voor regel.
+    public static func introHTML(_ intro: String) -> String {
+        paragraphs(intro.trimmingCharacters(in: .newlines))
+    }
+
     private static func htmlBody(_ mail: ComposedMail) -> String {
         var html = "<html><body><div style=\"font-family: Helvetica, Arial, sans-serif; font-size: 13px;\">"
         html += (mail.bodyHTML ?? paragraphs(mail.bodyText)) + "</div>"
@@ -325,7 +330,7 @@ public enum MailComposer {
         if let quote = mail.quote, !quote.isEmpty {
             html += "<br><div style=\"font-family: Helvetica, Arial, sans-serif; font-size: 13px;\">"
             // De kop van een doorgestuurde mail op eigen regels (Van, Datum, Onderwerp).
-            if let intro = mail.quoteIntro { html += paragraphs(intro.trimmingCharacters(in: .newlines)) + "<br>" }
+            if let intro = mail.quoteIntro { html += introHTML(intro) + "<br>" }
             // Elk ouder bericht in het citaat een eigen, dieper citaat: Apple Mail en Werkbank kleuren ze per niveau.
             let style = "margin: 6px 0 0 0; padding-left: 10px; border-left: 2px solid #c8c8cc; color: #55555a;"
             let open = "<blockquote type=\"cite\" style=\"\(style)\">"

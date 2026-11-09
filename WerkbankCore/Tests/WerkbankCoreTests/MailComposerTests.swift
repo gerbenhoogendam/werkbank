@@ -71,6 +71,25 @@ final class MailComposerTests: XCTestCase {
         XCTAssertTrue(parsed.quotableText.contains("> Zie bijlage"), parsed.quotableText)
     }
 
+    /// Een antwoord met het origineel als HTML: de afbeelding uit de oorspronkelijke mail gaat mee, de aanhef staat erboven.
+    func testReplyWithHTMLQuoteKeepsImages() {
+        var mail = sample()
+        mail.quoteIntro = ReplyBuilder.quoteIntro(date: "2 okt 2026", from: "Matthijs <m@x.nl>", forward: false)
+        mail.quote = "Graag toegang\n[cid:image001.png@01DD]"
+        mail.quoteHTML = #"<p>Graag <i>toegang</i></p><img src="cid:image001.png@01DD">"#
+        mail.inlineImages = [MailAttachment(name: "image001.png", mediaType: "image/png",
+                                            data: Data(repeating: 2, count: 4000), contentID: "image001.png@01DD")]
+        let parsed = MailContentParser.parse(MailComposer.build(mail))
+        XCTAssertTrue(parsed.displayHTML.contains("Op 2 okt 2026 schreef Matthijs &lt;m@x.nl&gt;:"), parsed.displayHTML)
+        XCTAssertTrue(parsed.displayHTML.contains("Graag <i>toegang</i>"), parsed.displayHTML)
+        XCTAssertTrue(parsed.displayHTML.contains("data:image/png;base64,"))
+        XCTAssertFalse(parsed.displayHTML.contains("[cid:image001"))
+    }
+
+    func testIntroHTMLEscapesAndBreaksLines() {
+        XCTAssertEqual(MailComposer.introHTML("Van: A <a@x.nl>\nDatum: 1 nov\n"), "Van: A &lt;a@x.nl&gt;<br>\nDatum: 1 nov")
+    }
+
     func testBodyHTMLReplacesPlainParagraphs() {
         var mail = sample()
         mail.bodyText = "Hoi,\n•\tpunt"

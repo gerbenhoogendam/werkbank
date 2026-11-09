@@ -51,8 +51,9 @@ public struct MailContent: Equatable {
     public var quotableText: String = ""
     /// Echte bijlagen: alles wat niet als afbeelding in de tekst staat (`cid:`), in de volgorde van de mail.
     public var files: [MailAttachment] = []
-    /// Voor doorsturen: de HTML van de mail om in een andere mail te zetten (de inhoud van `<body>`, met de stijlen
-    /// en zonder scripts; afbeeldingen als `cid:`), en de afbeeldingen waar die naar verwijst. `nil` bij platte tekst.
+    /// Voor doorsturen en beantwoorden: de HTML van de mail om in een andere mail te zetten (de inhoud van `<body>`,
+    /// met de stijlen en zonder scripts; afbeeldingen als `cid:`), en de afbeeldingen waar die naar verwijst. `nil` bij
+    /// platte tekst.
     public var forwardHTML: String?
     public var forwardImages: [MailAttachment] = []
 

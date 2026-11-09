@@ -51,10 +51,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// De app draait door als het hoofdvenster gesloten is (de menubalkknop blijft actief).
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
-    /// Klik op het Dock-icoon zonder open venster: macOS toont het gesloten hoofdvenster weer; dat vouwt dan open.
+    /// Klik op het Dock-icoon: altijd het hoofdvenster. Zonder open venster toont macOS het gesloten hoofdvenster
+    /// weer (dat vouwt dan open). Staat er een los venster open (mail, opstelvenster, timer), dan doet macOS niets:
+    /// dan zelf het hoofdvenster openen, uit het Dock halen of naar voren halen.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { DuoWindowFold.shared.prepareReopen() }
-        return true
+        guard flag else {
+            DuoWindowFold.shared.prepareReopen()
+            return true
+        }
+        if let window = DuoWindowFold.shared.mainWindow, window.isVisible || window.isMiniaturized {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            WindowRouter.showMain()
+        }
+        return false
     }
 
     /// Stoppen: eerst vouwt het hoofdvenster dicht.

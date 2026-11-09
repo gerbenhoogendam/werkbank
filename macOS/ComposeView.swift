@@ -98,6 +98,9 @@ struct ComposeView: View {
     @State private var draftSaveTask: Task<Void, Never>?
     /// Verstuurd: niets meer als concept bewaren.
     @State private var sent = false
+    /// Het oorspronkelijke bericht onder de handtekening (HTML, één keer opgebouwd) en hoe hoog het is.
+    @State private var quoteDocument = ""
+    @State private var quoteHeight: CGFloat = 40
 
     private static let maxAttachmentBytes = 18_000_000
 
@@ -121,9 +124,14 @@ struct ComposeView: View {
                 // In een gesprek groeit het opstelblok mee; het gesprek eromheen scrolt.
                 editorContent
             } else {
-                ScrollView { editorContent }
-                    .scrollIndicators(.never)
-                quotePreview
+                // Het oorspronkelijke bericht staat onder de tekst en de handtekening: naar beneden scrollen om het te lezen.
+                ScrollView {
+                    VStack(spacing: 0) {
+                        editorContent
+                        quotedOriginal
+                    }
+                }
+                .scrollIndicators(.never)
             }
             reviewSection
             if !pinsFooter { footer }
@@ -143,6 +151,9 @@ struct ComposeView: View {
         .onChange(of: subject) { _, _ in markEngaged() }
         .onChange(of: attachments.count) { _, _ in markEngaged() }
         .onChange(of: fromAccount, initial: true) { _, account in signaturePreview = MailSignatures.preview(for: account) }
+        .onChange(of: original?.messageID, initial: true) { _, _ in
+            quoteDocument = embedded ? "" : original.map(quoteHTML) ?? ""
+        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -298,20 +309,28 @@ struct ComposeView: View {
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { rich.focusEnd() })
     }
 
-    @ViewBuilder private var quotePreview: some View {
-        if let original, !original.quotableText.isEmpty {
-            Rectangle().fill(ThingsColor.separator).frame(height: 1)
-            ScrollView {
-                Text(original.quotableText)
-                    .font(.werk(size: 12))
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .textSelection(.enabled)
+    /// Het oorspronkelijke bericht zoals het meegaat: de aanhef en daaronder het citaat, met opmaak en afbeeldingen. Bij
+    /// beantwoorden staan de bijlagen eronder (om te bekijken; ze gaan niet mee). Doorsturen: die staan al bij de
+    /// bijlagen van deze mail.
+    @ViewBuilder private var quotedOriginal: some View {
+        if let original, !original.quotableText.isEmpty, !quoteDocument.isEmpty {
+            AutoHeightMailWebView(html: quoteDocument, height: $quoteHeight, margin: "4px 20px 12px")
+                .frame(height: quoteHeight)
+            if ref.mode != .forward, !original.files.isEmpty {
+                MailAttachmentsView(files: original.files, folderName: "citaat-\(ref.id.uuidString)")
+                    .padding(.leading, 34)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 16)
             }
-            .frame(maxHeight: 130)
-            .background(ThingsColor.backgroundSidebar)
         }
+    }
+
+    /// Aanhef en citaat als HTML, zoals `MailComposer` ze in de mail zet; de afbeeldingen als data-URL.
+    private func quoteHTML(_ original: MailContent) -> String {
+        let intro = ReplyBuilder.quoteIntro(date: original.date, from: original.from, forward: ref.mode == .forward,
+                                            subject: original.subject)
+        return "<div style=\"font: 13px Helvetica, Arial, sans-serif; color: #55555a;\">"
+            + MailComposer.introHTML(intro) + "</div><blockquote type=\"cite\">" + original.displayHTML + "</blockquote>"
     }
 
     /// Een los opstelpaneel waarin je iets hebt ingevuld, sluit niet meer bij een klik ernaast.
@@ -797,9 +816,9 @@ struct ComposeView: View {
             mail.quote = original.quotableText
             mail.quoteIntro = ReplyBuilder.quoteIntro(date: original.date, from: original.from, forward: ref.mode == .forward,
                                                       subject: original.subject)
-            // Doorsturen: de mail zelf met opmaak en afbeeldingen, als dat samen met de bijlagen binnen de grens blijft
-            // (anders de tekst).
-            if ref.mode == .forward, let html = original.forwardHTML {
+            // De mail zelf met opmaak en afbeeldingen (zoals hij onder de tekst staat), als dat samen met de bijlagen
+            // binnen de grens blijft; anders de tekst.
+            if let html = original.forwardHTML {
                 let imageBytes = original.forwardImages.reduce(0) { $0 + $1.data.count }
                 if totalAttachmentBytes + imageBytes <= Self.maxAttachmentBytes {
                     mail.quoteHTML = html

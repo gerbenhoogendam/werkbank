@@ -58,6 +58,12 @@ final class DuoWindowFold {
         unfold(window, settle: reused ? .milliseconds(60) : .milliseconds(300))
     }
 
+    /// Het hoofdvenster, open of gesloten (nil als het er niet meer is).
+    var mainWindow: NSWindow? {
+        NSApp.windows.first { windows[ObjectIdentifier($0)] == true }
+            ?? closed.values.first { $0.isMain && $0.window != nil }?.window
+    }
+
     /// Vlak voordat macOS een gesloten venster weer toont (Dock, menubalk): alvast achter de bureaubladachtergrond,
     /// zodat het niet eerst even plat in beeld staat. Komt het binnen 1,5 s niet tevoorschijn, dan terug zoals het was.
     func prepareReopen() {

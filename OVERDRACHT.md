@@ -230,6 +230,20 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     alleen in het venster van die details). Een losse afspraak gaat meteen weg (⌘Z zet hem terug); herhalend: "Alleen
     deze" of "Deze en alle volgende"; met deelnemers eerst een bevestiging (deelnemers komen met ⌘Z niet terug). Alleen
     in agenda's die je mag wijzigen. Testen alleen in een testagenda (testregels).
+27. **Bijlagen zoals in de Finder** (9 nov, `AttachmentMouseView` in `macOS/MailAttachmentsView.swift`). Klik kiest een
+    bijlage (achtergrond in de selectiekleur, zolang hij eerste responder is), spatie of een halve seconde vasthouden
+    zonder te bewegen opent Snelle weergave (`QLPreviewPanel`; blijft na loslaten open, spatie of Esc sluit hem), staat
+    Snelle weergave al open dan toont een klik op een andere bijlage die. Dubbelklik opent in het standaardprogramma,
+    slepen zet het bestand in de Finder (AppKit-sleep in plaats van `onDrag`), rechtsklik: Openen, Snelle weergave,
+    Bewaar als…. Na te gaan: spatie in de mailmodus (de mailmodustoetsen laten de spatie door), vasthouden naast slepen.
+28. **Origineel onder een antwoord** (9 nov, `ComposeView.quotedOriginal`). In een los opstelvenster en het opstelpaneel
+    staat het oorspronkelijke bericht niet meer in een vast grijs blok, maar onder de tekst en de handtekening in
+    dezelfde scroll: de aanhef en het citaat met opmaak en afbeeldingen (`displayHTML` in een `AutoHeightMailWebView`,
+    citaatkleuren uit Voorkeuren), bij beantwoorden met de bijlagen eronder (om te bekijken; ze gaan niet mee).
+    Beantwoorden stuurt het origineel nu ook als HTML mee (`forwardHTML`, net als doorsturen), binnen de 18 MB.
+29. **Dock-icoon** (9 nov, `AppDelegate.applicationShouldHandleReopen`). Een klik haalt altijd het hoofdvenster naar
+    voren, ook als er alleen een los venster (opstelvenster, timer) open staat: gesloten wordt het weer geopend
+    (`WindowRouter.showMain`), in het Dock teruggehaald, achter een ander venster naar voren gehaald.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
@@ -483,7 +497,8 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   Werkbank verstuurt een citaat zelf genest (en met ">>" in de tekstversie); de kop van een doorgestuurde mail staat op
   eigen regels. Doorsturen stuurt de mail zelf als HTML mee (`MailContent.forwardHTML`: de inhoud van `<body>` met de
   stijlen uit de kop, zonder scripts; `forwardImages`: de afbeeldingen met cid, en met alleen een naam een eigen
-  Content-ID), als die samen met de bijlagen binnen 18 MB blijft; anders de tekst. Beantwoorden citeert nog de tekst.
+  Content-ID), als die samen met de bijlagen binnen 18 MB blijft; anders de tekst. Beantwoorden doet dat sinds 9 nov
+  ook (de tekstversie blijft de tekst met ">").
 - Handtekeningafbeeldingen: een afbeelding telt als "in de tekst" bij cid, Content-Location of bestandsnaam
   (`MailContentParser.imageReferences`/`isReferenced`, `inlineNamedImages` zet hem op zijn plek); een ingesloten
   afbeelding met cid tot 100 KB waar de tekst niet naar verwijst, is geen bijlage (`embeddedImageLimit`). In de
