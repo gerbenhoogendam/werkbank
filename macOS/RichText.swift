@@ -451,8 +451,8 @@ final class RichTextController {
                             level: style?.firstLineHeadIndent ?? 0)
     }
 
-    /// Na plakken: wat er geplakt is altijd in Helvetica 13 en de tekstkleur, zonder markering, regelafstand of
-    /// uitlijning van de bron. Vet, cursief, onderstreept, doorgehaald, links en afbeeldingen blijven; opsommingen en
+    /// Na plakken: wat er geplakt is altijd in Helvetica 13 en de tekstkleur, zonder markering, doorhalen, regelafstand
+    /// of uitlijning van de bron. Vet, cursief, onderstreept, links en afbeeldingen blijven; opsommingen en
     /// nummering uit de bron (`NSTextList`, of een regel die met een lijstteken en een tab begint) worden lijsten
     /// zoals de werkbalk ze maakt. Eén stap voor ⌘Z samen met het plakken (`RichNSTextView.paste`).
     func normalizePasted(_ context: PasteContext) {
@@ -486,9 +486,6 @@ final class RichTextController {
                 clean[.link] = link
             } else if ((attributes[.underlineStyle] as? Int) ?? 0) != 0 {
                 clean[.underlineStyle] = NSUnderlineStyle.single.rawValue
-            }
-            if ((attributes[.strikethroughStyle] as? Int) ?? 0) != 0 {
-                clean[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
             }
             for key in [NSAttributedString.Key.attachment, .paragraphStyle, Self.listKey] {
                 if let value = attributes[key] { clean[key] = value }

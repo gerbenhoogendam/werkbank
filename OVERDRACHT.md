@@ -246,8 +246,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`WindowRouter.showMain`), in het Dock teruggehaald, achter een ander venster naar voren gehaald.
 30. **Plakken in de opmaak van de mail** (9 nov, `RichTextController.normalizePasted`, `RichNSTextView.paste`,
     `WerkbankCore/…/ListMarker.swift`). ⌘V in een mail die je opstelt: het geplakte wordt altijd Helvetica 13 in de
-    tekstkleur (zwart in de mail), zonder markering, regelafstand, uitlijning of inspringing van de bron. Vet, cursief,
-    onderstreept, doorgehaald, links en afbeeldingen blijven. Lijsten uit de bron (`NSTextList` uit een webpagina,
+    tekstkleur (zwart in de mail), zonder markering, doorhalen, regelafstand, uitlijning of inspringing van de bron.
+    Vet, cursief, onderstreept, links en afbeeldingen blijven. Lijsten uit de bron (`NSTextList` uit een webpagina,
     Pages of Word, of een regel die met een lijstteken en een tab begint) worden lijsten zoals de werkbalk ze maakt,
     ingesprongen per niveau. Ruimte tussen alinea's in de bron (vanaf 4 pt) wordt een lege regel. Geplakt midden in
     een regel: die regel houdt haar vorm. Plakken en aanpassen zijn samen één ⌘Z. ⇧⌥⌘V plakt platte tekst. Na te gaan
