@@ -429,6 +429,168 @@ final class RichTextController {
         return style
     }
 
+    // MARK: Plakken
+
+    /// Waar geplakt wordt, vastgelegd vlak voor het plakken: het begin, hoeveel tekst erachter staat en hoe ver de
+    /// alinea daar inspringt.
+    struct PasteContext {
+        let start: Int
+        let remaining: Int
+        let level: CGFloat
+    }
+
+    /// Opsommingsvormen van `NSTextList` die een opsomming zijn (de rest is nummering: 1., a., iv. …).
+    private static let bulletFormats: Set<NSTextList.MarkerFormat> = [.disc, .circle, .square, .diamond, .box, .check,
+                                                                     .hyphen]
+
+    func pasteContext() -> PasteContext? {
+        guard let textView, let storage = textView.textStorage else { return nil }
+        let selection = textView.selectedRange()
+        let style = textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
+        return PasteContext(start: selection.location, remaining: storage.length - NSMaxRange(selection),
+                            level: style?.firstLineHeadIndent ?? 0)
+    }
+
+    /// Na plakken: wat er geplakt is altijd in Helvetica 13 en de tekstkleur, zonder markering, regelafstand of
+    /// uitlijning van de bron. Vet, cursief, onderstreept, doorgehaald, links en afbeeldingen blijven; opsommingen en
+    /// nummering uit de bron (`NSTextList`, of een regel die met een lijstteken en een tab begint) worden lijsten
+    /// zoals de werkbalk ze maakt. Eén stap voor ⌘Z samen met het plakken (`RichNSTextView.paste`).
+    func normalizePasted(_ context: PasteContext) {
+        guard let textView, let storage = textView.textStorage else { return }
+        let end = storage.length - context.remaining
+        guard context.start >= 0, end > context.start else { return }
+        let pasted = NSRange(location: context.start, length: end - context.start)
+        let caret = textView.selectedRange().location
+        let delta = edit(textView) { text in
+            self.normalizeCharacters(in: text, range: pasted)
+            self.normalizeParagraphs(in: text, range: pasted, level: context.level)
+        }
+        textView.setSelectedRange(NSRange(location: min(max(0, caret + delta), storage.length), length: 0))
+        renumber()
+        refreshState()
+    }
+
+    private func normalizeCharacters(in text: NSMutableAttributedString, range: NSRange) {
+        text.enumerateAttributes(in: range) { attributes, run, _ in
+            var clean: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.textColor]
+            var font = Self.defaultFont
+            if let source = attributes[.font] as? NSFont {
+                let traits = NSFontManager.shared.traits(of: source)
+                let symbolic = source.fontDescriptor.symbolicTraits
+                if traits.contains(.boldFontMask) || symbolic.contains(.bold) { font = Self.font(font, bold: true) }
+                if traits.contains(.italicFontMask) || symbolic.contains(.italic) { font = Self.font(font, italic: true) }
+            }
+            clean[.font] = font
+            if let link = attributes[.link] {
+                // Een link krijgt zijn streep en kleur van het tekstvak en van de mail; geen eigen streep.
+                clean[.link] = link
+            } else if ((attributes[.underlineStyle] as? Int) ?? 0) != 0 {
+                clean[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            }
+            if ((attributes[.strikethroughStyle] as? Int) ?? 0) != 0 {
+                clean[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+            }
+            for key in [NSAttributedString.Key.attachment, .paragraphStyle, Self.listKey] {
+                if let value = attributes[key] { clean[key] = value }
+            }
+            text.setAttributes(clean, range: run)
+        }
+    }
+
+    /// Ruimte tussen alinea's in de bron (punten) vanaf waar er een lege regel tussen komt.
+    private static let gapSpacing: CGFloat = 4
+
+    /// Per alinea van achter naar voren (lijsttekens veranderen van lengte). Een alinea die al vóór het plakken begon,
+    /// houdt haar eigen vorm; de rest wordt gewone tekst op de inspringing van de plek (`level`) of een lijst. Had de
+    /// bron ruimte tussen twee alinea's (een webpagina, Word), dan komt daar een lege regel: zo blijven ze gescheiden,
+    /// ook in de verstuurde mail.
+    private func normalizeParagraphs(in text: NSMutableAttributedString, range: NSRange, level: CGFloat) {
+        let string = NSString(string: text.string)
+        var paragraphs: [NSRange] = []
+        var location = range.location
+        repeat {
+            let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+            paragraphs.append(paragraph)
+            location = NSMaxRange(paragraph)
+        } while location < NSMaxRange(range) && location < string.length
+        let source = paragraphs.map { paragraph -> (list: Bool, before: CGFloat, after: CGFloat, empty: Bool) in
+            let style = text.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+            let content = string.substring(with: paragraph)
+            let list = !(style?.textLists.isEmpty ?? true) || ListMarker.leading(content) != nil
+            return (list, style?.paragraphSpacingBefore ?? 0, style?.paragraphSpacing ?? 0,
+                    content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        for index in paragraphs.indices.reversed() {
+            let paragraph = paragraphs[index]
+            if paragraph.location < range.location {
+                joinPasted(NSRange(location: range.location,
+                                   length: min(NSMaxRange(paragraph), NSMaxRange(range)) - range.location),
+                           into: paragraph, text: text)
+                continue
+            }
+            if index + 1 < paragraphs.count, NSMaxRange(paragraph) <= NSMaxRange(range),
+               !source[index].empty, !source[index + 1].empty, !(source[index].list && source[index + 1].list),
+               max(source[index].after, source[index + 1].before) >= Self.gapSpacing {
+                var attributes = Self.defaultAttributes
+                attributes[.paragraphStyle] = Self.paragraphStyle(level: level, list: false)
+                text.insert(NSAttributedString(string: "\n", attributes: attributes), at: NSMaxRange(paragraph))
+            }
+            normalizeParagraph(paragraph, level: level, text: text)
+        }
+    }
+
+    /// Geplakt midden in een bestaande alinea: de vorm van die alinea, en geen lijstteken uit de bron midden in de regel.
+    private func joinPasted(_ pasted: NSRange, into paragraph: NSRange, text: NSMutableAttributedString) {
+        guard pasted.length > 0 else { return }
+        if let style = text.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) {
+            text.addAttribute(.paragraphStyle, value: style, range: pasted)
+        } else {
+            text.removeAttribute(.paragraphStyle, range: pasted)
+        }
+        if let list = text.attribute(Self.listKey, at: paragraph.location, effectiveRange: nil) {
+            text.addAttribute(Self.listKey, value: list, range: pasted)
+        } else {
+            text.removeAttribute(Self.listKey, range: pasted)
+        }
+        let content = NSString(string: text.string).substring(with: pasted)
+        if let marker = ListMarker.leading(content), marker.length < pasted.length {
+            text.deleteCharacters(in: NSRange(location: pasted.location, length: marker.length))
+        }
+    }
+
+    private func normalizeParagraph(_ paragraph: NSRange, level: CGFloat, text: NSMutableAttributedString) {
+        let content = NSString(string: text.string).substring(with: paragraph)
+        let style = text.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+        let lists = style?.textLists ?? []
+        var kind: ListKind?
+        var markerLength = 0
+        var depth: CGFloat = 0
+        if let list = lists.last {
+            kind = Self.bulletFormats.contains(list.markerFormat) ? .bullet : .number
+            markerLength = ListMarker.listed(content)
+            depth = CGFloat(lists.count - 1) * Self.indentStep
+        } else if let marker = ListMarker.leading(content) {
+            kind = marker.kind == .number ? .number : .bullet
+            markerLength = marker.length
+        }
+        guard let kind else {
+            text.removeAttribute(Self.listKey, range: paragraph)
+            text.addAttribute(.paragraphStyle, value: Self.paragraphStyle(level: level, list: false), range: paragraph)
+            return
+        }
+        let first = min(paragraph.location + markerLength, NSMaxRange(paragraph) - 1)
+        var attributes = text.attributes(at: max(paragraph.location, first), effectiveRange: nil)
+        attributes[.link] = nil
+        attributes[.attachment] = nil
+        attributes[.underlineStyle] = nil
+        attributes[.strikethroughStyle] = nil
+        text.replaceCharacters(in: NSRange(location: paragraph.location, length: markerLength),
+                               with: NSAttributedString(string: kind == .bullet ? "•\t" : "0.\t", attributes: attributes))
+        let updated = NSString(string: text.string).paragraphRange(for: NSRange(location: paragraph.location, length: 0))
+        text.addAttribute(.paragraphStyle, value: Self.paragraphStyle(level: level + depth, list: true), range: updated)
+        text.addAttribute(Self.listKey, value: kind.rawValue, range: updated)
+    }
+
     // MARK: Wijzigen met ongedaan maken
 
     /// Wijzigt een kopie en zet die in één keer terug, met de nieuwe tekst erbij: zo kan ⌘Z het precies
@@ -740,7 +902,15 @@ final class RichNSTextView: NSTextView {
             insertImage(data: data, name: "afbeelding.png")
             return
         }
+        // Tekst: altijd in de opmaak van de mail (Helvetica 13); lijsten, links, vet, cursief en onderstreept blijven.
+        guard let context = controller?.pasteContext() else {
+            super.paste(sender)
+            return
+        }
+        undoManager?.beginUndoGrouping()
         super.paste(sender)
+        controller?.normalizePasted(context)
+        undoManager?.endUndoGrouping()
     }
 
     private func insertImage(from url: URL) {
@@ -765,6 +935,13 @@ final class RichNSTextView: NSTextView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // ⇧⌥⌘V: plakken als platte tekst, in de opmaak waar de cursor staat.
+        if window?.firstResponder === self,
+           event.modifierFlags.intersection([.command, .option, .shift, .control]) == [.command, .option, .shift],
+           event.charactersIgnoringModifiers?.lowercased() == "v" {
+            pasteAsPlainText(nil)
+            return true
+        }
         guard window?.firstResponder === self, let controller,
               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               let key = event.charactersIgnoringModifiers?.lowercased() else {

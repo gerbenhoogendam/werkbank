@@ -244,6 +244,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 29. **Dock-icoon** (9 nov, `AppDelegate.applicationShouldHandleReopen`). Een klik haalt altijd het hoofdvenster naar
     voren, ook als er alleen een los venster (opstelvenster, timer) open staat: gesloten wordt het weer geopend
     (`WindowRouter.showMain`), in het Dock teruggehaald, achter een ander venster naar voren gehaald.
+30. **Plakken in de opmaak van de mail** (9 nov, `RichTextController.normalizePasted`, `RichNSTextView.paste`,
+    `WerkbankCore/…/ListMarker.swift`). ⌘V in een mail die je opstelt: het geplakte wordt altijd Helvetica 13 in de
+    tekstkleur (zwart in de mail), zonder markering, regelafstand, uitlijning of inspringing van de bron. Vet, cursief,
+    onderstreept, doorgehaald, links en afbeeldingen blijven. Lijsten uit de bron (`NSTextList` uit een webpagina,
+    Pages of Word, of een regel die met een lijstteken en een tab begint) worden lijsten zoals de werkbalk ze maakt,
+    ingesprongen per niveau. Ruimte tussen alinea's in de bron (vanaf 4 pt) wordt een lege regel. Geplakt midden in
+    een regel: die regel houdt haar vorm. Plakken en aanpassen zijn samen één ⌘Z. ⇧⌥⌘V plakt platte tekst. Na te gaan
+    met Safari, Chrome, Word, Outlook en Pages: herkent hij de lijsten, valt er geen teken of tab te veel achter.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
