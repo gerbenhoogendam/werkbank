@@ -105,6 +105,11 @@ final class MailModeStore {
     @ObservationIgnored private var returnTask: Task<Void, Never>?
     @ObservationIgnored private var escapeMonitor: Any?
     @ObservationIgnored private var loadToken = 0
+    /// Wanneer de lijst het laatst is opgevraagd (gelukt of niet) en wanneer het laden begon.
+    @ObservationIgnored private var lastAttempt: Date?
+    @ObservationIgnored private var loadStarted: Date?
+    /// Terug in de app of na de slaapstand: meteen verversen (`refreshIfStale`).
+    @ObservationIgnored private var wakeObservers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
     private let gmail = GmailSession.shared
 
     // MARK: Openen en sluiten
@@ -145,6 +150,8 @@ final class MailModeStore {
     func close() {
         refreshLoop?.cancel()
         refreshLoop = nil
+        for observer in wakeObservers { observer.center.removeObserver(observer.token) }
+        wakeObservers = []
         isActive = false
         isReceded = false
         isReturning = false
@@ -153,17 +160,52 @@ final class MailModeStore {
         searchTask?.cancel()
     }
 
-    /// Zolang de mailmodus open is komt nieuwe mail vanzelf binnen (elke twee minuten, zoals het Mail-paneel); niet
-    /// tijdens een blad, het slepen of als er al geladen wordt.
+    /// Zolang de mailmodus open is komt nieuwe mail vanzelf binnen: elke twee minuten (zoals het Mail-paneel), en
+    /// meteen als je terugkomt in Werkbank of de Mac uit de slaapstand komt. Niet tijdens een blad of het slepen.
     private func startRefreshing() {
         refreshLoop?.cancel()
         refreshLoop = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(120))
                 guard let self, !Task.isCancelled else { return }
-                if self.isActive, !self.isReceded, self.sheet == nil, !self.isLoading { await self.reload() }
+                self.refreshIfStale(after: 100)
             }
         }
+        guard wakeObservers.isEmpty else { return }
+        let refresh: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated { MailModeStore.shared.refreshIfStale(after: 20) }
+        }
+        let app = NotificationCenter.default
+        let workspace = NSWorkspace.shared.notificationCenter
+        wakeObservers = [
+            (app, app.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main,
+                                  using: refresh)),
+            (workspace, workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main,
+                                              using: refresh)),
+        ]
+    }
+
+    /// Een laadbeurt die na anderhalve minuut nog niet klaar is, telt niet meer: dan mag een nieuwe ervoor in de
+    /// plaats (die van toen wordt genegeerd als hij alsnog terugkomt). Zo kan een verbinding die bleef hangen (na de
+    /// slaapstand, ander netwerk) het verversen niet tegenhouden tot je de app opnieuw start.
+    private var loadIsStuck: Bool {
+        guard isLoading, let loadStarted else { return false }
+        return Date().timeIntervalSince(loadStarted) > 90
+    }
+
+    /// Ververst als de lijst langer dan `seconds` geleden is opgevraagd.
+    func refreshIfStale(after seconds: TimeInterval) {
+        guard isActive, !isReceded, sheet == nil, !isLoading || loadIsStuck else { return }
+        if let lastAttempt, Date().timeIntervalSince(lastAttempt) < seconds { return }
+        Task { await reload() }
+    }
+
+    /// De knop Verversen: de lijst, de mappen en het Mail-paneel opnieuw, ook als er nog iets aan het laden is.
+    func refreshNow() {
+        guard isActive else { return }
+        Task { await reload() }
+        Task { await refreshLabels() }
+        Task { await gmail.reload(force: true) }
     }
 
     /// Een mail wordt gesleept: de werkbank naar voren, zodat je hem op een kolom, de agenda of Tijd schrijven kunt
@@ -392,6 +434,8 @@ final class MailModeStore {
         if selectedID == nil { selectedID = listed.first?.id }
         let growsWhileLoading = items.isEmpty
         isLoading = true
+        loadStarted = Date()
+        lastAttempt = Date()
         let domains = client.map(clientDomains) ?? []
         if client != nil, domains.isEmpty {
             items = []

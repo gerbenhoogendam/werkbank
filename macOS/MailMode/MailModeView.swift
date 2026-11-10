@@ -219,7 +219,23 @@ private struct MailModeToolbar: View {
                 .padding(.leading, 8)
             }
             Spacer(minLength: 8)
-            if store.isLoading { ProgressView().controlSize(.small) }
+            // Verversen; tijdens het laden draait het wiel in de knop (blijft klikbaar als het laden blijft hangen).
+            Button { store.refreshNow() } label: {
+                Group {
+                    if store.isLoading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.werk(size: 13, weight: .semibold))
+                    }
+                }
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(ThingsColor.textSecondary)
+            .help("Verversen")
+            .accessibilityLabel("Verversen")
             if !showsClients {
                 // De klantenkolom is weggeklikt: een blauw rondje haalt hem terug.
                 Button { showsClients = true } label: {

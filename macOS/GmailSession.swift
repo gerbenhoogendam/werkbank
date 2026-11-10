@@ -120,7 +120,10 @@ final class GmailSession {
     private static let rawCacheLimit = 40
     /// Laatst opgehaalde inbox per mailbox, zodat schakelen direct iets toont.
     @ObservationIgnored private var messageCache: [String: [GmailMessageSummary]] = [:]
-    @ObservationIgnored private var loadingKeys: Set<String> = []
+    /// Per mailbox de laadbeurt die nu loopt en sinds wanneer.
+    @ObservationIgnored private var loading: [String: (token: UUID, since: Date)] = [:]
+    /// Wanneer de inbox het laatst is opgevraagd (`reloadIfStale`).
+    @ObservationIgnored private var lastReload: Date?
     /// Access-token per mailbox (sleutel "" is de oude enkele token).
     @ObservationIgnored private var tokenCache: [String: (token: String, expiry: Date)] = [:]
     /// Bij welke mailbox een bericht of gesprek hoort, zodat acties de juiste token gebruiken (ook in de gecombineerde lijst).
@@ -138,6 +141,16 @@ final class GmailSession {
     private static let inboxPageSize = "40"
 
     private static func tokenAccount(_ email: String) -> String { "refreshToken:\(email)" }
+
+    /// Voor Gmail en het inloggen: nooit een antwoord uit de cache (dan zou nieuwe mail pas na opnieuw starten
+    /// verschijnen), en na 30 seconden zonder antwoord opgeven in plaats van te blijven wachten.
+    nonisolated private static let http: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = 30
+        return URLSession(configuration: configuration)
+    }()
 
     private init() {
         let defaults = UserDefaults.standard
@@ -378,7 +391,7 @@ final class GmailSession {
                 request.httpMethod = "POST"
                 request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
                 request.httpBody = Data("token=\(Self.formEncode(refresh))".utf8)
-                _ = try? await URLSession.shared.data(for: request)
+                _ = try? await Self.http.data(for: request)
             }
         }
         Keychain.delete(Self.tokenAccount(email))
@@ -458,7 +471,7 @@ final class GmailSession {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(parameters.map { "\($0.key)=\(Self.formEncode($0.value))" }
             .joined(separator: "&").utf8)
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await Self.http.data(for: request)
         if let tokens = GoogleOAuth.parseTokenResponse(data) { return tokens }
         if let error = GoogleOAuth.parseError(data) {
             throw error.requiresNewSignIn ? GmailError.sessionExpired
@@ -512,7 +525,7 @@ final class GmailSession {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.http.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw GmailError.invalidResponse }
         if http.statusCode == 401, !isRetry {
             tokenCache[account ?? ""] = nil   // verlopen of ingetrokken: één keer opnieuw met een verse token
@@ -546,28 +559,39 @@ final class GmailSession {
     private func profileEmail(accessToken: String) async throws -> String? {
         var request = URLRequest(url: URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/profile")!)
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.http.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw GmailError.invalidResponse }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["emailAddress"] as? String
     }
 
     /// Haalt de inbox (nieuwste eerst, één rij per gesprek) opnieuw op; in de gecombineerde weergave van alle mailboxen.
-    func reload() async {
+    /// `force` (de knop Verversen): ook als er nog een laadbeurt loopt.
+    func reload(force: Bool = false) async {
         guard state == .signedIn else { return }
+        lastReload = Date()
         let keys = isCombined ? combinedAccounts : [activeAccount ?? ""]
         await withTaskGroup(of: Void.self) { group in
-            for key in keys { group.addTask { await self.reload(key: key) } }
+            for key in keys { group.addTask { await self.reload(key: key, force: force) } }
         }
     }
 
-    private func reload(key: String) async {
-        guard !loadingKeys.contains(key) else { return }
+    /// Terug in de app of na de slaapstand: verversen als dat langer dan `seconds` geleden is.
+    func reloadIfStale(after seconds: TimeInterval) async {
+        if let lastReload, Date().timeIntervalSince(lastReload) < seconds { return }
+        await reload()
+    }
+
+    private func reload(key: String, force: Bool) async {
+        // Loopt er al een: niet nog een, tenzij die al anderhalve minuut bezig is (een verbinding die bleef hangen, na
+        // de slaapstand of een ander netwerk) of de knop werd gebruikt. De oude telt dan niet meer als hij terugkomt.
+        if let running = loading[key], !force, Date().timeIntervalSince(running.since) < 90 { return }
         let account: String? = key.isEmpty ? nil : key
-        loadingKeys.insert(key)
+        let token = UUID()
+        loading[key] = (token, Date())
         isLoading = true
         defer {
-            loadingKeys.remove(key)
-            isLoading = !loadingKeys.isEmpty
+            if loading[key]?.token == token { loading[key] = nil }
+            isLoading = !loading.isEmpty
         }
         do {
             // Tegelijk: welke inboxmails ongelezen zijn. Een bekende mail verandert verder niet (afzender, onderwerp,
@@ -607,6 +631,7 @@ final class GmailSession {
                 return cached
             }
             guard key.isEmpty || accounts.contains(key) else { return }   // intussen losgekoppeld
+            guard loading[key]?.token == token else { return }   // intussen een nieuwere laadbeurt
             let changed = messageCache[key] != summaries
             messageCache[key] = summaries
             for summary in summaries {
@@ -904,7 +929,7 @@ final class GmailSession {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.http.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw GmailError.invalidResponse }
         if http.statusCode == 401, !isRetry {
             tokenCache[account] = nil

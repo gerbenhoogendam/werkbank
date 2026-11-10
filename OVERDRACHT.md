@@ -252,6 +252,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     ingesprongen per niveau. Ruimte tussen alinea's in de bron (vanaf 4 pt) wordt een lege regel. Geplakt midden in
     een regel: die regel houdt haar vorm. Plakken en aanpassen zijn samen één ⌘Z. ⇧⌥⌘V plakt platte tekst. Na te gaan
     met Safari, Chrome, Word, Outlook en Pages: herkent hij de lijsten, valt er geen teken of tab te veel achter.
+31. **Nieuwe mail ophalen** (10 nov). Melding: geen ververs-knop in de mailmodus en nieuwe mail kwam niet regelmatig
+    binnen, alleen na opnieuw starten. De oorzaak is niet met zekerheid gevonden (geen Mac om het na te spelen); wat er
+    nu is: een knop Verversen in de werkbalk van de mailmodus (`MailModeStore.refreshNow`: lijst, mappen en
+    Mail-paneel), verversen zodra Werkbank weer actief wordt of de Mac uit de slaapstand komt (`refreshIfStale`,
+    `GmailSession.reloadIfStale`, als het langer dan 20 s geleden is), en een laadbeurt die na 90 s nog loopt houdt het
+    verversen niet meer tegen (`loadIsStuck`, `GmailSession.loading`; een late uitkomst van de oude wordt genegeerd).
+    De knoppen blijven klikbaar tijdens het laden (het wiel staat in de knop). Gmail-aanvragen gaan via een eigen
+    `URLSession` zonder cache en met 30 s time-out (`GmailSession.http`). Na te gaan: komt nieuwe mail nu binnen 2
+    minuten en meteen na terugkomen in de app; zo niet, dan kijken of `isLoading` blijft staan of Gmail een fout geeft.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

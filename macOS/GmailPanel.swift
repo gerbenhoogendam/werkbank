@@ -89,6 +89,13 @@ struct GmailPanel: View {
                 await gmail.reload()
             }
         }
+        // Terug in Werkbank of na de slaapstand: meteen kijken of er nieuwe mail is.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await gmail.reloadIfStale(after: 20) }
+        }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
+            Task { await gmail.reloadIfStale(after: 0) }
+        }
     }
 
     // MARK: Acties
@@ -149,22 +156,24 @@ struct GmailPanel: View {
             .onTapGesture(count: 2) { MailModeStore.shared.open() }
             .help("Dubbelklik voor de mailmodus")
             if gmail.state == .signedIn {
-                // Vaste maat: het draaiwiel en de knop nemen evenveel plek in, de kop verspringt niet bij verversen.
-                if gmail.isLoading {
-                    ProgressView().controlSize(.small)
-                        .frame(width: 22, height: 22)
-                } else {
-                    Button {
-                        Task { await gmail.reload() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
+                // Vaste maat: het draaiwiel en de knop nemen evenveel plek in, de kop verspringt niet bij verversen. Het
+                // wiel staat in de knop, zodat je ook kunt verversen als een laadbeurt blijft hangen.
+                Button {
+                    Task { await gmail.reload(force: true) }
+                } label: {
+                    Group {
+                        if gmail.isLoading {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .help("Inbox verversen")
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(ThingsColor.textSecondary)
+                .help("Inbox verversen")
                 Button {
                     PanelStore.shared.open(.compose(ComposeRef(mode: .new, source: nil)))
                 } label: {
