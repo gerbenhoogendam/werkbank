@@ -325,6 +325,17 @@ private struct MailModeList: View {
                         .font(.werk(size: 13))
                         .focused($searchFocused)
                         .onExitCommand { searchFocused = false }
+                    if !store.query.isEmpty {
+                        // Het kruisje: de zoekopdracht weg, ook in het zoekvenster.
+                        Button { store.clearSearch() } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.werk(size: 13, weight: .medium))
+                                .foregroundStyle(ThingsColor.textTertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Zoekopdracht wissen")
+                        .accessibilityLabel("Zoekopdracht wissen")
+                    }
                     Button { store.openSheet(.search) } label: {
                         Image(systemName: "slider.horizontal.3")
                             .font(.werk(size: 12, weight: .medium))
@@ -340,7 +351,7 @@ private struct MailModeList: View {
 
                 WrapStack(spacing: 6) {
                     if let mailboxes = store.searchAccounts {
-                        Button { store.clearSearchAccounts() } label: {
+                        Button { store.clearSearch() } label: {
                             HStack(spacing: 5) {
                                 Text(mailboxes.count == 1 ? GmailSession.shared.displayName(mailboxes[0])
                                      : "\(mailboxes.count) mailboxen")
@@ -348,6 +359,7 @@ private struct MailModeList: View {
                             }
                         }
                         .buttonStyle(MailFilterChipStyle(isOn: true))
+                        .help("Zoekopdracht wissen")
                     }
                     if let client = store.client {
                         Button { store.showClient(nil) } label: {

@@ -1002,13 +1002,28 @@ private struct MailSearchSheet: View {
     @State private var form = MailModeStore.shared.searchForm
     @State private var mailboxes = Set(MailModeStore.shared.searchAccountChoice)
     @State private var results: [GmailMailItem] = []
+    /// De hoeveelste nieuwe kaart een resultaat is in zijn zoekbeurt: zo zakken ze na elkaar in beeld.
+    @State private var entryRank: [String: Int] = [:]
     @State private var searched = false
     @State private var isSearching = false
     @State private var error: String?
     @State private var run = 0
+    /// Waar nu naar gezocht is of wordt (niet twee keer hetzelfde vragen).
+    @State private var requested: Request?
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
+
+    private struct Request: Equatable {
+        var query: String
+        var mailboxes: [String]
+    }
+
+    /// Wat er in de tekstvelden staat: een seconde na de laatste toets wordt er gezocht.
+    private var typed: [String] {
+        [form.words, form.exclude, form.from, form.to, form.subject, form.attachmentName]
+    }
 
     var body: some View {
         SheetFrame(title: "Zoeken", systemImage: "magnifyingglass", detail: detail, width: 780) {
@@ -1059,6 +1074,7 @@ private struct MailSearchSheet: View {
             Button("Wissen") {
                 form = MailSearchForm()
                 mailboxes = Set(MailClientSettings.preferred)
+                refresh()
             }
             .buttonStyle(SheetButtonStyle(kind: .plain))
             .disabled(form.isEmpty)
@@ -1073,7 +1089,12 @@ private struct MailSearchSheet: View {
             focused = true
             refresh()
         }
-        // Vinkjes, periode en mailboxen: meteen; tekst: bij Enter.
+        // Vinkjes, periode en mailboxen: meteen. Tekst: een seconde na de laatste toets, of meteen met Enter.
+        .task(id: typed) {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            refresh()
+        }
         .onChange(of: form.period) { _, _ in refresh() }
         .onChange(of: form.hasAttachment) { _, _ in refresh() }
         .onChange(of: form.unread) { _, _ in refresh() }
@@ -1082,13 +1103,13 @@ private struct MailSearchSheet: View {
         .onChange(of: mailboxes) { _, _ in refresh() }
     }
 
-    /// Een tekstveld; Enter zoekt opnieuw. Het eerste veld krijgt de cursor.
+    /// Een tekstveld; Enter zoekt meteen (ook opnieuw). Het eerste veld krijgt de cursor.
     private func field(_ label: String, _ text: Binding<String>, focus: Bool = false) -> some View {
         SheetField(label: label) {
             if focus {
-                TextField("", text: text).sheetInput().focused($focused).onSubmit(refresh)
+                TextField("", text: text).sheetInput().focused($focused).onSubmit { refresh(force: true) }
             } else {
-                TextField("", text: text).sheetInput().onSubmit(refresh)
+                TextField("", text: text).sheetInput().onSubmit { refresh(force: true) }
             }
         }
     }
@@ -1104,19 +1125,42 @@ private struct MailSearchSheet: View {
             if let error {
                 Text(error).font(.werk(size: 12)).foregroundStyle(ThingsColor.deadline)
             }
+            // Het kader van de resultaten: de kaartjes bewegen erbinnen (zakken erin, zwiepen eruit).
             ScrollView {
-                if results.isEmpty {
-                    Color.clear.frame(height: 1)
-                } else {
-                    SheetList(items: results) { item in resultRow(item) }
+                VStack(spacing: 5) {
+                    ForEach(results) { item in
+                        resultRow(item)
+                            .transition(cardTransition(item.id))
+                    }
                 }
+                .padding(6)
+                .frame(maxWidth: .infinity)
             }
             .frame(height: 250)
+            .clipShape(Self.resultFrame)
+            .overlay(Self.resultFrame.strokeBorder(ThingsColor.separator))
         }
     }
 
+    private static var resultFrame: RoundedRectangle {
+        RoundedRectangle(cornerRadius: max(6, MailModeMetrics.radius + 2), style: .continuous)
+    }
+
+    /// Erin: van boven naar zijn plek zakken en verschijnen, na elkaar (40 ms per kaart, tot en met de achtste). Eruit:
+    /// naar rechts het kader uit. Met "Verminder beweging" (Toegankelijkheid): alleen vervagen.
+    private func cardTransition(_ id: String) -> AnyTransition {
+        if reduceMotion { return .opacity.animation(ThingsMotion.reveal) }
+        let delay = Double(min(entryRank[id] ?? 0, 8)) * 0.04
+        return .asymmetric(
+            insertion: AnyTransition.offset(x: 0, y: -28).combined(with: .opacity)
+                .animation(ThingsMotion.enter.delay(delay)),
+            removal: AnyTransition.move(edge: .trailing).combined(with: .opacity).animation(ThingsMotion.enter))
+    }
+
+    /// Eén resultaat als kaartje; een klik zet de zoekopdracht in de lijst en opent die mail.
     private func resultRow(_ item: GmailMailItem) -> some View {
-        Button { show(selecting: item.id) } label: {
+        let shape = RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
+        return Button { show(selecting: item.id) } label: {
             HStack(spacing: 10) {
                 Text(item.senderDisplay)
                     .font(.werk(size: 12.5, weight: item.isUnread ? .semibold : .medium))
@@ -1156,7 +1200,9 @@ private struct MailSearchSheet: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .contentShape(Rectangle())
+            .background(shape.fill(ThingsColor.cardBackground))
+            .overlay(shape.strokeBorder(ThingsColor.separator))
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
     }
@@ -1166,26 +1212,49 @@ private struct MailSearchSheet: View {
             : (mailboxes.count == 1 ? "1 mailbox" : "\(mailboxes.count) mailboxen")
     }
 
-    /// Opnieuw zoeken met wat er nu staat; een eerdere zoekopdracht die later klaar is telt niet meer.
-    private func refresh() {
-        guard !form.isEmpty, !mailboxes.isEmpty else {
-            results = []
+    /// Zoeken met wat er nu staat; een eerdere zoekopdracht die later klaar is telt niet meer. Dezelfde zoekopdracht
+    /// als die er al staat of loopt wordt niet nog eens gevraagd, behalve met Enter (`force`).
+    private func refresh(force: Bool = false) {
+        let chosen = gmail.accounts.filter { mailboxes.contains($0) }
+        let query = form.query()
+        guard !query.isEmpty, !chosen.isEmpty else {
+            run += 1
+            requested = nil
+            isSearching = false
             searched = false
             error = nil
+            place([])
             return
         }
+        let request = Request(query: query, mailboxes: chosen)
+        if !force, request == requested { return }
+        requested = request
         run += 1
         let current = run
         let snapshot = form
-        let chosen = gmail.accounts.filter { mailboxes.contains($0) }
         isSearching = true
         Task {
             let found = await store.searchPreview(snapshot, mailboxes: chosen)
             guard current == run else { return }
-            results = found.items
             error = found.error
             searched = true
             isSearching = false
+            place(found.items)
+        }
+    }
+
+    /// Zet de resultaten neer: wat nieuw is zakt na elkaar van boven in beeld, wat niet meer voldoet zwiept weg en
+    /// de rest schuift naar zijn plek.
+    private func place(_ items: [GmailMailItem]) {
+        var seen = Set<String>()
+        let unique = items.filter { seen.insert($0.id).inserted }
+        guard unique != results else { return }
+        let known = Set(results.map(\.id))
+        var rank: [String: Int] = [:]
+        for item in unique where !known.contains(item.id) { rank[item.id] = rank.count }
+        withAnimation(reduceMotion ? ThingsMotion.reveal : ThingsMotion.enter) {
+            entryRank = rank
+            results = unique
         }
     }
 

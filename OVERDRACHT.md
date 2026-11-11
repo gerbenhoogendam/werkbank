@@ -397,9 +397,18 @@ Verbeteringen voor een volgende build verzamelen en als één prompt aan Claude 
   WerkbankCore): woorden, zonder woorden, van, aan/cc (namen of adressen, komma's), onderwerp, bijlage en
   bestandsnaam, ongelezen, ster, ook spam en prullenbak, periode en mailboxen (kleine vinkjes, standaard gh@,
   support@ en info@: `MailClientSettings.preferred`). De resultaten staan onderaan in het venster
-  (`searchPreview`, verandert de lijst niet): vinkjes, periode en mailboxen zoeken meteen opnieuw, tekstvelden bij
-  Enter. Een klik op een resultaat zet de zoekopdracht in de lijst en opent die mail; "Toon in de lijst" doet hetzelfde
+  (`searchPreview`, verandert de lijst niet): vinkjes, periode en mailboxen zoeken meteen opnieuw, tekstvelden een
+  seconde na de laatste toets (`.task(id: typed)`) of meteen met Enter; dezelfde zoekopdracht wordt niet twee keer
+  gevraagd (`Request`). De resultaten zijn kaartjes in een kader (11 nov): nieuwe zakken na elkaar van boven naar hun
+  plek (28 pt, `ThingsMotion.enter`, 40 ms per kaart tot de achtste; `entryRank`), wat na een aanpassing niet meer
+  voldoet zwiept naar rechts het kader uit, de rest schuift op; met "Verminder beweging" alleen vervagen
+  (`cardTransition`, `place`). De beweging is niet in de app gezien: afstand en tempo zijn op gevoel bij te stellen.
+  Een klik op een resultaat zet de zoekopdracht in de lijst en opent die mail; "Toon in de lijst" doet hetzelfde
   zonder mail te kiezen. Een eigen keuze van mailboxen staat als knopje onder het zoekveld.
+- **Zoekopdracht wissen** (11 nov, `MailModeStore.clearSearch`): het kruisje in het zoekveld (staat er zodra er tekst
+  in staat) en het kruisje op het knopje van de mailboxen wissen de hele zoekopdracht: tekst, eigen keuze van
+  mailboxen en wat er in het zoekvenster stond (`searchForm`); ⌘F opent daarna leeg. Het zoekveld zelf leegmaken doet
+  hetzelfde (`setQuery`).
 - **Kolommen van de mailmodus** (mappen, lijst, klanten) zijn in de breedte te verslepen aan de lijn ertussen
   (`ColumnResizer` in `MailModeView.swift`, bewaard in `mailMode.foldersWidth`/`listWidth`/`clientsWidth`); dubbelklik
   zet terug. De mail in het midden neemt de rest (minstens 320 pt).

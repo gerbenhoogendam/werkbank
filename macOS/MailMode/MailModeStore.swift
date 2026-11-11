@@ -375,7 +375,11 @@ final class MailModeStore {
 
     func setQuery(_ text: String) {
         query = text
-        if text.trimmingCharacters(in: .whitespaces).isEmpty { searchAccounts = nil }
+        if text.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Geen zoekopdracht meer: ook de eigen keuze van mailboxen en wat er in het zoekvenster stond.
+            searchAccounts = nil
+            searchForm = MailSearchForm()
+        }
         searchTask?.cancel()
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(450))
@@ -1219,8 +1223,14 @@ final class MailModeStore {
         return (result.items, result.error)
     }
 
-    func clearSearchAccounts() {
+    /// Het kruisje (in het zoekveld en op het knopje van de mailboxen): de zoekopdracht helemaal weg. De tekst, de
+    /// eigen keuze van mailboxen en wat er in het zoekvenster stond; dat opent daarna leeg. De gewone lijst komt terug.
+    func clearSearch() {
+        searchTask?.cancel()
+        query = ""
         searchAccounts = nil
+        searchForm = MailSearchForm()
+        selectedID = nil
         Task { await reload() }
     }
 }
