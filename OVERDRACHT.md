@@ -261,6 +261,17 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     De knoppen blijven klikbaar tijdens het laden (het wiel staat in de knop). Gmail-aanvragen gaan via een eigen
     `URLSession` zonder cache en met 30 s time-out (`GmailSession.http`). Na te gaan: komt nieuwe mail nu binnen 2
     minuten en meteen na terugkomen in de app; zo niet, dan kijken of `isLoading` blijft staan of Gmail een fout geeft.
+32. **Afzendernaam per mailbox** (11 nov). Melding: ontvangers zagen "gh" als afzender. Er was geen naam ingevuld (het
+    veld stond onder "Handtekening voor", met een grijze voorbeeldnaam die ingevuld leek), dus ging alleen het adres
+    mee. Nu: Voorkeuren › Mail › Mailboxen heeft per mailbox "Naam op de tab" en "Naam afzender"
+    (`SignaturePreferences.senderBinding`, bewaard in `mail.senderName` per adres; gaat mee naar je andere Macs). Leeg:
+    de naam voor alle mailboxen (staat er dan grijs; in te vullen bij "Handtekening voor: Alle mailboxen"), en is die er
+    ook niet, dan alleen het adres (`MailSignatures.senderName(for:)`). In de kop gaat de naam tussen aanhalingstekens
+    zodra er iets anders in staat dan letters, cijfers, spaties en ' _ - (`MailComposer.encodePhrase`, bijvoorbeeld
+    "Gerben | ITG Solutions"). De organisator in een uitnodiging (.ics) krijgt dezelfde naam (stond op een sleutel
+    die nooit iets teruggaf). Het Claude-concept leest de naam nog op die oude manier (`MailConcept.swift`, altijd
+    leeg): bewust niet aangepast, een naam als "Gerben | ITG Solutions" hoort niet in de opdracht aan Claude. Na te
+    gaan met een mail aan jezelf: staat de naam goed in Gmail, Outlook en Apple Mail.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

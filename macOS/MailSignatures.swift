@@ -27,9 +27,12 @@ enum MailSignatures {
         return value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? value : nil
     }
 
+    /// De naam die de ontvanger als afzender ziet: die van de mailbox zelf, anders die voor alle mailboxen; `nil` als
+    /// er geen is ingevuld (dan gaat alleen het adres mee).
     static func senderName(for account: String?) -> String? {
         let all = strings(nameKey)
-        return account.flatMap { all[$0] } ?? all[defaultKey]
+        let candidates = [account.flatMap { all[$0] }, all[defaultKey]]
+        return candidates.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
     }
 
     static func logo(for account: String?) -> MailAttachment? {
@@ -44,7 +47,8 @@ enum MailSignatures {
     static func ownHTML(_ key: String) -> String { strings(htmlKey)[key] ?? "" }
     static func setHTML(_ value: String, for key: String) { write(value, htmlKey, forAccount: key, to: htmlKey) }
 
-    static func ownSenderName(_ key: String) -> String { strings(nameKey)[key] ?? "" }
+    /// Alle ingevulde afzendernamen: per mailbox, en onder `defaultKey` die voor alle mailboxen.
+    static func senderNames() -> [String: String] { strings(nameKey) }
     static func setSenderName(_ value: String, for key: String) { write(value, nameKey, forAccount: key, to: nameKey) }
 
     static func ownLogo(_ key: String) -> Data? {

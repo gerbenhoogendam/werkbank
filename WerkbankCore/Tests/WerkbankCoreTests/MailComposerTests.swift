@@ -41,6 +41,17 @@ final class MailComposerTests: XCTestCase {
         XCTAssertEqual(parsed.files.first?.data.count, 5000)
     }
 
+    /// De afzendernaam uit Voorkeuren: met een streepje ertussen gaat hij tussen aanhalingstekens mee.
+    func testSenderNameWithBarIsQuoted() {
+        var mail = sample()
+        mail.from = MailAddress(name: "Gerben | ITG Solutions", address: "gh@example.nl")
+        let text = String(data: MailComposer.build(mail), encoding: .utf8) ?? ""
+        XCTAssertTrue(text.contains("From: \"Gerben | ITG Solutions\" <gh@example.nl>"), text)
+        XCTAssertEqual(MailComposer.encodePhrase("Gerben Hoogendam"), "Gerben Hoogendam")
+        XCTAssertEqual(MailComposer.encodePhrase("O'Brien-Smith"), "O'Brien-Smith")
+        XCTAssertEqual(MailComposer.encodePhrase("Jos, de Vries"), "\"Jos, de Vries\"")
+    }
+
     func testForwardHeaderOnOwnLinesAndOlderMessagesNested() {
         var mail = sample()
         mail.quoteIntro = ReplyBuilder.quoteIntro(date: "1 nov 2026", from: "Jan Jansen", forward: true, subject: "Offerte")

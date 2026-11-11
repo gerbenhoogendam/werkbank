@@ -241,11 +241,12 @@ public enum MailComposer {
         return chunks.joined(separator: " ")
     }
 
-    /// Weergavenaam in een adres: tussen aanhalingstekens als er speciale tekens in staan.
+    /// Weergavenaam in een adres: tussen aanhalingstekens zodra er iets anders in staat dan letters, cijfers, spaties
+    /// en ' _ - (een komma of punt moet, en een naam als "Gerben | ITG Solutions" leest niet elk mailprogramma los goed).
     static func encodePhrase(_ name: String) -> String {
         if !isPlainASCII(name) { return encodeText(name) }
-        let specials = CharacterSet(charactersIn: "()<>[]:;@\\,.\"")
-        if name.unicodeScalars.contains(where: { specials.contains($0) }) {
+        let plain = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " '_-"))
+        if name.unicodeScalars.contains(where: { !plain.contains($0) }) {
             return "\"" + name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
         }
         return name

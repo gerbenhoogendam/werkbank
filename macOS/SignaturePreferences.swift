@@ -2,13 +2,15 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Voorkeuren › Mail: gekoppelde mailboxen, en per mailbox de handtekening: HTML, logo (voor `cid:`-afbeeldingen) en afzendernaam, per mailbox of voor alle.
+/// Voorkeuren › Mail: gekoppelde mailboxen met per mailbox de naam op de tab en de naam die de ontvanger als afzender
+/// ziet, en de handtekening: HTML en logo (voor `cid:`-afbeeldingen), per mailbox of voor alle.
 struct SignaturePreferences: View {
     private let gmail = GmailSession.shared
 
     @State private var key = MailSignatures.defaultKey
     @State private var html = ""
-    @State private var senderName = ""
+    /// Afzendernamen per mailbox ("" is die voor alle mailboxen); meteen bewaard bij het typen.
+    @State private var senderNames: [String: String] = [:]
     @State private var logo: Data?
     @State private var logoImage: NSImage?
     @State private var preview = ""
@@ -21,18 +23,29 @@ struct SignaturePreferences: View {
         Form {
             Section {
                 ForEach(gmail.accounts, id: \.self) { email in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            // Naam op de tab boven de maillijst (leeg = het deel vóór de @).
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(email)
+                            Spacer()
+                            Button("Loskoppelen", role: .destructive) { disconnecting = email }
+                        }
+                        // Naam op de tab boven de maillijst (leeg = het deel vóór de @).
+                        LabeledContent("Naam op de tab") {
                             TextField("", text: Binding(get: { gmail.displayNames[email] ?? "" },
                                                         set: { gmail.rename(email, to: $0) }),
                                       prompt: Text(GmailSession.shortName(email)))
+                                .labelsHidden()
                                 .textFieldStyle(.roundedBorder)
-                                .frame(maxWidth: 220)
-                            Text(email).font(.caption).foregroundStyle(.secondary)
+                                .frame(maxWidth: 280)
                         }
-                        Spacer()
-                        Button("Loskoppelen", role: .destructive) { disconnecting = email }
+                        // De naam die de ontvanger in zijn inbox ziet ("Gerben | ITG Solutions"). Leeg: die voor alle
+                        // mailboxen (staat er dan grijs), en is die er ook niet, dan alleen het adres.
+                        LabeledContent("Naam afzender") {
+                            TextField("", text: senderBinding(email), prompt: sharedSenderName.map { Text($0) })
+                                .labelsHidden()
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 280)
+                        }
                     }
                 }
                 HStack {
@@ -76,7 +89,10 @@ struct SignaturePreferences: View {
                     Text("Alle mailboxen (standaard)").tag(MailSignatures.defaultKey)
                     ForEach(gmail.accounts, id: \.self) { Text($0).tag($0) }
                 }
-                TextField("Naam afzender", text: $senderName, prompt: Text("Gerben Hoogendam"))
+                if key == MailSignatures.defaultKey {
+                    // Voor mailboxen zonder eigen afzendernaam (die staan hierboven bij Mailboxen).
+                    TextField("Naam afzender", text: senderBinding(MailSignatures.defaultKey))
+                }
             }
 
             Section("HTML van de handtekening") {
@@ -127,7 +143,6 @@ struct SignaturePreferences: View {
         .onAppear(perform: load)
         .onChange(of: key) { _, _ in load() }
         .onChange(of: html) { _, new in MailSignatures.setHTML(new, for: key) }
-        .onChange(of: senderName) { _, new in MailSignatures.setSenderName(new, for: key) }
         .onChange(of: logo) { _, new in MailSignatures.setLogo(new, for: key) }
         // Het logo één keer ontleden, niet bij elke toetsaanslag in de velden.
         .onChange(of: logo, initial: true) { _, new in logoImage = new.flatMap(NSImage.init(data:)) }
@@ -158,8 +173,22 @@ struct SignaturePreferences: View {
 
     private func load() {
         html = MailSignatures.ownHTML(key)
-        senderName = MailSignatures.ownSenderName(key)
+        senderNames = MailSignatures.senderNames()
         logo = MailSignatures.ownLogo(key)
+    }
+
+    private func senderBinding(_ key: String) -> Binding<String> {
+        Binding(get: { senderNames[key] ?? "" },
+                set: { name in
+                    senderNames[key] = name.isEmpty ? nil : name
+                    MailSignatures.setSenderName(name, for: key)
+                })
+    }
+
+    /// De afzendernaam voor alle mailboxen, als die is ingevuld.
+    private var sharedSenderName: String? {
+        let name = senderNames[MailSignatures.defaultKey]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? nil : name
     }
 
     private struct PreviewInput: Equatable {

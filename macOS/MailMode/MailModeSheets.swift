@@ -530,7 +530,7 @@ private struct MailPlanSheet: View {
             // De uitnodiging gaat mee in een antwoord dat je eerst ziet; versturen archiveert het gesprek.
             let me = GmailSession.shared.account(for: item.id) ?? ""
             let ics = CalendarInvite.ics(uid: "\(UUID().uuidString.lowercased())@werkbank", start: start, end: end, title: title,
-                                         organizer: MailAddress(name: UserDefaults.standard.string(forKey: "mail.senderName"), address: me),
+                                         organizer: MailAddress(name: MailSignatures.senderName(for: me), address: me),
                                          attendees: [guest])
             let attachment = MailAttachment(name: "uitnodiging.ics", mediaType: "text/calendar; method=REQUEST",
                                             data: Data(ics.utf8))
