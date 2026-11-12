@@ -293,6 +293,13 @@ final class MailThreadModel {
             if items.contains(where: { $0.id == ref.messageID }) { open.insert(ref.messageID) }
             expanded.formUnion(open)
             isLoading = false
+            // Geopend is gelezen: het hele gesprek, in Gmail en meteen in de lijsten. Welke mails ongelezen waren is
+            // hierboven al gebruikt (die staan opengeklapt). Alleen bij het openen zelf, dus wie de mail daarna weer op
+            // ongelezen zet, houdt hem ongelezen zolang hij open blijft staan.
+            if items.contains(where: \.isUnread), !Task.isCancelled {
+                let gmail = gmail, ref = ref
+                Task { await gmail.setUnread(false, threadID: ref.threadID, account: ref.account) }
+            }
             await withTaskGroup(of: Void.self) { group in
                 for id in open { group.addTask { await self.loadContent(id) } }
             }

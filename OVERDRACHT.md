@@ -292,7 +292,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`MailModeAction.unread`, aan te passen en uit te zetten in Voorkeuren › Mail; met meer mails gekozen: allemaal).
     `GmailSession.setUnread` zet het label UNREAD op het hele gesprek (`threads/modify`) en werkt het Mail-paneel en
     de lijst van de mailmodus meteen bij (`MailModeStore.noteUnread`). De handeling archiveert bewust niet en de mail
-    blijft gekozen. Een mail openen zet hem nog steeds niet vanzelf op gelezen.
+    blijft gekozen. Een mail openen zet het gesprek op gelezen (`ThreadModel.load`, zodra het gesprek is opgehaald en
+    in beeld staat: een paneel op de werkbank, of de gekozen mail in de mailmodus, dus ook de mail die vanzelf gekozen
+    wordt bij het openen van de mailmodus of na archiveren). Alleen bij het openen: zet je hem daarna met U weer op
+    ongelezen, dan blijft dat zo tot je hem opnieuw opent. Een mail alleen aanklikken in het Mail-paneel (zonder
+    openen) of snel voorbijbladeren voordat hij geladen is, markeert niets.
 36. **⌘N: nieuwe mail** (13 nov). Menu Archief › Nieuwe mail (`DefaultMailApp.composeNew`): overal in de app, ook
     vanuit een los venster of Voorkeuren (het hoofdvenster komt dan naar voren). ⇧⌘N in het Mail-paneel werkt nog.
     ⌘N is niet te kiezen als toets in de mailmodus.
