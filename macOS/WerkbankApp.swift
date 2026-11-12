@@ -59,12 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DuoWindowFold.shared.prepareReopen()
             return true
         }
-        if let window = DuoWindowFold.shared.mainWindow, window.isVisible || window.isMiniaturized {
-            if window.isMiniaturized { window.deminiaturize(nil) }
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            WindowRouter.showMain()
-        }
+        WindowRouter.focusMain()
         return false
     }
 
@@ -96,6 +91,14 @@ struct WerkbankApp: App {
             CommandGroup(after: .windowSize) {
                 Button("Volledig scherm") { FullScreenSupport.shared.toggle() }
                     .keyboardShortcut("f", modifiers: [.control, .command])
+            }
+            // Weergave: wisselen tussen de werkbank en de mailmodus.
+            CommandGroup(before: .toolbar) {
+                Button("Werkbank") { WindowRouter.show(mail: false) }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Mail") { WindowRouter.show(mail: true) }
+                    .keyboardShortcut("2", modifiers: .command)
+                Divider()
             }
         }
 

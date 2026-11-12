@@ -51,8 +51,10 @@ enum MailModeKeys {
     /// De handelingen die als knop in de mail staan, in die volgorde.
     static let buttons: [MailModeAction] = [.archive, .reply, .task, .time, .plan, .follow, .claude]
 
-    /// Combinaties die van macOS of de app zelf zijn (kopiëren, plakken, ongedaan maken, zoeken …).
-    static let reserved: Set<String> = ["⌘C", "⌘V", "⌘X", "⌘A", "⌘Z", "⇧⌘Z", "⌘Q", "⌘W", "⌘H", "⌘M", "⌘,", "⌘F", "⌘⇥"]
+    /// Combinaties die van macOS of de app zelf zijn (kopiëren, plakken, ongedaan maken, zoeken, ⌘1 werkbank en
+    /// ⌘2 mail …).
+    static let reserved: Set<String> = ["⌘C", "⌘V", "⌘X", "⌘A", "⌘Z", "⇧⌘Z", "⌘Q", "⌘W", "⌘H", "⌘M", "⌘,", "⌘F", "⌘⇥",
+                                        "⌘1", "⌘2"]
 
     /// De toets van een handeling: je eigen keuze, anders de standaard.
     static func key(for action: MailModeAction) -> String {

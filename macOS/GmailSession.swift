@@ -102,7 +102,7 @@ final class GmailSession {
     private(set) var accounts: [String] = []
     private(set) var activeAccount: String?
     var emailAddress: String? { activeAccount }
-    /// Mailboxen die samen in één lijst staan (⌘-klik op de tabs, of ⌘0 voor alle). Minder dan twee: gewoon de actieve.
+    /// Mailboxen die samen in één lijst staan (⌘-klik op de tabs, of ⌥⌘0 voor alle). Minder dan twee: gewoon de actieve.
     private(set) var combinedAccounts: [String] = []
     var isCombined: Bool { combinedAccounts.count > 1 }
     var isAllCombined: Bool { isCombined && Set(combinedAccounts) == Set(accounts) }

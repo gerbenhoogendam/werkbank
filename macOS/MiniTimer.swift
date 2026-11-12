@@ -18,6 +18,28 @@ enum WindowRouter {
         }
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    /// Het hoofdvenster naar voren: gesloten gaat het weer open, uit het Dock komt het terug, achter een ander venster
+    /// komt het vandaan.
+    static func focusMain() {
+        if let window = DuoWindowFold.shared.mainWindow, window.isVisible || window.isMiniaturized {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            showMain()
+        }
+    }
+
+    /// ⌘1 en ⌘2 (menu Weergave): de werkbank of de mailmodus, in het hoofdvenster.
+    static func show(mail: Bool) {
+        let store = MailModeStore.shared
+        if mail {
+            if !store.isActive { store.open() } else if store.isReceded { store.restore() }
+        } else if store.isActive {
+            store.close()
+        }
+        if DuoWindowFold.shared.mainWindow?.isKeyWindow != true { focusMain() }
+    }
 }
 
 // MARK: - Paneel

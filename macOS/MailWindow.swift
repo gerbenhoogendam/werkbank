@@ -519,6 +519,8 @@ private struct ThreadMailCard: View {
     @State private var showHistory = false
     @State private var bodyHeight: CGFloat = 40
     @State private var historyHeight: CGFloat = 40
+    /// Klik op de afzender: het adres staat erachter, met een knop om het te kopiëren.
+    @State private var showsAddress = false
 
     private var sender: (name: String, address: String) {
         if let first = MailAddress.parse(mail.from).valid.first {
@@ -530,16 +532,20 @@ private struct ThreadMailCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                SenderAvatar(name: sender.name, address: sender.address, isSent: mail.isSent)
+                Button(action: toggleAddress) {
+                    SenderAvatar(name: sender.name, address: sender.address, isSent: mail.isSent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Text(sender.name)
-                            .font(.werk(size: 13, weight: .semibold))
-                            .foregroundStyle(ThingsColor.textPrimary)
+                    HStack(spacing: 6) {
+                        senderLabel
                         Spacer()
                         Text(Self.dateText(mail.date))
                             .thingsFont(.metadata)
                             .foregroundStyle(ThingsColor.textTertiary)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     if isExpanded {
                         recipients
@@ -551,7 +557,7 @@ private struct ThreadMailCard: View {
                     }
                 }
             }
-            // Klik op de kop klapt de mail open of dicht.
+            // Klik op de kop klapt de mail open of dicht (op de afzender: het adres, zie `senderLabel`).
             .contentShape(Rectangle())
             .onTapGesture(perform: onToggle)
 
@@ -614,6 +620,54 @@ private struct ThreadMailCard: View {
                 Spacer()
             }
         }
+    }
+
+    /// De afzender. Een klik op de naam (of het rondje ervoor) laat het e-mailadres erachter zien, te selecteren en met
+    /// een knop te kopiëren; nog een klik haalt het weer weg. De rest van de kop klapt de mail open of dicht.
+    @ViewBuilder private var senderLabel: some View {
+        Button(action: toggleAddress) {
+            Text(sender.name)
+                .font(.werk(size: 13, weight: .semibold))
+                .foregroundStyle(ThingsColor.textPrimary)
+                .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .layoutPriority(1)
+        .help(sender.address)
+        if showsAddress, !sender.address.isEmpty {
+            // Zonder naam staat het adres er al als naam: dan alleen de knop.
+            if sender.name != sender.address {
+                Text(sender.address)
+                    .font(.werk(size: 12))
+                    .foregroundStyle(ThingsColor.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .transition(.opacity)
+            }
+            Button(action: copyAddress) {
+                Image(systemName: "doc.on.doc")
+                    .font(.werk(size: 11, weight: .medium))
+                    .frame(width: 20, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(ThingsColor.textSecondary)
+            .help("Kopieer adres")
+            .accessibilityLabel("Kopieer adres")
+            .transition(.opacity)
+        }
+    }
+
+    private func toggleAddress() {
+        guard !sender.address.isEmpty else { return }
+        withAnimation(ThingsMotion.reveal) { showsAddress.toggle() }
+    }
+
+    private func copyAddress() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(sender.address, forType: .string)
+        AppState.shared.announce("Adres gekopieerd")
     }
 
     @ViewBuilder private var recipients: some View {

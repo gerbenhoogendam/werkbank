@@ -343,7 +343,8 @@ struct GmailPanel: View {
         return true
     }
 
-    /// ⌘1…⌘9 schakelt tussen de mailboxen, ⌘0 toont ze samen (alleen als het Gmail-paneel open staat).
+    /// ⌥⌘1…⌥⌘9 schakelt tussen de mailboxen, ⌥⌘0 toont ze samen (alleen als het Gmail-paneel open staat). Zonder ⌥
+    /// zijn ⌘1 en ⌘2 van de werkbank en de mailmodus (menu Weergave).
     @ViewBuilder private var mailboxShortcuts: some View {
         if gmail.accounts.count > 1 {
             ZStack {
@@ -352,13 +353,13 @@ struct GmailPanel: View {
                         selection.selectedID = nil
                         Task { await gmail.switchAccount(to: email) }
                     }
-                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
                 }
                 Button("") {
                     selection.selectedID = nil
                     Task { await gmail.showCombined() }
                 }
-                .keyboardShortcut("0", modifiers: .command)
+                .keyboardShortcut("0", modifiers: [.command, .option])
             }
             .opacity(0)
             .frame(width: 0, height: 0)

@@ -272,6 +272,17 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     die nooit iets teruggaf). Het Claude-concept leest de naam nog op die oude manier (`MailConcept.swift`, altijd
     leeg): bewust niet aangepast, een naam als "Gerben | ITG Solutions" hoort niet in de opdracht aan Claude. Na te
     gaan met een mail aan jezelf: staat de naam goed in Gmail, Outlook en Apple Mail.
+33. **Wisselen tussen werkbank en mail** (12 nov). De knop links in de werkbalk van het venster ("Mail ›" /
+    "‹ Werkbank") heeft een eigen stijl (`ToolbarSwitchStyle` in `MailModeView.swift`): een capsule van neutraal grijs
+    glas zonder rand, 32 hoog, in elk thema hetzelfde (zo stond hij al in Puls). De werkbalk is van macOS en heeft geen
+    themakleuren; het themavlak met rand (`MailModeButtonStyle`) stak er in de andere thema's los in. Opgevat als: het
+    zag er alleen in Puls goed uit (de melding zei letterlijk het omgekeerde, de screenshot was een ander thema).
+    ⌘1 is de werkbank, ⌘2 de mailmodus (menu Weergave, `WindowRouter.show(mail:)`; werkt ook vanuit een los venster,
+    dan komt het hoofdvenster naar voren). Daarvoor zijn de mailboxen in het Mail-paneel verhuisd van ⌘1…⌘9 en ⌘0
+    naar ⌥⌘1…⌥⌘9 en ⌥⌘0, en ⌘1/⌘2 zijn niet meer te kiezen als toets in de mailmodus (`MailModeKeys.reserved`).
+34. **Adres van de afzender** (12 nov, `ThreadMailCard.senderLabel`). In een gesprek: een klik op de naam van de
+    afzender (of het rondje ervoor) zet het e-mailadres erachter, te selecteren, met een knopje om het te kopiëren
+    (melding "Adres gekopieerd"); nog een klik haalt het weg. De rest van de kop klapt de mail open of dicht.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

@@ -215,8 +215,8 @@ struct MainView: View {
                             Text("Werkbank")
                         }
                     }
-                    .buttonStyle(MailModeButtonStyle())
-                    .help("Terug naar de werkbank (Esc)")
+                    .buttonStyle(ToolbarSwitchStyle())
+                    .help("Terug naar de werkbank (⌘1 of Esc)")
                 } else {
                     Button { mailMode.open() } label: {
                         HStack(spacing: 6) {
@@ -225,8 +225,8 @@ struct MainView: View {
                             Image(systemName: "chevron.right").font(.werk(size: 10, weight: .semibold))
                         }
                     }
-                    .buttonStyle(MailModeButtonStyle())
-                    .help("Mailmodus")
+                    .buttonStyle(ToolbarSwitchStyle())
+                    .help("Mailmodus (⌘2)")
                 }
             }
             ToolbarItem(placement: .navigation) {

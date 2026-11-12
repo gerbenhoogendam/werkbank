@@ -127,6 +127,8 @@ struct MailModeView: View {
             if store.isMarking { store.clearMarks() } else { store.close() }
             return true
         }
+        // Van macOS of de app zelf (⌘1 en ⌘2 wisselen tussen werkbank en mail): nooit een handeling van de mailmodus.
+        if let key = MailModeKeys.key(from: event), MailModeKeys.reserved.contains(key) { return false }
         guard let action = MailModeKeys.action(for: event) else { return false }
         // In een tekstveld is een losse toets gewoon tekst; een combinatie met ⌘, ⌃ of ⌥ werkt ook daar.
         if typing, !MailModeKeys.hasModifiers(MailModeKeys.key(for: action)) { return false }
@@ -1059,6 +1061,23 @@ struct MailModeButtonStyle: ButtonStyle {
                 .strokeBorder(prominent || puls ? Color.clear : ThingsColor.separator))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .contentShape(Rectangle())
+    }
+}
+
+/// De knop in de werkbalk van het venster die tussen werkbank en mail wisselt. Die werkbalk is van macOS (grijs glas,
+/// in elk thema hetzelfde), dus een vlak in de kleuren van het thema met een rand eromheen stond er in de meeste
+/// thema's los in. Daarom overal wat in Puls al goed stond: een capsule van neutraal grijs glas zonder rand, even rond
+/// als de werkbalk zelf, met de tekstkleur van het systeem; alleen de letter komt uit het thema.
+struct ToolbarSwitchStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.werk(size: 13, weight: .semibold))
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, 13)
+            .frame(height: 32)
+            .background(Capsule(style: .continuous).fill(Puls.glass))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule(style: .continuous))
     }
 }
 
