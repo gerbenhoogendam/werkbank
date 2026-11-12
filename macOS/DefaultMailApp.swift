@@ -34,6 +34,14 @@ enum DefaultMailApp {
     }
 }
 
+extension DefaultMailApp {
+    /// ⌘N, waar je ook bent in de app: het hoofdvenster naar voren en een lege nieuwe mail.
+    static func composeNew() {
+        if DuoWindowFold.shared.mainWindow?.isKeyWindow != true { WindowRouter.focusMain() }
+        PanelStore.shared.open(.compose(ComposeRef(mode: .new, source: nil)))
+    }
+}
+
 /// Voorkeuren › Mail: welk programma mailto-links opent.
 struct DefaultMailAppSection: View {
     @State private var isWerkbank = DefaultMailApp.isWerkbank

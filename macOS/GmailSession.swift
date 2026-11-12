@@ -1018,7 +1018,7 @@ final class GmailSession {
         note(account: account, forMessageID: threadID)
         let owner = account ?? messageAccount[threadID]
         let query = [URLQueryItem(name: "format", value: "metadata")]
-            + ["From", "To", "Cc", "Subject"].map { URLQueryItem(name: "metadataHeaders", value: $0) }
+            + ["From", "To", "Cc", "Bcc", "Subject"].map { URLQueryItem(name: "metadataHeaders", value: $0) }
         let data = try await api("threads/\(threadID)", query: query, account: owner)
         guard let messages = GmailAPI.threadMessages(fromJSON: data) else { throw GmailError.invalidResponse }
         for message in messages { note(account: owner, forMessageID: message.id) }
@@ -1209,6 +1209,56 @@ final class GmailSession {
         // Wat uit de inbox ging, ook uit de lijsten van het Mail-paneel.
         for id in done where byThread[id]?.remove.contains("INBOX") == true { removeThreadFromLists(id) }
         return done.compactMap { byThread[$0] }
+    }
+
+    // MARK: Gelezen en ongelezen
+
+    /// Zet een gesprek op gelezen of ongelezen (het label UNREAD op alle mails van het gesprek) en werkt de lijsten
+    /// meteen bij: het Mail-paneel en de mailmodus. `false`: het lukte niet.
+    @discardableResult
+    func setUnread(_ unread: Bool, threadID: String, account: String? = nil) async -> Bool {
+        do {
+            let change = unread ? ["addLabelIds": ["UNREAD"]] : ["removeLabelIds": ["UNREAD"]]
+            let body = try JSONSerialization.data(withJSONObject: change)
+            _ = try await api("threads/\(threadID)/modify", method: "POST", body: body,
+                              account: account ?? messageAccount[threadID])
+        } catch {
+            return false
+        }
+        var changed = false
+        for key in Array(messageCache.keys) {
+            guard let index = messageCache[key]?.firstIndex(where: { $0.threadID == threadID }),
+                  messageCache[key]?[index].isUnread != unread else { continue }
+            messageCache[key]?[index].isUnread = unread
+            changed = true
+        }
+        if changed {
+            refreshVisible()
+            saveInboxLater()
+        }
+        MailModeStore.shared.noteUnread(unread, threadID: threadID)
+        return true
+    }
+
+    /// Meer gesprekken tegelijk; geeft terug bij hoeveel het lukte.
+    func setUnread(_ unread: Bool, threads: [(threadID: String, account: String?)]) async -> Int {
+        let accounts = Dictionary(threads.map { ($0.threadID, $0.account) }, uniquingKeysWith: { first, _ in first })
+        let done = await forEachThread(Array(accounts.keys)) { id in
+            guard await self.setUnread(unread, threadID: id, account: accounts[id] ?? nil) else {
+                throw GmailError.invalidResponse
+            }
+        }
+        return done.count
+    }
+
+    /// Rechtermuisknop op een mail: gelezen wordt ongelezen en andersom.
+    func toggleUnread(_ message: GmailMessageSummary, appState: AppState) async {
+        let unread = !message.isUnread
+        if await setUnread(unread, threadID: message.threadID, account: account(for: message.id)) {
+            appState.announce(unread ? "Gemarkeerd als ongelezen" : "Gemarkeerd als gelezen")
+        } else {
+            appState.showToast("Markeren mislukt", seconds: 5)
+        }
     }
 
     /// Doet `work` voor elk gesprek, steeds acht tegelijk onderweg (binnen wat Gmail per seconde toestaat). Geeft de

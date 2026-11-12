@@ -4,7 +4,7 @@ import Foundation
 /// De handelingen in de mailmodus met hun toets (ook een combinatie zoals ⇧⌘R). De toetsen, en welke knoppen in de
 /// mail staan, zijn aan te passen in Voorkeuren › Mail en gaan mee naar je andere Macs.
 enum MailModeAction: String, CaseIterable, Identifiable {
-    case archive, task, time, plan, reply, follow, claude, scope, search, next, previous
+    case archive, task, time, plan, reply, follow, claude, unread, scope, search, next, previous
 
     var id: String { rawValue }
 
@@ -17,6 +17,7 @@ enum MailModeAction: String, CaseIterable, Identifiable {
         case .reply: "Beantwoorden"
         case .follow: "Opvolgen"
         case .claude: "Claude-concept"
+        case .unread: "Gelezen of ongelezen"
         case .scope: "Volgende mailbox of combinatie"
         case .search: "Zoeken"
         case .next: "Volgende mail"
@@ -33,6 +34,7 @@ enum MailModeAction: String, CaseIterable, Identifiable {
         case .reply: "R"
         case .follow: "F"
         case .claude: "C"
+        case .unread: "U"
         case .scope: MailModeKeys.tab
         case .search: "/"
         case .next: "J"
@@ -49,12 +51,12 @@ enum MailModeKeys {
     static let tab = "⇥"
 
     /// De handelingen die als knop in de mail staan, in die volgorde.
-    static let buttons: [MailModeAction] = [.archive, .reply, .task, .time, .plan, .follow, .claude]
+    static let buttons: [MailModeAction] = [.archive, .reply, .task, .time, .plan, .follow, .claude, .unread]
 
-    /// Combinaties die van macOS of de app zelf zijn (kopiëren, plakken, ongedaan maken, zoeken, ⌘1 werkbank en
-    /// ⌘2 mail …).
+    /// Combinaties die van macOS of de app zelf zijn (kopiëren, plakken, ongedaan maken, zoeken, ⌘1 werkbank,
+    /// ⌘2 mail, ⌘N nieuwe mail …).
     static let reserved: Set<String> = ["⌘C", "⌘V", "⌘X", "⌘A", "⌘Z", "⇧⌘Z", "⌘Q", "⌘W", "⌘H", "⌘M", "⌘,", "⌘F", "⌘⇥",
-                                        "⌘1", "⌘2"]
+                                        "⌘1", "⌘2", "⌘N"]
 
     /// De toets van een handeling: je eigen keuze, anders de standaard.
     static func key(for action: MailModeAction) -> String {

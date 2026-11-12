@@ -145,6 +145,9 @@ struct MailModeView: View {
         case .search: store.requestSearchFocus()
         case .next: store.selectNext()
         case .previous: store.selectPrevious()
+        case .unread:
+            guard store.selected != nil || store.isMarking else { return false }
+            store.toggleUnread(appState: appState)
         case .task, .time, .plan, .follow, .claude:
             guard store.selected != nil, !store.isMarking else { return false }
             store.openSheet(Self.sheet(for: action))
@@ -799,6 +802,13 @@ private struct MailModeReader: View {
                 }
                 if shows(.claude) {
                     MailActionButton(title: "Concept", systemImage: "sparkles", action: .claude) { store.openSheet(.concept) }
+                }
+                if shows(.unread) {
+                    // Zegt wat de knop doet: een ongelezen mail wordt gelezen en andersom. Archiveert niet.
+                    MailActionButton(title: item.isUnread ? "Markeer gelezen" : "Markeer ongelezen",
+                                     systemImage: item.isUnread ? "envelope.open" : "envelope.badge", action: .unread) {
+                        store.toggleUnread(appState: appState)
+                    }
                 }
             }
         }

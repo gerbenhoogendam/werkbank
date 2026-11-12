@@ -645,6 +645,32 @@ final class MailModeStore {
         }
     }
 
+    // MARK: Gelezen en ongelezen
+
+    /// Gelezen wordt ongelezen en andersom (toets U, de knop in de mail): de gekozen mail, of alle gekozen mails
+    /// tegelijk (is er daarvan één ongelezen, dan worden ze allemaal gelezen). Archiveert niet; de mail blijft gekozen.
+    func toggleUnread(appState: AppState) {
+        let targets = isMarking ? marked : [selected].compactMap { $0 }
+        guard !targets.isEmpty else { return }
+        let unread = !targets.contains(where: \.isUnread)
+        let changing = targets.filter { $0.isUnread != unread }
+        Task {
+            let done = await gmail.setUnread(unread, threads: changing.map { ($0.threadID, gmail.account(for: $0.id)) })
+            await report(done, of: Set(changing.map(\.threadID)).count,
+                         unread ? "gemarkeerd als ongelezen" : "gemarkeerd als gelezen", appState: appState)
+        }
+    }
+
+    /// Na het markeren in Gmail (`GmailSession.setUnread`): de lijst hier meteen bijwerken, zonder opnieuw op te halen.
+    func noteUnread(_ unread: Bool, threadID: String) {
+        guard let index = items.firstIndex(where: { $0.threadID == threadID }), items[index].isUnread != unread
+        else { return }
+        var labels = items[index].labels.filter { $0 != "UNREAD" }
+        if unread { labels.append("UNREAD") }
+        items[index].labels = labels
+        if let shownKey { MailListCache.shared.store(items, for: shownKey) }
+    }
+
     /// Meldt hoe het ging met een handeling op meer gesprekken; mislukte er een, dan wordt de lijst opnieuw geladen.
     private func report(_ done: Int, of total: Int, _ what: String, appState: AppState) async {
         let failed = total - done

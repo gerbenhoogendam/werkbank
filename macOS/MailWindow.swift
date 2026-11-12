@@ -521,6 +521,8 @@ private struct ThreadMailCard: View {
     @State private var historyHeight: CGFloat = 40
     /// Klik op de afzender: het adres staat erachter, met een knop om het te kopiëren.
     @State private var showsAddress = false
+    /// Meer dan `recipientLimit` ontvangers: de rest pas na een klik op "+N".
+    @State private var showsAllRecipients = false
 
     private var sender: (name: String, address: String) {
         if let first = MailAddress.parse(mail.from).valid.first {
@@ -624,39 +626,9 @@ private struct ThreadMailCard: View {
 
     /// De afzender. Een klik op de naam (of het rondje ervoor) laat het e-mailadres erachter zien, te selecteren en met
     /// een knop te kopiëren; nog een klik haalt het weer weg. De rest van de kop klapt de mail open of dicht.
-    @ViewBuilder private var senderLabel: some View {
-        Button(action: toggleAddress) {
-            Text(sender.name)
-                .font(.werk(size: 13, weight: .semibold))
-                .foregroundStyle(ThingsColor.textPrimary)
-                .lineLimit(1)
-        }
-        .buttonStyle(.plain)
-        .layoutPriority(1)
-        .help(sender.address)
-        if showsAddress, !sender.address.isEmpty {
-            // Zonder naam staat het adres er al als naam: dan alleen de knop.
-            if sender.name != sender.address {
-                Text(sender.address)
-                    .font(.werk(size: 12))
-                    .foregroundStyle(ThingsColor.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-                    .transition(.opacity)
-            }
-            Button(action: copyAddress) {
-                Image(systemName: "doc.on.doc")
-                    .font(.werk(size: 11, weight: .medium))
-                    .frame(width: 20, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(ThingsColor.textSecondary)
-            .help("Kopieer adres")
-            .accessibilityLabel("Kopieer adres")
-            .transition(.opacity)
-        }
+    private var senderLabel: some View {
+        MailPersonView(name: sender.name, address: sender.address, nameFont: .werk(size: 13, weight: .semibold),
+                       addressFont: .werk(size: 12), showsAddress: $showsAddress)
     }
 
     private func toggleAddress() {
@@ -664,23 +636,64 @@ private struct ThreadMailCard: View {
         withAnimation(ThingsMotion.reveal) { showsAddress.toggle() }
     }
 
-    private func copyAddress() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(sender.address, forType: .string)
-        AppState.shared.announce("Adres gekopieerd")
+    /// Aan, Cc en Bcc: per persoon de naam; een klik zet het e-mailadres erachter, net als bij de afzender
+    /// (`MailPersonView`).
+    @ViewBuilder private var recipients: some View {
+        let list = recipientEntries(limit: showsAllRecipients ? Int.max : Self.recipientLimit)
+        if !list.entries.isEmpty {
+            WrapStack(spacing: 4) {
+                ForEach(Array(list.entries.enumerated()), id: \.offset) { _, entry in
+                    switch entry {
+                    case .label(let text):
+                        Text(text)
+                    case .person(let person, let comma):
+                        RecipientView(person: person, trailingComma: comma)
+                    case .plain(let text):
+                        Text(text).textSelection(.enabled)
+                    }
+                }
+                if list.hidden > 0 {
+                    Button("+\(list.hidden)") { showsAllRecipients = true }
+                        .buttonStyle(.plain)
+                        .help("Alle ontvangers")
+                }
+            }
+            .thingsFont(.metadata)
+            .foregroundStyle(ThingsColor.accent)
+        }
     }
 
-    @ViewBuilder private var recipients: some View {
-        let to = mail.to
-        let cc = mail.cc
-        if !to.isEmpty || !cc.isEmpty {
-            Text([to.isEmpty ? nil : "Aan: \(Self.names(to))", cc.isEmpty ? nil : "Cc: \(Self.names(cc))"]
-                .compactMap { $0 }.joined(separator: "   "))
-                .thingsFont(.metadata)
-                .foregroundStyle(ThingsColor.accent)
-                .lineLimit(2)
-                .textSelection(.enabled)
+    private enum RecipientEntry {
+        case label(String)
+        case person(MailAddress, comma: Bool)
+        /// Een regel die niet als adressen te lezen is ("undisclosed-recipients:;").
+        case plain(String)
+    }
+
+    private static let recipientLimit = 12
+
+    /// De ontvangers op volgorde (Aan, Cc, Bcc), hooguit `limit` personen; `hidden`: hoeveel er niet bij staan.
+    private func recipientEntries(limit: Int) -> (entries: [RecipientEntry], hidden: Int) {
+        var entries: [RecipientEntry] = []
+        var shown = 0
+        var hidden = 0
+        for (label, list) in [("Aan", mail.to), ("Cc", mail.cc), ("Bcc", mail.bcc)] where !list.isEmpty {
+            let people = MailAddress.parse(list).valid
+            if people.isEmpty {
+                entries.append(.label(label + ":"))
+                entries.append(.plain(list))
+                continue
+            }
+            let visible = Array(people.prefix(max(0, limit - shown)))
+            hidden += people.count - visible.count
+            guard !visible.isEmpty else { continue }
+            entries.append(.label(label + ":"))
+            for (index, person) in visible.enumerated() {
+                entries.append(.person(person, comma: index < visible.count - 1))
+            }
+            shown += visible.count
         }
+        return (entries, hidden)
     }
 
     private func action(_ title: String, _ symbol: String, perform: @escaping () -> Void) -> some View {
@@ -691,14 +704,87 @@ private struct ThreadMailCard: View {
         .foregroundStyle(ThingsColor.textSecondary)
     }
 
-    private static func names(_ list: String) -> String {
-        let parsed = MailAddress.parse(list).valid
-        guard !parsed.isEmpty else { return list }
-        return parsed.map { $0.name ?? $0.address }.joined(separator: ", ")
-    }
-
     private static func dateText(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).hour().minute().locale(Locale(identifier: "nl_NL")))
+    }
+}
+
+// MARK: - Personen in de kop van een mail
+
+/// Eén persoon in de kop van een mail (van, aan, cc, bcc). Een klik op de naam zet het e-mailadres erachter, te
+/// selecteren en met een knopje te kopiëren (melding "Adres gekopieerd"); nog een klik haalt het weer weg.
+private struct MailPersonView: View {
+    let name: String
+    let address: String
+    /// `nil`: de letter van de regel eromheen.
+    var nameFont: Font? = nil
+    var nameColor: Color = ThingsColor.textPrimary
+    var addressFont: Font? = nil
+    /// Wat er achter deze persoon komt als er nog iemand volgt (een komma).
+    var trailing = ""
+    @Binding var showsAddress: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Button(action: toggle) {
+                Text(showsAddress ? name : name + trailing)
+                    .font(nameFont)
+                    .foregroundStyle(nameColor)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
+            .help(address)
+            if showsAddress, !address.isEmpty {
+                // Zonder naam staat het adres er al als naam: dan alleen de knop.
+                if name != address {
+                    Text(address)
+                        .font(addressFont)
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .transition(.opacity)
+                }
+                Button(action: copy) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.werk(size: 11, weight: .medium))
+                        .frame(width: 18, height: 14)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(ThingsColor.textSecondary)
+                .help("Kopieer adres")
+                .accessibilityLabel("Kopieer adres van \(name)")
+                .transition(.opacity)
+                if !trailing.isEmpty {
+                    Text(trailing).font(nameFont).foregroundStyle(nameColor)
+                }
+            }
+        }
+    }
+
+    private func toggle() {
+        guard !address.isEmpty else { return }
+        withAnimation(ThingsMotion.reveal) { showsAddress.toggle() }
+    }
+
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(address, forType: .string)
+        AppState.shared.announce("Adres gekopieerd")
+    }
+}
+
+/// Een ontvanger (Aan, Cc, Bcc) met zijn eigen open of dicht.
+private struct RecipientView: View {
+    let person: MailAddress
+    let trailingComma: Bool
+    @State private var showsAddress = false
+
+    var body: some View {
+        MailPersonView(name: person.name ?? person.address, address: person.address, nameColor: ThingsColor.accent,
+                       trailing: trailingComma ? "," : "", showsAddress: $showsAddress)
     }
 }
 

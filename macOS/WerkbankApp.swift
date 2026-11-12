@@ -122,7 +122,13 @@ struct WerkbankApp: App {
             }
         }
         .defaultSize(width: 760, height: 680)
-        .commands { CommandGroup(replacing: .newItem) {} }
+        .commands {
+            // ⌘N: overal in de app een nieuwe mail (geen nieuw venster).
+            CommandGroup(replacing: .newItem) {
+                Button("Nieuwe mail") { DefaultMailApp.composeNew() }
+                    .keyboardShortcut("n", modifiers: .command)
+            }
+        }
 
         Settings {
             PreferencesView()

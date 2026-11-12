@@ -184,7 +184,7 @@ struct GmailPanel: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(ThingsColor.textSecondary)
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-                .help("Nieuwe mail (⇧⌘N)")
+                .help("Nieuwe mail (⌘N)")
                 accountMenu
             }
         }
@@ -762,6 +762,9 @@ struct GmailRow: View {
                     }
                 }
                 Divider()
+                Button(message.isUnread ? "Markeer als gelezen" : "Markeer als ongelezen") {
+                    Task { await GmailSession.shared.toggleUnread(message, appState: AppState.shared) }
+                }
                 Button("Archiveren", action: onArchive)
             }
             .accessibilityElement(children: .combine)

@@ -280,9 +280,22 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     ⌘1 is de werkbank, ⌘2 de mailmodus (menu Weergave, `WindowRouter.show(mail:)`; werkt ook vanuit een los venster,
     dan komt het hoofdvenster naar voren). Daarvoor zijn de mailboxen in het Mail-paneel verhuisd van ⌘1…⌘9 en ⌘0
     naar ⌥⌘1…⌥⌘9 en ⌥⌘0, en ⌘1/⌘2 zijn niet meer te kiezen als toets in de mailmodus (`MailModeKeys.reserved`).
-34. **Adres van de afzender** (12 nov, `ThreadMailCard.senderLabel`). In een gesprek: een klik op de naam van de
-    afzender (of het rondje ervoor) zet het e-mailadres erachter, te selecteren, met een knopje om het te kopiëren
-    (melding "Adres gekopieerd"); nog een klik haalt het weg. De rest van de kop klapt de mail open of dicht.
+34. **Adres van iedereen in de kop van een mail** (12 en 13 nov, `MailPersonView` in `MailWindow.swift`). In een
+    gesprek: een klik op de naam van de afzender (of het rondje ervoor) of van een ontvanger (Aan, Cc, Bcc) zet het
+    e-mailadres erachter, te selecteren, met een knopje om het te kopiëren (melding "Adres gekopieerd"); nog een klik
+    haalt het weg. De rest van de kop klapt de mail open of dicht. Ontvangers staan per persoon in een `WrapStack`
+    (`recipientEntries`); meer dan 12: "+N" toont de rest. Bcc komt mee uit de koppen van het gesprek
+    (`GmailThreadMessage.bcc`; staat alleen in eigen verstuurde mail).
+35. **Gelezen en ongelezen** (13 nov). Tot nu toe zette Werkbank nooit iets op gelezen: dat kwam alleen uit Gmail zelf.
+    Nu: rechtermuisknop op een mail in een lijst › "Markeer als gelezen/ongelezen" (`GmailRow`, Mail-paneel en
+    mailmodus), in de mailmodus de knop "Markeer gelezen/ongelezen" tussen de handelingen en de toets U
+    (`MailModeAction.unread`, aan te passen en uit te zetten in Voorkeuren › Mail; met meer mails gekozen: allemaal).
+    `GmailSession.setUnread` zet het label UNREAD op het hele gesprek (`threads/modify`) en werkt het Mail-paneel en
+    de lijst van de mailmodus meteen bij (`MailModeStore.noteUnread`). De handeling archiveert bewust niet en de mail
+    blijft gekozen. Een mail openen zet hem nog steeds niet vanzelf op gelezen.
+36. **⌘N: nieuwe mail** (13 nov). Menu Archief › Nieuwe mail (`DefaultMailApp.composeNew`): overal in de app, ook
+    vanuit een los venster of Voorkeuren (het hoofdvenster komt dan naar voren). ⇧⌘N in het Mail-paneel werkt nog.
+    ⌘N is niet te kiezen als toets in de mailmodus.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

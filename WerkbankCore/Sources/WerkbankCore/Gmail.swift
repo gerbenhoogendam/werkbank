@@ -139,7 +139,7 @@ public enum GmailAPI {
             }
             let millis = message.internalDate.flatMap(Double.init) ?? 0
             return GmailThreadMessage(id: message.id, date: Date(timeIntervalSince1970: millis / 1000), labels: labels,
-                                      from: header("from"), to: header("to"), cc: header("cc"),
+                                      from: header("from"), to: header("to"), cc: header("cc"), bcc: header("bcc"),
                                       subject: header("subject"), snippet: decodeEntities(message.snippet ?? ""))
         }
         .sorted { $0.date < $1.date }
@@ -258,16 +258,20 @@ public struct GmailThreadMessage: Equatable {
     public var from: String
     public var to: String
     public var cc: String
+    /// Alleen bij eigen verstuurde mail: wie er in Bcc stond.
+    public var bcc: String
     public var subject: String
     public var snippet: String
 
-    public init(id: String, date: Date, labels: [String], from: String, to: String, cc: String, subject: String, snippet: String) {
+    public init(id: String, date: Date, labels: [String], from: String, to: String, cc: String, bcc: String = "",
+                subject: String, snippet: String) {
         self.id = id
         self.date = date
         self.labels = labels
         self.from = from
         self.to = to
         self.cc = cc
+        self.bcc = bcc
         self.subject = subject
         self.snippet = snippet
     }

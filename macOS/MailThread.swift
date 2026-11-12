@@ -12,6 +12,8 @@ struct ThreadMail: Identifiable {
     let from: String
     let to: String
     let cc: String
+    /// Alleen bij eigen verstuurde mail.
+    let bcc: String
     let subject: String
     let snippet: String
     var content: MailContent?
@@ -27,6 +29,7 @@ struct ThreadMail: Identifiable {
         from = message.from
         to = message.to
         cc = message.cc
+        bcc = message.bcc
         subject = message.subject
         snippet = message.snippet
     }
