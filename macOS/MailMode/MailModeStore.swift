@@ -185,6 +185,33 @@ final class MailModeStore {
         ]
     }
 
+    /// Op een melding van nieuwe mail geklikt: de mailmodus met die mail gekozen. Staat de mailbox niet in wat je nu
+    /// bekijkt (ander bereik, een map, een zoekopdracht of filter), dan de inbox van die mailbox.
+    func show(messageID: String?, threadID: String?, account: String) {
+        if !isActive { open() } else if isReceded { restore() }
+        sheet = nil
+        let visibleHere = folder == .inbox && !isFiltering && accounts(of: scope).contains(account)
+        if !visibleHere {
+            searchTask?.cancel()
+            scope = .account(account)
+            folder = .inbox
+            client = nil
+            query = ""
+            filters = []
+            searchAccounts = nil
+            searchForm = MailSearchForm()
+        }
+        bundleOpen = false
+        markedIDs = []
+        selectedID = messageID
+        Task {
+            await reload()
+            if let item = items.first(where: { $0.id == messageID }) ?? items.first(where: { $0.threadID == threadID }) {
+                selectedID = item.id
+            }
+        }
+    }
+
     /// Een laadbeurt die na anderhalve minuut nog niet klaar is, telt niet meer: dan mag een nieuwe ervoor in de
     /// plaats (die van toen wordt genegeerd als hij alsnog terugkomt). Zo kan een verbinding die bleef hangen (na de
     /// slaapstand, ander netwerk) het verversen niet tegenhouden tot je de app opnieuw start.
@@ -606,6 +633,9 @@ final class MailModeStore {
         if isFiltering || bundleOpen || folder != .inbox { return filtered }
         return filtered.filter { !isBundled($0) }
     }
+
+    /// Een nieuwsbrief of melding (wat in de bundel komt); daar komt geen melding van macOS van (`MailNotifier`).
+    func isNewsletter(_ item: GmailMailItem) -> Bool { isBundled(item) }
 
     private func isBundled(_ item: GmailMailItem) -> Bool {
         let kind = kind(of: item)
@@ -1048,6 +1078,7 @@ final class MailModeStore {
 
     /// Haalt een gesprek uit de lijst en kiest de mail die er nu staat (de volgende, of de laatste).
     func remove(threadID: String) {
+        MailNotifier.shared.noteHandled(threadID: threadID)
         let order = listed
         let index = order.firstIndex { $0.threadID == threadID }
         if !markedIDs.isEmpty { keepMarks(in: items.filter { $0.threadID != threadID }) }

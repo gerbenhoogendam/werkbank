@@ -11,6 +11,9 @@ struct SignaturePreferences: View {
     @State private var html = ""
     /// Afzendernamen per mailbox ("" is die voor alle mailboxen); meteen bewaard bij het typen.
     @State private var senderNames: [String: String] = [:]
+    /// De mailboxen die een melding geven bij nieuwe mail.
+    @State private var notifyAccounts: Set<String> = []
+    @State private var notificationsDenied = false
     @State private var logo: Data?
     @State private var logoImage: NSImage?
     @State private var preview = ""
@@ -46,6 +49,24 @@ struct SignaturePreferences: View {
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: 280)
                         }
+                        // Een melding van macOS bij nieuwe mail in deze mailbox (geen nieuwsbrieven en meldingen), en
+                        // meetellen op het Dock-icoon.
+                        LabeledContent("Meldingen") {
+                            Toggle("", isOn: Binding(
+                                get: { notifyAccounts.contains(email) },
+                                set: { on in
+                                    if on { notifyAccounts.insert(email) } else { notifyAccounts.remove(email) }
+                                    MailNotifier.set(email, notifies: on)
+                                }))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                    }
+                }
+                if notificationsDenied, !notifyAccounts.isEmpty {
+                    LabeledContent("Meldingen staan uit in Systeeminstellingen") {
+                        Button("Openen") { MailNotifier.openSystemSettings() }
                     }
                 }
                 HStack {
@@ -174,6 +195,8 @@ struct SignaturePreferences: View {
     private func load() {
         html = MailSignatures.ownHTML(key)
         senderNames = MailSignatures.senderNames()
+        notifyAccounts = Set(MailNotifier.accounts)
+        Task { notificationsDenied = await MailNotifier.isDenied() }
         logo = MailSignatures.ownLogo(key)
     }
 

@@ -217,6 +217,7 @@ final class GmailSession {
     }
 
     private func removeThreadFromLists(_ threadID: String) {
+        MailNotifier.shared.noteHandled(threadID: threadID)
         for key in Array(messageCache.keys) { messageCache[key]?.removeAll { $0.threadID == threadID } }
         refreshVisible()
         saveInboxLater()
@@ -667,6 +668,21 @@ final class GmailSession {
         var seenThreads = Set<String>()
         let refs = GmailAPI.messageRefs(fromListJSON: list).refs.filter { seenThreads.insert($0.threadID).inserted }
         return await mailItems(ids: refs.map(\.id), account: account, headers: GmailAPI.mailItemHeaders)
+    }
+
+    /// Ongelezen mail in de inbox van één mailbox, nieuwste eerst en één per gesprek (hooguit 50), met de koppen die
+    /// de mailmodus ook gebruikt (om nieuwsbrieven te herkennen). Wat in `known` staat wordt niet opnieuw opgehaald.
+    /// Voor de meldingen en het Dock-icoon (`MailNotifier`).
+    func unreadInbox(account: String, known: [String: GmailMailItem]) async throws -> [GmailMailItem] {
+        let list = try await api("messages", query: [URLQueryItem(name: "labelIds", value: "INBOX"),
+                                                     URLQueryItem(name: "labelIds", value: "UNREAD"),
+                                                     URLQueryItem(name: "maxResults", value: "50")], account: account)
+        var seenThreads = Set<String>()
+        let refs = GmailAPI.messageRefs(fromListJSON: list).refs.filter { seenThreads.insert($0.threadID).inserted }
+        let missing = refs.map(\.id).filter { known[$0] == nil }
+        let fetched = await mailItems(ids: missing, account: account, headers: GmailAPI.mailItemHeaders)
+        let byID = Dictionary(fetched.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return refs.compactMap { byID[$0.id] ?? known[$0.id] }
     }
 
     /// Alle mail (ook verzonden en gearchiveerd) sinds `since` (en vóór `until`), met alleen afzender en ontvangers:
@@ -1237,6 +1253,8 @@ final class GmailSession {
             saveInboxLater()
         }
         MailModeStore.shared.noteUnread(unread, threadID: threadID)
+        // Het Dock-icoon: gelezen telt meteen niet meer mee, weer ongelezen na een korte controle.
+        if unread { MailNotifier.shared.checkSoon() } else { MailNotifier.shared.noteHandled(threadID: threadID) }
         return true
     }
 

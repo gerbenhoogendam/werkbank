@@ -24,6 +24,7 @@ final class PreferencesSync {
         FoldSpeed.windowOpen.key, FoldSpeed.windowClose.key, FoldSpeed.mailOpen.key, FoldSpeed.mailClose.key,
         FoldSpeed.send.key, MailModeKeys.storageKey, MailModeKeys.hiddenButtonsKey, FollowUpStore.itemsKey,
         FollowUpStore.returnedKey, MailModeStore.bulkRulesKey, MailClientSettings.accountsKey, MailClientSettings.excludedKey,
+        MailNotifier.accountsKey,
     ]).union(ThemeStore.Key.all)
     private static let calendarColorsKey = "calendar.colors"
     /// Alleen op deze Mac.

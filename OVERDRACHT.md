@@ -300,6 +300,24 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 36. **⌘N: nieuwe mail** (13 nov). Menu Archief › Nieuwe mail (`DefaultMailApp.composeNew`): overal in de app, ook
     vanuit een los venster of Voorkeuren (het hoofdvenster komt dan naar voren). ⇧⌘N in het Mail-paneel werkt nog.
     ⌘N is niet te kiezen als toets in de mailmodus.
+37. **Meldingen van nieuwe mail** (13 nov, `macOS/MailNotifier.swift`, `WerkbankCore/…/MailNotices.swift`). Per mailbox
+    aan te zetten in Voorkeuren › Mail › Mailboxen ("Meldingen"; zolang je niets kiest: gh@, support@ en info@,
+    `MailClientSettings.preferred`; gaat mee naar je andere Macs). `MailNotifier` kijkt elke minuut (ook met het
+    hoofdvenster dicht; na de slaapstand binnen een paar seconden) wat er ongelezen in de inbox van die mailboxen
+    staat (`GmailSession.unreadInbox`, alleen nieuwe koppen worden opgehaald) en laat nieuwsbrieven en meldingen weg
+    (`MailModeStore.isNewsletter`, hetzelfde als de bundel in de mailmodus; wat je daar uitsloot telt dus wel mee).
+    - Melding van macOS (`UNUserNotificationCenter`; de eerste keer vraagt macOS toestemming): afzender (met de
+      mailbox erachter als er meer mailboxen meldingen geven), onderwerp en begin van de tekst, met geluid, ook als
+      Werkbank op de voorgrond staat. Alleen voor mail die na de vorige controle binnenkwam
+      (`MailNotices.fresh`): bij het starten komt er dus niets voor wat er al stond, en een oude mail die je weer op
+      ongelezen zet is geen nieuwe mail. Meer dan 4 tegelijk (na de slaapstand): één melding met het aantal. Een klik
+      opent de mailmodus met die mail gekozen (`MailModeStore.show`; zo nodig de inbox van die mailbox). Gelezen of
+      gearchiveerd (hier of elders): de melding verdwijnt uit Berichtencentrum.
+    - Dock-icoon: het aantal ongelezen gesprekken in die inboxen, zonder nieuwsbrieven (hooguit 50 per mailbox
+      geteld, "99+" erboven). Lezen, archiveren of weghalen in de app telt meteen af (`noteHandled`).
+    - Staat het uit in Systeeminstellingen, dan staat dat in Voorkeuren › Mail met een knop erheen.
+    Niet op een Mac gezien: of de toestemmingsvraag komt, of de melding en het getal op het Dock kloppen, en of een
+    klik de goede mail opent.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

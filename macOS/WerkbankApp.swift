@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         IdleWatcher.shared.start()
         WerkbankSync.start()
         Dictation.shared.start()
+        MailNotifier.shared.start()
         // Wat de mailmodus nodig heeft alvast buiten de hoofdthread inlezen, zodat hij meteen opent.
         MailActivityStore.shared.preload()
         MailListCache.shared.preload()
