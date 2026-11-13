@@ -215,6 +215,15 @@ final class MailNotifier {
         NSApp.dockTile.badgeLabel = MailNotices.badge(count)
     }
 
+    /// Je kijkt naar de mail: Werkbank staat op de voorgrond met de mailmodus in beeld. Dan komt er geen banner, alleen
+    /// het geluid; de nieuwe mail verschijnt in de lijst.
+    fileprivate var isWatchingMail: Bool {
+        let store = MailModeStore.shared
+        guard NSApp.isActive, store.isActive, !store.isReceded,
+              let window = DuoWindowFold.shared.mainWindow else { return false }
+        return window.isVisible && !window.isMiniaturized
+    }
+
     /// Op een melding geklikt: het hoofdvenster naar voren, de mailmodus op die mailbox en die mail gekozen.
     fileprivate func opened(messageID: String?, threadID: String?, account: String) {
         WindowRouter.focusMain()
@@ -225,10 +234,14 @@ final class MailNotifier {
 
 /// Wat macOS over de meldingen vraagt. Los van de hoofdthread: macOS roept dit op een eigen moment aan.
 private final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
-    /// Ook tonen als Werkbank op de voorgrond staat (je kijkt dan lang niet altijd naar de mail).
+    /// Werkbank staat op de voorgrond. Kijk je naar de mail (de mailmodus in beeld), dan alleen het geluid: de mail
+    /// verschijnt in de lijst. Anders gewoon de melding (op de werkbank kijk je niet naar de mail).
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .list, .sound])
+        DispatchQueue.main.async {
+            let watching = MainActor.assumeIsolated { MailNotifier.shared.isWatchingMail }
+            completionHandler(watching ? [.sound] : [.banner, .list, .sound])
+        }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,

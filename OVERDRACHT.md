@@ -308,7 +308,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`MailModeStore.isNewsletter`, hetzelfde als de bundel in de mailmodus; wat je daar uitsloot telt dus wel mee).
     - Melding van macOS (`UNUserNotificationCenter`; de eerste keer vraagt macOS toestemming): afzender (met de
       mailbox erachter als er meer mailboxen meldingen geven), onderwerp en begin van de tekst, met geluid, ook als
-      Werkbank op de voorgrond staat. Alleen voor mail die na de vorige controle binnenkwam
+      Werkbank op de voorgrond staat. Staat de mailmodus dan in beeld (`MailNotifier.isWatchingMail`), dan alleen het
+      geluid en geen banner: de mail verschijnt in de lijst. Alleen voor mail die na de vorige controle binnenkwam
       (`MailNotices.fresh`): bij het starten komt er dus niets voor wat er al stond, en een oude mail die je weer op
       ongelezen zet is geen nieuwe mail. Meer dan 4 tegelijk (na de slaapstand): één melding met het aantal. Een klik
       opent de mailmodus met die mail gekozen (`MailModeStore.show`; zo nodig de inbox van die mailbox). Gelezen of
