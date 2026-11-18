@@ -988,21 +988,33 @@ struct RichTextToolbar: View {
                     Button(family) { controller.setFamily(family) }
                 }
             } label: {
-                Text(state.family)
+                menuLabel {
+                    Text(state.family)
+                        .font(.werk(size: 13))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                }
             }
-            .menuStyle(.borderlessButton)
+            .themedMenu()
             .frame(width: 128, alignment: .leading)
             .help("Lettertype")
+            .accessibilityLabel("Lettertype")
             Menu {
                 ForEach(Self.sizes, id: \.self) { size in
                     Button("\(Int(size))") { controller.setSize(size) }
                 }
             } label: {
-                Text("\(Int(state.size.rounded()))").monospacedDigit()
+                menuLabel {
+                    Text("\(Int(state.size.rounded()))")
+                        .font(.werk(size: 13))
+                        .monospacedDigit()
+                        .foregroundStyle(ThingsColor.textPrimary)
+                }
             }
-            .menuStyle(.borderlessButton)
+            .themedMenu()
             .frame(width: 46, alignment: .leading)
             .help("Grootte")
+            .accessibilityLabel("Grootte")
             separator
             Menu {
                 Button("Standaard") { controller.setColor(nil) }
@@ -1010,22 +1022,24 @@ struct RichTextToolbar: View {
                     Button(item.name) { controller.setColor(Self.color(item.hex)) }
                 }
             } label: {
-                Image(systemName: "paintbrush.pointed")
+                menuLabel { menuSymbol("paintbrush.pointed") }
             }
-            .menuStyle(.borderlessButton)
+            .themedMenu()
             .fixedSize()
             .help("Tekstkleur")
+            .accessibilityLabel("Tekstkleur")
             Menu {
                 Button("Geen") { controller.setHighlight(nil) }
                 ForEach(Self.highlights, id: \.name) { item in
                     Button(item.name) { controller.setHighlight(Self.color(item.hex)) }
                 }
             } label: {
-                Image(systemName: "highlighter")
+                menuLabel { menuSymbol("highlighter") }
             }
-            .menuStyle(.borderlessButton)
+            .themedMenu()
             .fixedSize()
             .help("Markeren")
+            .accessibilityLabel("Markeren")
             separator
             toggle("list.bullet", on: state.list == .bullet, label: "Opsomming") { controller.toggleList(.bullet) }
             toggle("list.number", on: state.list == .number, label: "Nummering") { controller.toggleList(.number) }
@@ -1048,6 +1062,25 @@ struct RichTextToolbar: View {
             .fill(ThingsColor.separator)
             .frame(width: 1, height: 16)
             .padding(.horizontal, 5)
+    }
+
+    /// Het label van een keuzemenu in de balk: zo hoog als de knoppen ernaast, met een eigen pijltje (`themedMenu`).
+    private func menuLabel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 4) {
+            content()
+            Image(systemName: "chevron.down")
+                .font(.werk(size: 8, weight: .semibold))
+                .foregroundStyle(ThingsColor.textTertiary)
+        }
+        .padding(.horizontal, 5)
+        .frame(height: 24)
+        .contentShape(Rectangle())
+    }
+
+    private func menuSymbol(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.werk(size: 13, weight: .medium))
+            .foregroundStyle(ThingsColor.textSecondary)
     }
 
     private func toggle(_ symbol: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {

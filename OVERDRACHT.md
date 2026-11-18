@@ -333,6 +333,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`RecipientFlow`: het tekstvak krijgt de rest van de regel of een eigen regel). Na te gaan in de app: komen
     Backspace, Tab en Esc aan in het tekstvak (`onKeyPress`), blijft de cursor na Return in het veld, staat "Aan:" op
     de regel van de blokjes, en loopt een veld met veel ontvangers netjes door naar een volgende regel.
+39. **Menu's in het lettertype van het thema** (18 nov). Een `Menu` met `.menuStyle(.borderlessButton)` tekent macOS
+    zelf: systeemletter en eigen kleur, `.font` en `.foregroundStyle` op het label doen niets. Daardoor stond "Van" in
+    het opstelvenster in de systeemletter (en zwart in plaats van de accentkleur). Menu's met tekst gebruiken nu
+    `themedMenu()` (`macOS/MainView.swift`: `.menuStyle(.button)`, `.buttonStyle(.plain)`, geen systeempijltje; het
+    label zet zo nodig zelf een `chevron.down`): Van en Opvolgen in `ComposeView`, lettertype, grootte, tekstkleur en
+    markeren in de opmaakbalk (`RichTextToolbar.menuLabel`), en het accountmenu in `GmailPanel`. De menu's met alleen
+    een `ellipsis` (`MailWindow`, `MailModeSheets`, `BoardView`) zijn randloos gebleven: daar staat geen tekst. Nieuwe
+    menu's met tekst: `themedMenu()`. Na te gaan in de app: staat "Van" nog op de grondlijn van zijn label, en zijn de
+    vier menu's in de opmaakbalk even hoog als de knoppen ernaast.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

@@ -237,11 +237,12 @@ struct ComposeView: View {
                 }
             } label: {
                 Text(fromLabel(fromAccount))
+                    .font(.werk(size: 13))
+                    .foregroundStyle(ThingsColor.accent)
+                    .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
+            .themedMenu()
             .fixedSize()
-            .foregroundStyle(ThingsColor.accent)
         } else {
             Text(fromLabel(fromAccount)).foregroundStyle(ThingsColor.accent)
         }
@@ -525,12 +526,16 @@ struct ComposeView: View {
                         Button(Self.followUpTitle(days)) { followUpDays = days }
                     }
                 } label: {
-                    Label(followUpDays.map { "Opvolgen · \(Self.followUpTitle($0))" } ?? "Opvolgen",
-                          systemImage: "arrow.uturn.backward.circle")
+                    HStack(spacing: 4) {
+                        Label(followUpDays.map { "Opvolgen · \(Self.followUpTitle($0))" } ?? "Opvolgen",
+                              systemImage: "arrow.uturn.backward.circle")
+                        Image(systemName: "chevron.down").font(.werk(size: 8, weight: .semibold))
+                    }
+                    .foregroundStyle(followUpDays == nil ? ThingsColor.textSecondary : ThingsColor.accent)
+                    .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
+                .themedMenu()
                 .fixedSize()
-                .foregroundStyle(followUpDays == nil ? ThingsColor.textSecondary : ThingsColor.accent)
                 if isSending { ProgressView().controlSize(.small) }
                 Button("Verstuur") { sendDirectly() }
                     .buttonStyle(.borderedProminent)

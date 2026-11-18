@@ -388,6 +388,15 @@ extension MainView {
 }
 
 extension View {
+    /// Een menu waarvan het label het lettertype en de kleur van het thema houdt. De randloze menustijl tekent macOS
+    /// zelf, in de systeemletter en zijn eigen kleur: `.font` en `.foregroundStyle` op het label doen daar niets.
+    /// Het pijltje van het systeem gaat hiermee weg; een menu dat er een hoort te tonen zet het zelf in zijn label.
+    func themedMenu() -> some View {
+        menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+    }
+
     /// Een paneel van het hoofdvenster; bij losse vlakken (Drukproef) met afgeronde hoeken, in Telemetrie met een
     /// afgesneden hoek en een haarlijn erom.
     @ViewBuilder func themePanel() -> some View {

@@ -400,10 +400,10 @@ struct GmailPanel: View {
                         .lineLimit(1)
                 }
             }
+            .foregroundStyle(ThingsColor.textPrimary)
+            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .foregroundStyle(ThingsColor.textPrimary)
-        .menuIndicator(.hidden)
+        .themedMenu()
         .fixedSize()
         .help(gmail.emailAddress ?? "Account")
     }
