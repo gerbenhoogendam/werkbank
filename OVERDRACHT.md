@@ -342,6 +342,20 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     een `ellipsis` (`MailWindow`, `MailModeSheets`, `BoardView`) zijn randloos gebleven: daar staat geen tekst. Nieuwe
     menu's met tekst: `themedMenu()`. Na te gaan in de app: staat "Van" nog op de grondlijn van zijn label, en zijn de
     vier menu's in de opmaakbalk even hoog als de knoppen ernaast.
+40. **Knoppen op de melding van nieuwe mail** (18 nov, `macOS/MailNotifier.swift`). De melding van één mail heeft de
+    categorie `mail` met twee knoppen; de melding van veel mails tegelijk heeft ze niet. macOS bepaalt hoe ze eruitzien:
+    je houdt de muis op de melding en bij twee knoppen staat er rechtsonder "Opties" met beide erin (één knop zou
+    los staan). **Archiveer** (`mail.archive`, zonder `.foreground`): Werkbank komt niet naar voren;
+    `GmailSession.archiveThread` haalt INBOX weg (de mail blijft ongelezen, zoals Archiveren in de lijst), ⌘Z zet hem
+    terug, en `MailModeStore.archivedOutside` haalt hem uit de lijst zonder een andere mail te openen (dat zou die op
+    gelezen zetten), tenzij hij zelf openstond. Staat er nog een antwoord op dat gesprek open, is Gmail niet aangemeld
+    of mislukt het, dan komt de melding terug als "Archiveren mislukt" met de reden (`failed` in `userInfo`: die komt
+    ook in beeld als je naar de mail kijkt). **Beantwoord** (`mail.reply`, `.foreground`): als een klik op de melding,
+    en `MailReplyTrigger.replyWhenShown` laat het gesprek het antwoord (allen, zoals toets R) openen zodra die mail
+    erin staat (`MailWindowView.openPendingReply`); de vraag vervalt na een halve minuut. Typen in de melding zelf is
+    bewust niet gebouwd: dan gaat er mail weg zonder dat je handtekening, ontvangers en citaat ziet. Na te gaan in
+    de app: verschijnen de knoppen (meldingen van voor deze versie hebben ze niet), archiveert Archiveer zonder dat
+    Werkbank naar voren komt, en opent Beantwoord het antwoord ook als de mailmodus dicht was.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

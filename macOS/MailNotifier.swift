@@ -3,6 +3,9 @@ import UserNotifications
 import WerkbankCore
 
 /// Meldingen van nieuwe mail: een melding van macOS per nieuwe mail en het aantal ongelezen mails op het Dock-icoon.
+/// Op de melding van één mail staan twee knoppen: Archiveer (op de achtergrond, Werkbank komt niet naar voren) en
+/// Beantwoord (de mail in de mailmodus met het antwoord open). macOS toont ze als je de muis op de melding houdt;
+/// bij meer dan één knop onder "Opties".
 /// Alleen voor de mailboxen die in Voorkeuren › Mail zijn aangezet, en niet voor nieuwsbrieven en meldingen (wat de
 /// mailmodus in de bundel zet). Kijkt elke minuut, ook als het hoofdvenster dicht is of de mailmodus niet open staat:
 /// Gmail stuurt deze app zelf niets.
@@ -15,6 +18,10 @@ final class MailNotifier {
     private static let interval: Duration = .seconds(60)
     /// Komen er meer nieuwe mails tegelijk binnen dan dit (na de slaapstand), dan één melding met het aantal.
     private static let burstLimit = 4
+    /// De melding van één mail, met de knoppen. De melding van veel mails tegelijk heeft ze niet.
+    private static let category = "mail"
+    fileprivate static let archiveAction = "mail.archive"
+    fileprivate static let replyAction = "mail.reply"
 
     private let delegate = NotificationDelegate()
     private var loop: Task<Void, Never>?
@@ -66,6 +73,7 @@ final class MailNotifier {
     func start() {
         guard loop == nil else { return }
         UNUserNotificationCenter.current().delegate = delegate
+        registerActions()
         loop = Task { [weak self] in
             // Even na het starten: inloggen en de eerste lijsten gaan voor.
             try? await Task.sleep(for: .seconds(6))
@@ -181,6 +189,17 @@ final class MailNotifier {
 
     private static func identifier(_ messageID: String) -> String { "mail:" + messageID }
 
+    private func registerActions() {
+        let archive = UNNotificationAction(identifier: Self.archiveAction, title: "Archiveer", options: [],
+                                           icon: UNNotificationActionIcon(systemImageName: "archivebox"))
+        // `.foreground`: macOS haalt Werkbank naar voren.
+        let reply = UNNotificationAction(identifier: Self.replyAction, title: "Beantwoord", options: [.foreground],
+                                         icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"))
+        let category = UNNotificationCategory(identifier: Self.category, actions: [archive, reply],
+                                              intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
     private func announce(_ fresh: [GmailMailItem], account: String, mailboxes: Int) {
         guard !fresh.isEmpty else { return }
         let mailbox = GmailSession.shared.displayName(account)
@@ -204,7 +223,9 @@ final class MailNotifier {
             content.body = text.body
             content.sound = .default
             content.threadIdentifier = account
-            content.userInfo = ["account": account, "messageID": item.id, "threadID": item.threadID]
+            content.categoryIdentifier = Self.category
+            content.userInfo = ["account": account, "messageID": item.id, "threadID": item.threadID,
+                                "subject": text.subtitle]
             center.add(UNNotificationRequest(identifier: Self.identifier(item.id), content: content, trigger: nil))
         }
     }
@@ -230,17 +251,73 @@ final class MailNotifier {
         NSApp.activate(ignoringOtherApps: true)
         MailModeStore.shared.show(messageID: messageID, threadID: threadID, account: account)
     }
+
+    // MARK: Knoppen op de melding
+
+    /// Beantwoord: als een klik op de melding, met het antwoord open zodra de mail er staat.
+    fileprivate func reply(messageID: String, threadID: String, account: String) {
+        MailModeStore.shared.replyTrigger.replyWhenShown(threadID: threadID, messageID: messageID)
+        opened(messageID: messageID, threadID: threadID, account: account)
+    }
+
+    /// Archiveer: het gesprek uit de inbox, zonder Werkbank naar voren te halen. Lukt het niet, dan komt de melding
+    /// terug met de reden, zodat de mail niet ongemerkt blijft staan.
+    fileprivate func archive(messageID: String, threadID: String, account: String, subject: String) async {
+        let store = MailModeStore.shared
+        guard !store.hasOpenReply(threadID) else {
+            notArchived("Je antwoord staat nog open", messageID: messageID, threadID: threadID, account: account,
+                        subject: subject)
+            return
+        }
+        // macOS kan Werkbank voor deze knop net gestart hebben: even wachten tot Gmail is aangemeld.
+        let gmail = GmailSession.shared
+        var tries = 0
+        while gmail.state != .signedIn, tries < 40 {
+            try? await Task.sleep(for: .milliseconds(500))
+            tries += 1
+        }
+        guard gmail.state == .signedIn else {
+            notArchived("Niet aangemeld bij Gmail", messageID: messageID, threadID: threadID, account: account,
+                        subject: subject)
+            return
+        }
+        do {
+            try await gmail.archiveThread(threadID: threadID, account: account)
+            store.archivedOutside(threadID: threadID)
+            if NSApp.isActive { AppState.shared.announce("Mail gearchiveerd", seconds: 3) }
+        } catch {
+            notArchived(error.localizedDescription, messageID: messageID, threadID: threadID, account: account,
+                        subject: subject)
+        }
+    }
+
+    private func notArchived(_ reason: String, messageID: String, threadID: String, account: String, subject: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Archiveren mislukt"
+        content.subtitle = subject
+        content.body = reason
+        content.sound = .default
+        content.threadIdentifier = account
+        content.categoryIdentifier = Self.category
+        // `failed`: deze melding komt ook in beeld als je naar de mail kijkt.
+        content.userInfo = ["account": account, "messageID": messageID, "threadID": threadID, "subject": subject,
+                            "failed": true]
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: Self.identifier(messageID), content: content, trigger: nil))
+    }
 }
 
 /// Wat macOS over de meldingen vraagt. Los van de hoofdthread: macOS roept dit op een eigen moment aan.
 private final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     /// Werkbank staat op de voorgrond. Kijk je naar de mail (de mailmodus in beeld), dan alleen het geluid: de mail
-    /// verschijnt in de lijst. Anders gewoon de melding (op de werkbank kijk je niet naar de mail).
+    /// verschijnt in de lijst. Anders gewoon de melding (op de werkbank kijk je niet naar de mail). Dat archiveren
+    /// vanaf een melding mislukte, komt altijd in beeld.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let failed = notification.request.content.userInfo["failed"] as? Bool == true
         DispatchQueue.main.async {
             let watching = MainActor.assumeIsolated { MailNotifier.shared.isWatchingMail }
-            completionHandler(watching ? [.sound] : [.banner, .list, .sound])
+            completionHandler(watching && !failed ? [.sound] : [.banner, .list, .sound])
         }
     }
 
@@ -250,10 +327,25 @@ private final class NotificationDelegate: NSObject, UNUserNotificationCenterDele
         let account = info["account"] as? String
         let messageID = info["messageID"] as? String
         let threadID = info["threadID"] as? String
-        if response.actionIdentifier == UNNotificationDefaultActionIdentifier, let account {
+        let subject = info["subject"] as? String ?? ""
+        let action = response.actionIdentifier
+        if let account {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    MailNotifier.shared.opened(messageID: messageID, threadID: threadID, account: account)
+                    let notifier = MailNotifier.shared
+                    switch (action, messageID, threadID) {
+                    case (MailNotifier.archiveAction, let messageID?, let threadID?):
+                        Task {
+                            await notifier.archive(messageID: messageID, threadID: threadID, account: account,
+                                                   subject: subject)
+                        }
+                    case (MailNotifier.replyAction, let messageID?, let threadID?):
+                        notifier.reply(messageID: messageID, threadID: threadID, account: account)
+                    case (UNNotificationDefaultActionIdentifier, _, _):
+                        notifier.opened(messageID: messageID, threadID: threadID, account: account)
+                    default:
+                        break
+                    }
                 }
             }
         }

@@ -1075,6 +1075,15 @@ final class GmailSession {
         _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
     }
 
+    /// De knop Archiveer op een melding van nieuwe mail: het gesprek hoeft in geen enkele lijst te staan. Eén keer ⌘Z
+    /// zet het terug in de inbox.
+    func archiveThread(threadID: String, account: String) async throws {
+        note(account: account, forMessageID: threadID)
+        try await archive(threadID: threadID)
+        removeThreadFromLists(threadID)
+        recordArchive(threadID: threadID)
+    }
+
     /// Zet een gesprek terug in de inbox (opvolgen zonder antwoord, later terug).
     func moveToInbox(threadID: String, account: String?) async throws {
         note(account: account, forMessageID: threadID)

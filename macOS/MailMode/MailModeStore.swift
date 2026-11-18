@@ -1063,6 +1063,26 @@ final class MailModeStore {
         if wasSelected { selectNext() }
     }
 
+    /// Een gesprek is buiten de lijst om gearchiveerd (de knop op een melding). Stond het open, dan komt de volgende
+    /// mail ervoor in de plaats, zoals bij Archiveren in de lijst; anders verdwijnt het alleen uit de lijst en blijft
+    /// staan wat er openstond (een andere mail openen zou die ook op gelezen zetten).
+    func archivedOutside(threadID: String) {
+        FollowUpStore.shared.clearReturned(threadID: threadID)
+        guard selected?.threadID != threadID else {
+            takeOut(threadID: threadID)
+            return
+        }
+        guard listIsInbox else {
+            for index in items.indices where items[index].threadID == threadID {
+                items[index].labels.removeAll { $0 == "INBOX" }
+            }
+            return
+        }
+        if !markedIDs.isEmpty { keepMarks(in: items.filter { $0.threadID != threadID }) }
+        items.removeAll { $0.threadID == threadID }
+        MailListCache.shared.remove(threadID: threadID)
+    }
+
     /// In de lijst: bij je eigen mail de ontvanger ("Aan: …") in plaats van jezelf.
     func rowSummary(_ item: GmailMailItem) -> GmailMessageSummary {
         var summary = item.summary
@@ -1310,6 +1330,32 @@ final class MailReplyTrigger {
     func reply(_ mode: ComposeRef.Mode = .replyAll, text: String? = nil, attachments: [MailAttachment] = []) {
         request = Request(mode: mode, text: text, attachments: attachments)
     }
+
+    /// De knop Beantwoord op een melding van nieuwe mail. Die mail wordt dan pas gekozen en opgehaald, dus `request`
+    /// (dat werkt op het gesprek dat er al staat) komt te vroeg: het gesprek opent het antwoord zelf zodra de mail
+    /// erin staat. Komt de mail niet in beeld, dan vervalt de vraag na een halve minuut.
+    struct Pending: Equatable {
+        let id = UUID()
+        var threadID: String
+        var messageID: String
+        var until: Date
+
+        static func == (lhs: Pending, rhs: Pending) -> Bool { lhs.id == rhs.id }
+    }
+
+    private(set) var pending: Pending?
+
+    func replyWhenShown(threadID: String, messageID: String) {
+        pending = Pending(threadID: threadID, messageID: messageID, until: Date().addingTimeInterval(30))
+    }
+
+    /// De mail waarop het gesprek `threadID` een antwoord moet openen, als dat nog gevraagd is.
+    func pendingMessage(threadID: String) -> String? {
+        guard let pending, pending.threadID == threadID, pending.until > Date() else { return nil }
+        return pending.messageID
+    }
+
+    func clearPending() { pending = nil }
 }
 
 /// Welke mailboxen meetellen voor de klanten rechts in de mailmodus, en welke klanten geen klant zijn. Gaat mee naar je

@@ -442,6 +442,9 @@ struct MailWindowView: View {
                     withAnimation { proxy.scrollTo("reply", anchor: .center) }
                 }
             }
+            // De knop Beantwoord op een melding: het gesprek stond er al, of de mail is er net bij gekomen.
+            .onChange(of: trigger?.pending?.id, initial: true) { _, _ in openPendingReply(proxy) }
+            .onChange(of: model.mails.last?.id) { _, _ in openPendingReply(proxy) }
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }
                 // Even wachten tot het nieuwe blok in de lijst staat.
@@ -458,6 +461,22 @@ struct MailWindowView: View {
                     proxy.scrollTo(newest, anchor: newestAtBottom ? .top : .bottom)
                 }
             }
+        }
+    }
+
+    /// De knop Beantwoord op een melding van nieuwe mail: het antwoord (allen, zoals toets R) openen zodra die mail in
+    /// het gesprek staat. Een antwoord dat er al stond blijft staan.
+    private func openPendingReply(_ proxy: ScrollViewProxy) {
+        guard embedded, let trigger, let messageID = trigger.pendingMessage(threadID: ref.threadID),
+              model.mails.contains(where: { $0.id == messageID }), let newest = model.mails.last else { return }
+        trigger.clearPending()
+        if replyRef == nil {
+            replyAttachments = []
+            replyRef = composeRef(.replyAll, for: newest)
+        }
+        // Na het scrollen naar de nieuwste mail van het net geladen gesprek.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation { proxy.scrollTo("reply", anchor: .center) }
         }
     }
 
