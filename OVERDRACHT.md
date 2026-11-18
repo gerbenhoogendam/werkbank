@@ -319,6 +319,20 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - Staat het uit in Systeeminstellingen, dan staat dat in Voorkeuren › Mail met een knop erheen.
     Niet op een Mac gezien: of de toestemmingsvraag komt, of de melding en het getal op het Dock kloppen, en of een
     klik de goede mail opent.
+38. **Ontvangers als naamblokjes** (18 nov, `macOS/MailMode/AddressField.swift`, `WerkbankCore/…/RecipientTokens.swift`;
+    ontwerp vooraf laten zien en goedgekeurd). Aan, Cc en Bcc: elke ontvanger is een blokje met alleen de naam (het
+    adres als er geen naam is), daarachter typ je de volgende. Sluiten: komma, puntkomma, Return of Tab; een spatie
+    alleen na een compleet adres (een naam typ je met spaties); het veld verlaten sluit een compleet adres. Is er nog
+    geen compleet adres en staat er een suggestie gemarkeerd, dan wordt die het blokje. Plakken met komma's of
+    regeleinden geeft losse blokjes. Klik op een blokje: het adres erbij en een kruisje (accentkleur); dubbelklik zet
+    hem terug naar tekst; Backspace in een leeg tekstvak wijst het laatste blokje aan en haalt het de tweede keer weg;
+    Esc sluit het aangewezen blokje. Geen geldig adres: rood blokje. Een ontvanger die er al staat komt er niet nog
+    eens bij. Naar buiten blijft het veld één tekst (`RecipientTokens.text`, namen met een komma tussen
+    aanhalingstekens), dus versturen, concepten en loshalen zijn ongewijzigd; zet iets anders de tekst (ontvangers van
+    een antwoord, een concept), dan wordt alles opnieuw in blokjes gezet (`adopt`). De indeling is een eigen `Layout`
+    (`RecipientFlow`: het tekstvak krijgt de rest van de regel of een eigen regel). Na te gaan in de app: komen
+    Backspace, Tab en Esc aan in het tekstvak (`onKeyPress`), blijft de cursor na Return in het veld, staat "Aan:" op
+    de regel van de blokjes, en loopt een veld met veel ontvangers netjes door naar een volgende regel.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

@@ -610,8 +610,9 @@ struct ComposeView: View {
                 let recipients = ReplyBuilder.recipients(from: mail.from, replyTo: mail.replyTo, to: mail.to, cc: mail.cc,
                                                          replyingAs: fromAccount, myAddresses: gmail.accounts,
                                                          replyAll: ref.mode == .replyAll)
-                toText = recipients.to.map(\.displayString).joined(separator: ", ")
-                ccText = recipients.cc.map(\.displayString).joined(separator: ", ")
+                // Een naam met een komma erin tussen aanhalingstekens: anders valt hij in het veld in twee stukken.
+                toText = recipients.to.map(AddressSuggestions.fieldString).joined(separator: ", ")
+                ccText = recipients.cc.map(AddressSuggestions.fieldString).joined(separator: ", ")
             }
             // Een concept dat verder geschreven wordt: zijn eigen ontvangers en onderwerp.
             if let prefill = ref.prefill {
