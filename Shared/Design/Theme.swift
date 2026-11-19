@@ -352,9 +352,9 @@ extension WerkbankTheme {
     /// Een bureaucomputer uit de jaren tachtig, gezien door een hedendaagse drukproef: crème papier op een
     /// platina-beige blad, één oranjerood, smalle schreefkoppen (Instrument Serif) op een leesletter met schreef
     /// (Charter), en een paar details van een vroege vensteromgeving (zie `DisketteParts`).
-    /// - Stofblauw (`Diskette.blauw`, #BBD0DB) staat op precies twee plekken: de agenda en het papier van een bericht
-    ///   dat je leest (`ThingsColor.messagePaper`). Nergens anders: zo is het afgesproken met de eigenaar, naar het
-    ///   ontwerp in Claude Design ("Werkbank thema Diskette").
+    /// - Stofblauw (`Diskette.blauw`, #BBD0DB) staat op precies twee plekken: het vlak achter de dagkolommen van de
+    ///   agenda (`TimelineWell`; niet de kop en niet de kolom met de uren) en het papier van een bericht dat je leest
+    ///   (`ThingsColor.messagePaper`). Nergens anders: zo is het afgesproken met de eigenaar.
     /// - Wat gekozen is, is platina-beige. Het felle oranje staat op `today` en `running` (grote letters en vlakken);
     ///   `accent` en `fieldLabel` zijn donkerder. Alle tekstkleuren zijn nagerekend op het blauw, de achtergrond met
     ///   de minste marge.
@@ -363,7 +363,7 @@ extension WerkbankTheme {
         .window: ThemeColor(0xDCD6C8, 0x11100E), .mail: ThemeColor(0xF2EEE4, 0x1C1A17),
         .mailHeader: ThemeColor(0xF2EEE4, 0x1C1A17), .board: ThemeColor(0xF2EEE4, 0x1C1A17),
         .column: ThemeColor(0xE8E3D7, 0x23211D), .card: ThemeColor(0xFCFBF7, 0x2B2924),
-        .agenda: ThemeColor(Diskette.blauw, 0x1C282E), .timeList: ThemeColor(0xF2EEE4, 0x1C1A17),
+        .agenda: ThemeColor(0xF2EEE4, 0x1C1A17), .timeList: ThemeColor(0xF2EEE4, 0x1C1A17),
         .surface: ThemeColor(0xF2EEE4, 0x1C1A17), .surfaceAlt: ThemeColor(0xE8E3D7, 0x23211D),
         .text: ThemeColor(0x1D1D1B, 0xEFEADD), .textSecondary: ThemeColor(0x45413A, 0xC4BDAD),
         .textTertiary: ThemeColor(0x524D43, 0xA8A192), .fieldLabel: ThemeColor(0x9A3008, 0xFF8A5C),

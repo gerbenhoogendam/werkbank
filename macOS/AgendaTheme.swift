@@ -488,7 +488,7 @@ struct HourRuler: View {
     }
 }
 
-/// Het vlak achter de dagkolommen (Tischsuper en Rekenmachine verzonken, Sneeuwwitje glas).
+/// Het vlak achter de dagkolommen (Tischsuper en Rekenmachine verzonken, Sneeuwwitje glas, Diskette stofblauw).
 struct TimelineWell: View {
     @Environment(\.colorScheme) private var scheme
 
@@ -508,6 +508,13 @@ struct TimelineWell: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(Color.white.opacity(scheme == .dark ? 0.08 : 0.85), lineWidth: 1))
+        case .diskette:
+            // Stofblauw achter de tijdblokken, tot aan de rand van het paneel; de kop en de kolom met de uren
+            // blijven crème. De marges zijn die om de dagkolommen in `AgendaView` (8 boven, 4 rechts, 48 onder).
+            Diskette.blauwVlak
+                .padding(.top, -8)
+                .padding(.trailing, -4)
+                .padding(.bottom, -48)
         default:
             Color.clear
         }

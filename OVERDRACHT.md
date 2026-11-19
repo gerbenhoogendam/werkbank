@@ -288,8 +288,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     (`GmailThreadMessage.bcc`; staat alleen in eigen verstuurde mail).
 35. **Gelezen en ongelezen** (13 nov). Tot nu toe zette Werkbank nooit iets op gelezen: dat kwam alleen uit Gmail zelf.
     Nu: rechtermuisknop op een mail in een lijst › "Markeer als gelezen/ongelezen" (`GmailRow`, Mail-paneel en
-    mailmodus), in de mailmodus de knop "Markeer gelezen/ongelezen" tussen de handelingen en de toets U
-    (`MailModeAction.unread`, aan te passen en uit te zetten in Voorkeuren › Mail; met meer mails gekozen: allemaal).
+    mailmodus), in de mailmodus de knop "Markeer gelezen/ongelezen" tussen de handelingen en de toets ⇧⌘U
+    (`MailModeAction.unread`, aan te passen en uit te zetten in Voorkeuren › Mail; met meer mails gekozen: allemaal;
+    eerst was de standaard een losse U, zie punt 43).
     `GmailSession.setUnread` zet het label UNREAD op het hele gesprek (`threads/modify`) en werkt het Mail-paneel en
     de lijst van de mailmodus meteen bij (`MailModeStore.noteUnread`). De handeling archiveert bewust niet en de mail
     blijft gekozen. Een mail openen zet het gesprek op gelezen (`ThreadModel.load`, zodra het gesprek is opgehaald en
@@ -391,7 +392,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     gaat om de vormgeving eromheen: geen merk, logo, product of afbeelding uit de beelden is overgenomen.
     - **Kleur:** platina-beige als vensterkleur met de panelen los erop (`panelGap` 8, `panelRadius` 12): crème
       panelen, platina kolommen en vlakken, papierwitte kaarten. **Stofblauw (`Diskette.blauw`, #BBD0DB) staat op
-      precies twee plekken: de agenda en het papier van een bericht dat je leest** (`ThingsColor.messagePaper`, ook in
+      precies twee plekken: het vlak achter de dagkolommen van de agenda (`TimelineWell`, `Diskette.blauwVlak`; niet de
+      kop, de dagkoppen of de kolom met de uren) en het papier van een bericht dat je leest** (`ThingsColor.messagePaper`, ook in
       de CSS van de mail via `paper:` in `MailWebView.document`). Nergens anders: het Mail-paneel, de mailmodus, het
       vlak om een bericht, een antwoord en het opstelvenster niet. Zo is het afgesproken met de eigenaar, naar het
       ontwerp in Claude Design ("Werkbank thema Diskette", drie schermen); een eerdere versie had het blauw op veel
@@ -416,6 +418,18 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       leesletter prettig op 13 punt (anders in Voorkeuren een andere letter kiezen), passen de koppen van 22 en 26
       punt in de kolomkop, de kop van het Mail-paneel (58 hoog) en de dagkoppen van de agenda, en is de harde schaduw
       onder de kaarten niet te zwaar bij veel kaarten.
+43. **Gelezen/ongelezen met ⇧⌘U, ook op de werkbank; geen titel in de vensterbalk** (19 nov).
+    - De standaardtoets van `MailModeAction.unread` is ⇧⌘U (zoals in Mail van Apple) in plaats van een losse U; hij
+      blijft instelbaar in Voorkeuren › Mail. Wie de toets nooit had aangepast, krijgt de nieuwe standaard.
+    - Dezelfde toets werkt nu ook op de werkbank (`MailCommands.start`, een toetsmonitor naast die van de mailmodus):
+      voor het open gesprek (het laatst geopende mailpaneel), anders de gekozen mail in het Mail-paneel
+      (`MailCommands.toggleUnreadFocused`). Alleen een toets met ⌘, ⌃ of ⌥ geldt daar; in de mailmodus regelt
+      `MailModeView.handle` hem zoals voorheen.
+    - De naam "Werkbank" staat niet meer in de vensterbalk (`window.titleVisibility = .hidden` in
+      `DuoWindowFold.attach`): de schakelaar werkbank/mail zegt genoeg. In het menu Venster en in Mission Control
+      heet het venster nog wel Werkbank.
+    - Na te gaan in de app: blijft de titel weg na volledig scherm en na het opnieuw openen van het venster, en
+      werkt ⇧⌘U op de werkbank terwijl de cursor in een tekstveld staat.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

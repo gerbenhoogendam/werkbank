@@ -36,7 +36,12 @@ final class DuoWindowFold {
         guard windows[key] == nil else { return }
         windows[key] = isMain
         window.animationBehavior = .none
-        if isMain { FullScreenSupport.shared.adopt(window) }
+        if isMain {
+            FullScreenSupport.shared.adopt(window)
+            // De naam van de app staat niet in de vensterbalk: de schakelaar werkbank/mail zegt genoeg. In het
+            // menu Venster en in Mission Control heet het venster nog wel Werkbank.
+            window.titleVisibility = .hidden
+        }
         observers[key] = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
                                                                 queue: .main) { note in
             MainActor.assumeIsolated {

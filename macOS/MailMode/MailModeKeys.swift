@@ -34,7 +34,7 @@ enum MailModeAction: String, CaseIterable, Identifiable {
         case .reply: "R"
         case .follow: "F"
         case .claude: "C"
-        case .unread: "U"
+        case .unread: "⇧⌘U"
         case .scope: MailModeKeys.tab
         case .search: "/"
         case .next: "J"

@@ -8,9 +8,13 @@ import SwiftUI
 enum Diskette {
     /// De rand van een venster of knopje: de tekstkleur, iets teruggenomen. In donker wordt dat crème op zwart.
     static var line: Color { ThingsColor.textPrimary.opacity(0.78) }
-    /// Het stofblauw van het thema. Alleen voor de agenda en het papier van een bericht dat je leest
-    /// (`ThingsColor.messagePaper`); nergens anders gebruiken.
+    /// Het stofblauw van het thema. Alleen voor het vlak achter de dagkolommen van de agenda (`blauwVlak`,
+    /// `TimelineWell`) en het papier van een bericht dat je leest (`ThingsColor.messagePaper`); nergens anders
+    /// gebruiken.
     static let blauw: UInt32 = 0xBBD0DB
+    /// Hetzelfde blauw in de donkere weergave.
+    static let blauwDonker: UInt32 = 0x1C282E
+    static var blauwVlak: Color { Color.dynamic(light: blauw, dark: blauwDonker) }
     /// Zo breed is elk cijfer in `DisketteTime`, als deel van de lettergrootte (de breedste, de nul, is 0,46).
     static let digitWidth: CGFloat = 0.47
 }
