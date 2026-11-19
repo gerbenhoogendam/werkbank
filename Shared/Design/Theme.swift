@@ -350,21 +350,24 @@ extension WerkbankTheme {
     ], cardRadius: 12)
 
     /// Een bureaucomputer uit de jaren tachtig, gezien door een hedendaagse drukproef: crème papier op een
-    /// platina-beige blad, één oranjerood, stofblauw voor wat gekozen is, smalle schreefkoppen (Instrument Serif) op
-    /// een leesletter met schreef (Charter), en een paar details van een vroege vensteromgeving (zie `DisketteParts`).
-    /// Het felle oranje staat op `today` en `running` (grote letters en vlakken); `accent` en `fieldLabel` zijn
-    /// donkerder, zodat kleine tekst op crème leesbaar blijft.
+    /// platina-beige blad, stofblauw (#BBD0DB) voor Mail, de agenda en wat gekozen is, één oranjerood, smalle
+    /// schreefkoppen (Instrument Serif) op een leesletter met schreef (Charter), en een paar details van een vroege
+    /// vensteromgeving (zie `DisketteParts`).
+    /// - Het felle oranje staat op `today` en `running` (grote letters en vlakken); `accent` en `fieldLabel` zijn
+    ///   donkerder. Alle tekstkleuren zijn nagerekend op het blauw, de lichtste achtergrond met de minste marge.
+    /// - De haarlijn is inkt met weinig dekking: zo is hij op crème, blauw en papier even sterk.
     static let diskette = WerkbankTheme(id: "diskette", name: "Diskette", colors: [
-        .window: ThemeColor(0xDCD6C8, 0x11100E), .mail: ThemeColor(0xF2EEE4, 0x1C1A17),
-        .mailHeader: ThemeColor(0xF2EEE4, 0x1C1A17), .board: ThemeColor(0xF2EEE4, 0x1C1A17),
+        .window: ThemeColor(0xDCD6C8, 0x11100E), .mail: ThemeColor(0xBBD0DB, 0x1C282E),
+        .mailHeader: ThemeColor(0xBBD0DB, 0x1C282E), .board: ThemeColor(0xF2EEE4, 0x1C1A17),
         .column: ThemeColor(0xE8E3D7, 0x23211D), .card: ThemeColor(0xFCFBF7, 0x2B2924),
-        .agenda: ThemeColor(0xF2EEE4, 0x1C1A17), .timeList: ThemeColor(0xF2EEE4, 0x1C1A17),
+        .agenda: ThemeColor(0xBBD0DB, 0x1C282E), .timeList: ThemeColor(0xF2EEE4, 0x1C1A17),
         .surface: ThemeColor(0xF2EEE4, 0x1C1A17), .surfaceAlt: ThemeColor(0xE8E3D7, 0x23211D),
-        .text: ThemeColor(0x1D1D1B, 0xEFEADD), .textSecondary: ThemeColor(0x5C574D, 0xB8B1A1),
-        .textTertiary: ThemeColor(0x615B50, 0xA19A8B), .fieldLabel: ThemeColor(0xA8360A, 0xFF8A5C),
-        .separator: ThemeColor(0xD6D0C1, 0x38352E), .checkbox: ThemeColor(0x857F72, 0x857F70),
-        .accent: ThemeColor(0xA8360A, 0xFF7A45), .selection: ThemeColor(0xD2DDE2, 0x2A363B),
-        .running: ThemeColor(0xE0430E, 0xFF6A33), .today: ThemeColor(0xE0430E, 0xFF6A33),
+        .text: ThemeColor(0x1D1D1B, 0xEFEADD), .textSecondary: ThemeColor(0x45413A, 0xC4BDAD),
+        .textTertiary: ThemeColor(0x524D43, 0xA8A192), .fieldLabel: ThemeColor(0x9A3008, 0xFF8A5C),
+        .separator: ThemeColor(0x1D1D1B, 0xEFEADD, lightOpacity: 0.15, darkOpacity: 0.16),
+        .checkbox: ThemeColor(0x6F6A5E, 0x857F70),
+        .accent: ThemeColor(0x9A3008, 0xFF7A45), .selection: ThemeColor(0xBBD0DB, 0x2A3A42),
+        .running: ThemeColor(0xD23C0A, 0xFF6A33), .today: ThemeColor(0xD23C0A, 0xFF6A33),
         .deadline: ThemeColor(0xA3201A, 0xFF5A4D), .tag: ThemeColor(0xE3DDCF, 0x34312B),
         .tagText: ThemeColor(0x57524A, 0xC2BBAB), .shadow: ThemeColor(0x1D1D1B, 0x000000, lightOpacity: 0.12, darkOpacity: 0.5),
     ], fontFamily: "Charter", cardRadius: 5)

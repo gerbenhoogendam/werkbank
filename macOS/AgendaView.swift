@@ -1312,9 +1312,12 @@ private struct EventBlock: View {
                 shape.fill(ThingsColor.cardBackground)
                     .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 0.5))
             case .diskette:
-                // Een tint van de agenda met een dunne rand in dezelfde kleur.
-                shape.fill(event.color.opacity(opacity))
-                    .overlay(shape.strokeBorder(event.color.opacity(0.55), lineWidth: 1))
+                // Papier op het stofblauw, met een streep links en een dunne rand in de kleur van de agenda (een
+                // tint zou op het blauw vertroebelen).
+                shape.fill(ThingsColor.cardBackground)
+                    .overlay(alignment: .leading) { Rectangle().fill(event.color).frame(width: 3) }
+                    .clipShape(shape)
+                    .overlay(shape.strokeBorder(event.color.opacity(0.6), lineWidth: 1))
             case .puls:
                 // Een tint van de agenda met een lichtrandje bovenaan; wat nu bezig is vol, van licht naar vol.
                 if pulsNow {

@@ -62,7 +62,7 @@ struct MailModeView: View {
                 if ThemeStore.shared.look == .tischsuper { Veneer(vertical: true).frame(width: 7) }
             }
         }
-        .background(ThemeStore.shared.look == .puls ? ThingsColor.window : ThingsColor.backgroundSidebar)
+        .background(ThemeStore.shared.look == .puls ? ThingsColor.window : MailLook.desk)
         .overlay {
             if let sheet = store.sheet, !sheet.needsMail || store.selected != nil {
                 MailModeSheetHost(sheet: sheet, item: store.selected)
@@ -632,7 +632,7 @@ struct MailModeFolders: View {
             .padding(.vertical, 10)
         }
         .scrollIndicators(.never)
-        .background(ThemeStore.shared.look == .puls ? ThingsColor.window : ThingsColor.backgroundSidebar)
+        .background(ThemeStore.shared.look == .puls ? ThingsColor.window : MailLook.desk)
     }
 
     private func row(_ folder: MailFolder, depth: Int) -> some View {
@@ -655,7 +655,7 @@ struct MailModeFolders: View {
             .background(RoundedRectangle(cornerRadius: ThemeStore.shared.look == .puls ? 12 : MailModeMetrics.radius,
                                          style: .continuous)
                 // Puls: de gekozen map als tegel op het zwart, met een groen icoon.
-                .fill(isOn ? (ThemeStore.shared.look == .puls ? ThingsColor.backgroundContent : ThingsColor.selection) : Color.clear))
+                .fill(isOn ? (ThemeStore.shared.look == .puls ? ThingsColor.backgroundContent : MailLook.chosen) : Color.clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -815,7 +815,7 @@ private struct MailModeReader: View {
         .padding(.horizontal, 22)
         .padding(.top, 16)
         .padding(.bottom, 12)
-        .background(ThemeStore.shared.look == .puls ? ThingsColor.mailPaper : ThingsColor.backgroundSidebar)
+        .background(ThemeStore.shared.look == .puls ? ThingsColor.mailPaper : MailLook.desk)
     }
 
     /// Een datum of tijd uit de mail, met Inplannen ernaast.

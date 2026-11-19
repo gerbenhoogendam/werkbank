@@ -402,7 +402,7 @@ struct MailWindowView: View {
                 .padding(.bottom, footerHeight)
             }
             .scrollIndicators(.never)
-            .background(ThingsColor.backgroundSidebar)
+            .background(MailLook.desk)
             // De onderste regel van het antwoord (bijlage, opvolgen, versturen …) staat vast onder in het venster.
             .overlayPreferenceValue(ComposeFooterKey.self, alignment: .bottom) { box in
                 if let box {
