@@ -8,11 +8,9 @@ import SwiftUI
 enum Diskette {
     /// De rand van een venster of knopje: de tekstkleur, iets teruggenomen. In donker wordt dat crème op zwart.
     static var line: Color { ThingsColor.textPrimary.opacity(0.78) }
-    /// Wat gekozen is op een stofblauw paneel (een rij in Mail, een map in de mailmodus): een vel papier, want de
-    /// selectiekleur is daar het blauw zelf. In donker het lichtere blauw van de selectie.
-    static var chosenOnBlue: Color {
-        Color.dynamic(light: ThemeStore.shared.themeColor(.card).light, dark: ThemeStore.shared.themeColor(.selection).dark)
-    }
+    /// Het stofblauw van het thema. Alleen voor de agenda en het papier van een bericht dat je leest
+    /// (`ThingsColor.messagePaper`); nergens anders gebruiken.
+    static let blauw: UInt32 = 0xBBD0DB
     /// Zo breed is elk cijfer in `DisketteTime`, als deel van de lettergrootte (de breedste, de nul, is 0,46).
     static let digitWidth: CGFloat = 0.47
 }

@@ -376,17 +376,6 @@ enum MailLook {
         }
     }
 
-    /// Het vlak achter een geopende mail en om de lijst van de mailmodus. Diskette: het stofblauw van het
-    /// Mail-paneel, zodat het witte papier van de mail erop ligt.
-    static var desk: Color {
-        ThemeStore.shared.look == .diskette ? ThingsColor.mailBackground : ThingsColor.backgroundSidebar
-    }
-
-    /// Wat gekozen is op dat vlak (een map in de mailmodus).
-    static var chosen: Color {
-        ThemeStore.shared.look == .diskette ? Diskette.chosenOnBlue : ThingsColor.selection
-    }
-
     static var unreadDot: Color {
         switch ThemeStore.shared.look {
         case .standaard, .principes: ThingsColor.accent

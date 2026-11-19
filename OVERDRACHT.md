@@ -389,18 +389,20 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 42. **Thema Diskette** (19 nov, `WerkbankTheme.diskette`, `Shared/Design/DisketteParts.swift`; naar vijf beelden van de
     eigenaar, geen schets vooraf). Een bureaucomputer uit de jaren tachtig, gezien door een hedendaagse drukproef. Het
     gaat om de vormgeving eromheen: geen merk, logo, product of afbeelding uit de beelden is overgenomen.
-    - **Kleur:** platina-beige als vensterkleur met de panelen los erop (`panelGap` 8, `panelRadius` 12): bord en
-      tijdlijst crème, Mail en agenda stofblauw (#BBD0DB, op verzoek van de eigenaar), papierwitte kaarten. Hetzelfde
-      blauw ligt achter een geopende mail en om de lijst van de mailmodus (`MailLook.desk`), en ook het papier van de
-      mail zelf en van het opstelvenster is hier blauw (`ThingsColor.mailPaperLight`, ook in de CSS van `MailWebView`):
-      de enige uitzondering op "een mail is in de lichte weergave wit", op verzoek van de eigenaar. Een mail die zelf
-      een witte achtergrond meegeeft (veel nieuwsbrieven) houdt die; een verstuurde mail krijgt geen achtergrond mee. De selectiekleur is ook dit blauw, dus wat gekozen is op een blauw paneel
-      (een rij in Mail, een map in de mailmodus) is een vel papier (`Diskette.chosenOnBlue`, `MailLook.chosen`), en een
-      afspraak in de agenda is papier met een streep en rand in de kleur van zijn agenda in plaats van een tint. Eén
-      oranjerood: fel op `today` en `running` (grote letters en vlakken, minstens 3:1), donkerder op `accent` en
-      `fieldLabel`. Alle tekstkleuren zijn nagerekend op het blauw (4,5:1 voor kleine tekst); de haarlijn is inkt met
-      15% dekking, zodat hij op crème, blauw en papier even sterk is. Donker: warm zwart met crème letters en
-      donkerblauwe panelen voor Mail en agenda; `ThingsColor.onAccent` is daar inkt in plaats van wit.
+    - **Kleur:** platina-beige als vensterkleur met de panelen los erop (`panelGap` 8, `panelRadius` 12): crème
+      panelen, platina kolommen en vlakken, papierwitte kaarten. **Stofblauw (`Diskette.blauw`, #BBD0DB) staat op
+      precies twee plekken: de agenda en het papier van een bericht dat je leest** (`ThingsColor.messagePaper`, ook in
+      de CSS van de mail via `paper:` in `MailWebView.document`). Nergens anders: het Mail-paneel, de mailmodus, het
+      vlak om een bericht, een antwoord en het opstelvenster niet. Zo is het afgesproken met de eigenaar, naar het
+      ontwerp in Claude Design ("Werkbank thema Diskette", drie schermen); een eerdere versie had het blauw op veel
+      meer plekken en dat was niet de bedoeling. Het is de enige uitzondering op "een mail is in de lichte weergave
+      wit"; een mail die zelf een witte achtergrond meegeeft (veel nieuwsbrieven) houdt die, en een verstuurde mail
+      krijgt geen achtergrond mee. Wat gekozen is, is platina-beige (`selection`). Een afspraak in de agenda is papier
+      met een streep en rand in de kleur van zijn agenda (een tint vertroebelt op het blauw). Eén oranjerood: fel op
+      `today` en `running` (grote letters en vlakken, minstens 3:1), donkerder op `accent` en `fieldLabel`. Alle
+      tekstkleuren zijn nagerekend op het blauw (4,5:1 voor kleine tekst); de haarlijn is inkt met 15% dekking, zodat
+      hij op crème, blauw en papier even sterk is. Donker: warm zwart met crème letters, de agenda donkerblauw, het
+      blok van een bericht donker met de inhoud op lichtblauw; `ThingsColor.onAccent` is daar inkt in plaats van wit.
     - **Letter:** Charter (staat op macOS en iOS) voor alle tekst; Instrument Serif (SIL OFL, meegeleverd met
       licentiebestand, `Font.werkTitle`) voor koppen en grote cijfers, met het aantal of het bereik cursief in oranje
       erachter. Niet onder een punt of zestien gebruiken: de lijnen zijn dun. De cijfers zijn niet even breed, dus een

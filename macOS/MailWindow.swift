@@ -402,7 +402,7 @@ struct MailWindowView: View {
                 .padding(.bottom, footerHeight)
             }
             .scrollIndicators(.never)
-            .background(MailLook.desk)
+            .background(ThingsColor.backgroundSidebar)
             // De onderste regel van het antwoord (bijlage, opvolgen, versturen …) staat vast onder in het venster.
             .overlayPreferenceValue(ComposeFooterKey.self, alignment: .bottom) { box in
                 if let box {
@@ -586,7 +586,7 @@ private struct ThreadMailCard: View {
         }
         .task(id: mail.id) { if showsHistoryByDefault { showHistory = true } }
         .padding(isExpanded ? 14 : 10)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.mailPaper))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ThingsColor.messagePaper))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ThingsColor.separator))
     }
 
@@ -600,7 +600,8 @@ private struct ThreadMailCard: View {
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            AutoHeightMailWebView(html: mail.mainHTML, height: $bodyHeight, margin: "12px 14px")
+            AutoHeightMailWebView(html: mail.mainHTML, height: $bodyHeight, margin: "12px 14px",
+                                  paper: ThingsColor.messagePaperLight)
                 .frame(height: bodyHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
@@ -614,7 +615,8 @@ private struct ThreadMailCard: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(ThingsColor.accent)
                 if showHistory {
-                    AutoHeightMailWebView(html: history, height: $historyHeight, margin: "12px 14px")
+                    AutoHeightMailWebView(html: history, height: $historyHeight, margin: "12px 14px",
+                                          paper: ThingsColor.messagePaperLight)
                         .frame(height: historyHeight)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 }
@@ -975,6 +977,8 @@ struct AutoHeightMailWebView: NSViewRepresentable {
     @Binding var height: CGFloat
     /// Ruimte rond de inhoud (CSS-marge van de body).
     var margin = "0"
+    /// De kleur van het papier (hex). Wit; een bericht dat je leest geeft `ThingsColor.messagePaperLight` mee.
+    var paper = ThingsColor.mailPaperLight
     // Andere citaatkleuren in Voorkeuren: opnieuw tekenen.
     @AppStorage(QuoteColors.enabledKey) private var quoteColorsOn = true
     @AppStorage(QuoteColors.colorsKey) private var quoteColors = ""
@@ -997,11 +1001,12 @@ struct AutoHeightMailWebView: NSViewRepresentable {
         context.coordinator.parent = self
         // Vergelijk de HTML zelf; het document eromheen pas bouwen als er echt iets anders te tonen is (ook een ander
         // papier: een ander thema).
-        let style = QuoteColors.signature + MailWebView.paperCSS
+        let style = QuoteColors.signature + String(paper)
         guard context.coordinator.lastHTML != html || context.coordinator.lastStyle != style else { return }
         context.coordinator.lastHTML = html
         context.coordinator.lastStyle = style
-        view.loadHTMLString(MailWebView.document(html, allowRemote: true, margin: margin, fitsContent: true), baseURL: nil)
+        view.loadHTMLString(MailWebView.document(html, allowRemote: true, margin: margin, fitsContent: true, paper: paper),
+                            baseURL: nil)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
@@ -1092,7 +1097,7 @@ struct MailWebView: NSViewRepresentable {
 
     func updateNSView(_ view: WKWebView, context: Context) {
         // De invoer vergelijken; het document (met bewerkingen over de hele HTML) alleen bouwen als die anders is.
-        let style = QuoteColors.signature + Self.paperCSS
+        let style = QuoteColors.signature
         if let last = context.coordinator.lastInput, last.html == html, last.allowRemote == allowRemote, last.style == style {
             return
         }
@@ -1103,11 +1108,11 @@ struct MailWebView: NSViewRepresentable {
     /// Een citaat: `blockquote type="cite"` (Apple Mail, Werkbank, platte tekst met ">") of `blockquote.gmail_quote`.
     private static let quote = #":is(blockquote[type="cite" i], blockquote.gmail_quote)"#
 
-    /// De kleur van het papier voor de CSS: wit, in Diskette het stofblauw (`ThingsColor.mailPaperLight`). Een mail
-    /// die zelf een witte achtergrond meegeeft (veel nieuwsbrieven) houdt die.
-    static var paperCSS: String { String(format: "#%06X", ThingsColor.mailPaperLight) }
-
-    static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
+    /// `paper`: de kleur van het papier (hex). Wit; een bericht dat je leest kan een andere meegeven
+    /// (`ThingsColor.messagePaperLight`, in Diskette stofblauw). Een mail die zelf een witte achtergrond meegeeft
+    /// (veel nieuwsbrieven) houdt die.
+    static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false,
+                         paper: UInt32 = ThingsColor.mailPaperLight) -> String {
         let images = allowRemote ? "img-src data: https: http: \(MailImageLoader.scheme):" : "img-src data:"
         let body = GIFLoop.playOnce(inHTML: allowRemote ? MailImageLoader.route(QuoteLevels.nest(inner))
                                                         : QuoteLevels.nest(inner))
@@ -1117,7 +1122,7 @@ struct MailWebView: NSViewRepresentable {
         <meta name="color-scheme" content="light">
         <style>
         html { color-scheme: light; }
-        body { margin: \(margin); background: \(paperCSS); color: #1d1d1f;
+        body { margin: \(margin); background: \(String(format: "#%06X", paper)); color: #1d1d1f;
                font: 14px -apple-system, "Helvetica Neue", sans-serif; line-height: 1.45; word-wrap: break-word; }
         img { max-width: 100%; height: auto; }
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }

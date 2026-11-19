@@ -625,12 +625,12 @@ struct GmailRow: View {
                 shape.fill(Color.primary.opacity(0.04))
             }
         case .diskette:
-            // De gekozen rij als een vel papier op het stofblauw, strak afgerond.
+            // De gekozen rij in platina-beige, strak afgerond.
             let row = RoundedRectangle(cornerRadius: 5, style: .continuous)
             if isSelected {
-                row.fill(Diskette.chosenOnBlue)
+                row.fill(ThingsColor.selection)
             } else if isHovering {
-                row.fill(Diskette.chosenOnBlue.opacity(0.5))
+                row.fill(ThingsColor.selection.opacity(0.5))
             }
         case .viertakt:
             // De gekozen rij als wit kaartje met een zachte schaduw.

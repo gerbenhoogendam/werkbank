@@ -82,16 +82,23 @@ enum ThingsColor {
     static var cardBackground: Color { ThemeStore.shared.color(.card) }
     static var agendaBackground: Color { ThemeStore.shared.color(.agenda) }
     static var timeListBackground: Color { ThemeStore.shared.color(.timeList) }
-    /// Achtergrond van een mail (lezen en opstellen): in de lichte weergave wit, wat het thema ook is; in de donkere
-    /// die van de panelen. Eén uitzondering, op verzoek van de eigenaar: in Diskette is het papier het stofblauw van
-    /// het Mail-paneel.
+    /// Het papier van een mail (opstellen, en lezen in de meeste thema's): in de lichte weergave altijd wit, wat het
+    /// thema ook is; in de donkere de kleur van de panelen.
     static var mailPaper: Color {
         Color.dynamic(light: mailPaperLight, dark: ThemeStore.shared.themeColor(.surface).dark)
     }
 
-    /// Het papier van een mail in de lichte weergave, als hex: ook voor de CSS van de mail zelf (`MailWebView`).
-    static var mailPaperLight: UInt32 {
-        ThemeStore.shared.look == .diskette ? ThemeStore.shared.themeColor(.mail).light : 0xFFFFFF
+    /// Het wit van dat papier, als hex: ook voor de CSS van de mail zelf (`MailWebView`).
+    static let mailPaperLight: UInt32 = 0xFFFFFF
+
+    /// Het papier van een bericht dat je leest (het blok in een gesprek). Hetzelfde wit, met één uitzondering op
+    /// verzoek van de eigenaar: in Diskette is het stofblauw. Een antwoord en het opstelvenster blijven wit.
+    static var messagePaper: Color {
+        Color.dynamic(light: messagePaperLight, dark: ThemeStore.shared.themeColor(.surface).dark)
+    }
+
+    static var messagePaperLight: UInt32 {
+        ThemeStore.shared.look == .diskette ? Diskette.blauw : mailPaperLight
     }
 
     // Tekst
