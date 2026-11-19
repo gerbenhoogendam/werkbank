@@ -391,8 +391,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     gaat om de vormgeving eromheen: geen merk, logo, product of afbeelding uit de beelden is overgenomen.
     - **Kleur:** platina-beige als vensterkleur met de panelen los erop (`panelGap` 8, `panelRadius` 12): bord en
       tijdlijst crème, Mail en agenda stofblauw (#BBD0DB, op verzoek van de eigenaar), papierwitte kaarten. Hetzelfde
-      blauw ligt achter een geopende mail en om de lijst van de mailmodus (`MailLook.desk`); het papier van de mail
-      zelf blijft wit, zoals in elk thema. De selectiekleur is ook dit blauw, dus wat gekozen is op een blauw paneel
+      blauw ligt achter een geopende mail en om de lijst van de mailmodus (`MailLook.desk`), en ook het papier van de
+      mail zelf en van het opstelvenster is hier blauw (`ThingsColor.mailPaperLight`, ook in de CSS van `MailWebView`):
+      de enige uitzondering op "een mail is in de lichte weergave wit", op verzoek van de eigenaar. Een mail die zelf
+      een witte achtergrond meegeeft (veel nieuwsbrieven) houdt die; een verstuurde mail krijgt geen achtergrond mee. De selectiekleur is ook dit blauw, dus wat gekozen is op een blauw paneel
       (een rij in Mail, een map in de mailmodus) is een vel papier (`Diskette.chosenOnBlue`, `MailLook.chosen`), en een
       afspraak in de agenda is papier met een streep en rand in de kleur van zijn agenda in plaats van een tint. Eén
       oranjerood: fel op `today` en `running` (grote letters en vlakken, minstens 3:1), donkerder op `accent` en

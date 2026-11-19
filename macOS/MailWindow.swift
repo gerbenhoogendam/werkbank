@@ -995,8 +995,9 @@ struct AutoHeightMailWebView: NSViewRepresentable {
 
     func updateNSView(_ view: PassthroughWebView, context: Context) {
         context.coordinator.parent = self
-        // Vergelijk de HTML zelf; het document eromheen pas bouwen als er echt iets anders te tonen is.
-        let style = QuoteColors.signature
+        // Vergelijk de HTML zelf; het document eromheen pas bouwen als er echt iets anders te tonen is (ook een ander
+        // papier: een ander thema).
+        let style = QuoteColors.signature + MailWebView.paperCSS
         guard context.coordinator.lastHTML != html || context.coordinator.lastStyle != style else { return }
         context.coordinator.lastHTML = html
         context.coordinator.lastStyle = style
@@ -1091,7 +1092,7 @@ struct MailWebView: NSViewRepresentable {
 
     func updateNSView(_ view: WKWebView, context: Context) {
         // De invoer vergelijken; het document (met bewerkingen over de hele HTML) alleen bouwen als die anders is.
-        let style = QuoteColors.signature
+        let style = QuoteColors.signature + Self.paperCSS
         if let last = context.coordinator.lastInput, last.html == html, last.allowRemote == allowRemote, last.style == style {
             return
         }
@@ -1101,6 +1102,10 @@ struct MailWebView: NSViewRepresentable {
 
     /// Een citaat: `blockquote type="cite"` (Apple Mail, Werkbank, platte tekst met ">") of `blockquote.gmail_quote`.
     private static let quote = #":is(blockquote[type="cite" i], blockquote.gmail_quote)"#
+
+    /// De kleur van het papier voor de CSS: wit, in Diskette het stofblauw (`ThingsColor.mailPaperLight`). Een mail
+    /// die zelf een witte achtergrond meegeeft (veel nieuwsbrieven) houdt die.
+    static var paperCSS: String { String(format: "#%06X", ThingsColor.mailPaperLight) }
 
     static func document(_ inner: String, allowRemote: Bool, margin: String = "18px 22px", fitsContent: Bool = false) -> String {
         let images = allowRemote ? "img-src data: https: http: \(MailImageLoader.scheme):" : "img-src data:"
@@ -1112,7 +1117,7 @@ struct MailWebView: NSViewRepresentable {
         <meta name="color-scheme" content="light">
         <style>
         html { color-scheme: light; }
-        body { margin: \(margin); background: #fff; color: #1d1d1f;
+        body { margin: \(margin); background: \(paperCSS); color: #1d1d1f;
                font: 14px -apple-system, "Helvetica Neue", sans-serif; line-height: 1.45; word-wrap: break-word; }
         img { max-width: 100%; height: auto; }
         pre.plain { white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; margin: 0; }

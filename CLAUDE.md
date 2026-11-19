@@ -9,7 +9,8 @@ Lees eerst `OVERDRACHT.md`: werkwijze, testregels voor echte gegevens, wat nog g
   `thingsFont`, nooit `.system(size:)` of vaste hexkleuren voor gewone onderdelen.
 - Meldingen na een handeling (verzonden, gelogd, ongedaan) via `AppState.announce` (de zwevende pil).
 - Een mail (lezen en opstellen) heeft in de lichte weergave altijd een witte achtergrond, in elk thema
-  (`ThingsColor.mailPaper`); thema's stylen alleen wat eromheen staat.
+  (`ThingsColor.mailPaper`); thema's stylen alleen wat eromheen staat. Eén uitzondering, op verzoek van de eigenaar:
+  in Diskette is het papier het stofblauw van het Mail-paneel.
 - Mail werkt met archiveren: verwerkt, beantwoord of een taak van gemaakt is archiveren. Mappen (Gmail-labels) zijn
   er om te bekijken (de kolom in de mailmodus); bouw geen handelingen om mappen heen.
 - Mailmodus (`macOS/MailMode/`): elke handeling heeft een toets (`MailModeAction`, aan te passen in Voorkeuren) en
