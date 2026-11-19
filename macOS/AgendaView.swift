@@ -422,6 +422,22 @@ struct AgendaView: View {
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 10)
+        } else if look == .diskette {
+            // De kop als op een drukproef: "Agenda" in de schreefletter met het bereik cursief in oranje erachter.
+            HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Agenda").font(.werkTitle(size: 26)).foregroundStyle(ThingsColor.textPrimary)
+                    Text(titleParts.main).font(.werkTitle(size: 26, italic: true)).foregroundStyle(ThingsColor.today)
+                    if !titleParts.detail.isEmpty { DisketteLabel(text: titleParts.detail) }
+                }
+                .lineLimit(1)
+                navigation(look)
+                Spacer(minLength: 8)
+                calendarFilters
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
         } else if look == .principes {
             // Twee koppen naast elkaar met elk een regel erboven, zoals de affiche.
             HStack(alignment: .top, spacing: 14) {
@@ -1295,6 +1311,10 @@ private struct EventBlock: View {
                 // Een wit kaartje met een zachte schaduw, zoals de panelen naast de motor.
                 shape.fill(ThingsColor.cardBackground)
                     .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 0.5))
+            case .diskette:
+                // Een tint van de agenda met een dunne rand in dezelfde kleur.
+                shape.fill(event.color.opacity(opacity))
+                    .overlay(shape.strokeBorder(event.color.opacity(0.55), lineWidth: 1))
             case .puls:
                 // Een tint van de agenda met een lichtrandje bovenaan; wat nu bezig is vol, van licht naar vol.
                 if pulsNow {

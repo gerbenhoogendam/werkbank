@@ -61,6 +61,8 @@ struct AgendaNavButton: View {
                 icon(size: 11, weight: .semibold, color: ThingsColor.textPrimary)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(Puls.glass))
+            case .diskette:
+                DisketteKey(symbol: symbol, size: 22)
             case .standaard:
                 icon(size: 11, weight: .semibold, color: ThingsColor.textSecondary)
                     .frame(width: 22, height: 22)
@@ -145,6 +147,16 @@ struct AgendaTodayButton: View {
                     .padding(.horizontal, 13)
                     .frame(height: 30)
                     .background(Capsule().fill(Puls.glass))
+            case .diskette:
+                // Een knop met een dunne rand, even hoog als de pijlen ernaast.
+                let shape = RoundedRectangle(cornerRadius: 3, style: .continuous)
+                Text("Vandaag")
+                    .font(.werk(size: 11.5, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .padding(.horizontal, 9)
+                    .frame(height: 22)
+                    .background(shape.fill(ThingsColor.cardBackground))
+                    .overlay(shape.strokeBorder(Diskette.line, lineWidth: 1))
             case .standaard:
                 Text("Vandaag")
                     .thingsFont(.metadata)
@@ -238,6 +250,15 @@ struct AgendaCalendarChip: View {
             HStack(spacing: 6) {
                 Rectangle().fill(color).frame(width: 14, height: 2).opacity(hidden ? 0.3 : 1)
                 EngineLabel(text: title, color: hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary, size: 10)
+            }
+        case .diskette:
+            // Een vakje in de kleur van de agenda (leeg als hij uit staat), zoals een aankruisvakje.
+            let box = RoundedRectangle(cornerRadius: 2, style: .continuous)
+            HStack(spacing: 5) {
+                box.fill(hidden ? Color.clear : color)
+                    .overlay(box.strokeBorder(hidden ? ThingsColor.checkboxStroke : color, lineWidth: 1))
+                    .frame(width: 10, height: 10)
+                label(hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary)
             }
         case .puls:
             // Een glazen capsule met een stip in de kleur van de agenda (leeg als hij uit staat).
@@ -402,6 +423,15 @@ struct AgendaDayHeader: View {
                 FiringDot(text: number, isOn: isToday, size: 26)
             }
             .frame(maxWidth: .infinity)
+        case .diskette:
+            // De weekdag in kleine kapitalen en het dagnummer groot in de schreefletter; vandaag cursief en oranje.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                DisketteLabel(text: weekday, color: isToday ? ThingsColor.accent : ThingsColor.textSecondary)
+                Text(number)
+                    .font(.werkTitle(size: 22, italic: isToday))
+                    .foregroundStyle(isToday ? ThingsColor.today : ThingsColor.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
         case .standaard:
             HStack(spacing: 6) {
                 Text(weekday).font(.werk(size: 11)).foregroundStyle(ThingsColor.textSecondary)
@@ -498,6 +528,7 @@ enum AgendaLook {
         case .telemetrie: (ThingsColor.running, 1)
         case .viertakt: (ThingsColor.running, 2)
         case .puls: (Puls.rood.solid, 2)
+        case .diskette: (ThingsColor.running, 1.5)
         case .standaard: (ThingsColor.deadline, 1.5)
         }
     }
@@ -509,7 +540,7 @@ enum AgendaLook {
         case .rekenmachine, .sneeuwwitje: 10
         case .wandklok, .puls: 8
         case .tischsuper, .drukproef, .spark: 6
-        case .standaard: 4
+        case .standaard, .diskette: 4
         case .viertakt: 3
         case .karmijn, .telemetrie: 0
         }

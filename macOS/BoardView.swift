@@ -229,7 +229,8 @@ struct BoardView: View {
                                           tint: Puls.columnHue(index).big,
                                           unit: columnCards.count == 1 ? "KAART" : "KAARTEN")
                                 .darkScheme(look == .tischsuper)
-                            Spacer(minLength: 0)
+                            // Diskette: de streepjes van een titelbalk vullen de kop tot aan de knopjes.
+                            if look == .diskette { Pinstripes().padding(.leading, 3) } else { Spacer(minLength: 0) }
                         }
                     } else {
                         HStack(spacing: 6) {
@@ -400,6 +401,11 @@ struct BoardView: View {
                 .background(Rectangle().fill(ThingsColor.textPrimary))
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
+        case .diskette:
+            // Het vierkante vakje van een venster, met een plus erin.
+            DisketteKey(symbol: "plus", size: 18)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
         default:
             Image(systemName: "plus")
                 .font(.werk(size: 11, weight: .semibold))
@@ -567,6 +573,11 @@ private struct ColumnSurface: View {
             // Geen vlak: de witte kaarten liggen los op het studiogrijs.
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
                 .fill(isTarget ? targetColor.opacity(0.10) : Color.clear)
+        case .diskette:
+            // Een platina vlak met een dunne rand, zoals de kast om het scherm.
+            let panel = RoundedRectangle(cornerRadius: 8, style: .continuous)
+            panel.fill(fill)
+                .overlay(panel.strokeBorder(isTarget ? targetColor : ThingsColor.separator, lineWidth: 1))
         case .drukproef, .karmijn:
             // Geen vlak: een haarlijn tussen de kolommen.
             HStack(spacing: 0) {

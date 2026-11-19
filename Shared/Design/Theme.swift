@@ -105,12 +105,12 @@ enum ThemeRole: String, CaseIterable, Identifiable {
 /// De vormgeving naast de kleuren (kolomkoppen, kaarten, agenda, mail, tijdlijst, timerpil), zoals in de schetsen.
 enum ThemeLook: String {
     case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn
-    case telemetrie, viertakt, puls
+    case telemetrie, viertakt, puls, diskette
 
-    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie, Puls).
+    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie, Puls, Diskette).
     var panelGap: CGFloat {
         switch self {
-        case .drukproef, .telemetrie: 8
+        case .drukproef, .telemetrie, .diskette: 8
         case .puls: 10
         default: 0
         }
@@ -120,6 +120,7 @@ enum ThemeLook: String {
         switch self {
         case .drukproef: 14
         case .puls: 18
+        case .diskette: 12
         default: 0
         }
     }
@@ -147,7 +148,7 @@ struct WerkbankTheme: Identifiable, Equatable {
     var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
 
     static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark,
-                                       karmijn, telemetrie, viertakt, puls]
+                                       karmijn, telemetrie, viertakt, puls, diskette]
 
     static func named(_ id: String) -> WerkbankTheme { all.first { $0.id == id } ?? standaard }
 }
@@ -347,6 +348,26 @@ extension WerkbankTheme {
         .deadline: ThemeColor(0xC2410C, 0xFF7A2E), .tag: ThemeColor(0xE5E5EA, 0x3A3A3C),
         .tagText: ThemeColor(0x4A4A4E, 0xC7C7CC), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0.05, darkOpacity: 0),
     ], cardRadius: 12)
+
+    /// Een bureaucomputer uit de jaren tachtig, gezien door een hedendaagse drukproef: crème papier op een
+    /// platina-beige blad, één oranjerood, stofblauw voor wat gekozen is, smalle schreefkoppen (Instrument Serif) op
+    /// een leesletter met schreef (Charter), en een paar details van een vroege vensteromgeving (zie `DisketteParts`).
+    /// Het felle oranje staat op `today` en `running` (grote letters en vlakken); `accent` en `fieldLabel` zijn
+    /// donkerder, zodat kleine tekst op crème leesbaar blijft.
+    static let diskette = WerkbankTheme(id: "diskette", name: "Diskette", colors: [
+        .window: ThemeColor(0xDCD6C8, 0x11100E), .mail: ThemeColor(0xF2EEE4, 0x1C1A17),
+        .mailHeader: ThemeColor(0xF2EEE4, 0x1C1A17), .board: ThemeColor(0xF2EEE4, 0x1C1A17),
+        .column: ThemeColor(0xE8E3D7, 0x23211D), .card: ThemeColor(0xFCFBF7, 0x2B2924),
+        .agenda: ThemeColor(0xF2EEE4, 0x1C1A17), .timeList: ThemeColor(0xF2EEE4, 0x1C1A17),
+        .surface: ThemeColor(0xF2EEE4, 0x1C1A17), .surfaceAlt: ThemeColor(0xE8E3D7, 0x23211D),
+        .text: ThemeColor(0x1D1D1B, 0xEFEADD), .textSecondary: ThemeColor(0x5C574D, 0xB8B1A1),
+        .textTertiary: ThemeColor(0x615B50, 0xA19A8B), .fieldLabel: ThemeColor(0xA8360A, 0xFF8A5C),
+        .separator: ThemeColor(0xD6D0C1, 0x38352E), .checkbox: ThemeColor(0x857F72, 0x857F70),
+        .accent: ThemeColor(0xA8360A, 0xFF7A45), .selection: ThemeColor(0xD2DDE2, 0x2A363B),
+        .running: ThemeColor(0xE0430E, 0xFF6A33), .today: ThemeColor(0xE0430E, 0xFF6A33),
+        .deadline: ThemeColor(0xA3201A, 0xFF5A4D), .tag: ThemeColor(0xE3DDCF, 0x34312B),
+        .tagText: ThemeColor(0x57524A, 0xC2BBAB), .shadow: ThemeColor(0x1D1D1B, 0x000000, lightOpacity: 0.12, darkOpacity: 0.5),
+    ], fontFamily: "Charter", cardRadius: 5)
 }
 
 // MARK: - Opslag en de kleuren die de app gebruikt
@@ -387,10 +408,11 @@ final class ThemeStore: @unchecked Sendable {
     }
 
     /// Letters die met de app meekomen (Michroma voor de cijfers van Drukproef, Anton en Playfair Display voor Karmijn,
-    /// DSEG7 voor de lcd-cijfers van Rekenmachine, Barlow (Semi) Condensed voor Telemetrie).
+    /// DSEG7 voor de lcd-cijfers van Rekenmachine, Barlow (Semi) Condensed voor Telemetrie, Instrument Serif voor de
+    /// koppen van Diskette).
     private static func registerBundledFonts() {
         for name in ["Michroma-Regular", "Anton-Regular", "PlayfairDisplay-Regular", "PlayfairDisplay-Italic",
-                     "PlayfairDisplay-BoldItalic", "DSEG7Classic-Italic",
+                     "PlayfairDisplay-BoldItalic", "DSEG7Classic-Italic", "InstrumentSerif-Regular", "InstrumentSerif-Italic",
                      "BarlowCondensed-Regular", "BarlowCondensed-Medium", "BarlowCondensed-SemiBold", "BarlowCondensed-Bold",
                      "BarlowSemiCondensed-Regular", "BarlowSemiCondensed-Medium", "BarlowSemiCondensed-SemiBold"] {
             guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
@@ -565,6 +587,12 @@ extension Font {
     /// Lcd-cijfers met zeven segmenten (DSEG7, meegeleverd), iets schuin zoals op het schermpje van de ET 66.
     static func werkLCD(size: CGFloat) -> Font {
         .custom("DSEG7Classic-Italic", size: size * ThemeStore.shared.scale)
+    }
+
+    /// Smalle schreefletter voor koppen en grote cijfers (Instrument Serif, meegeleverd): recht of cursief. Alleen
+    /// groot: onder een punt of zestien worden de dunne lijnen te licht.
+    static func werkTitle(size: CGFloat, italic: Bool = false) -> Font {
+        .custom(italic ? "InstrumentSerif-Italic" : "InstrumentSerif-Regular", size: size * ThemeStore.shared.scale)
     }
 
     /// Schreefletter voor accenten (Playfair Display, meegeleverd): recht, cursief of vet cursief.

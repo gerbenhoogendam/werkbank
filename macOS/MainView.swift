@@ -381,7 +381,7 @@ extension MainView {
     fileprivate func dividerFill(_ neighbour: Color) -> Color {
         switch ThemeStore.shared.look {
         case .standaard: ThingsColor.backgroundContent
-        case .drukproef, .karmijn, .telemetrie, .puls: ThingsColor.window
+        case .drukproef, .karmijn, .telemetrie, .puls, .diskette: ThingsColor.window
         default: neighbour
         }
     }

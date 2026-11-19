@@ -141,6 +141,14 @@ struct MailHeaderTitle: View {
                     .foregroundStyle(ThingsColor.textPrimary)
                 PulsValue(value: "\(unread)", unit: "ONGELEZEN", size: 18, color: Puls.blauw.big)
             }
+        case .diskette:
+            // De naam in de schreefletter en het aantal ongelezen cursief in oranje erachter.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.werkTitle(size: 26)).foregroundStyle(ThingsColor.textPrimary)
+                Text("\(unread)").font(.werkTitle(size: 26, italic: true)).foregroundStyle(ThingsColor.today)
+                DisketteLabel(text: "ongelezen")
+            }
+            .lineLimit(1)
         case .sneeuwwitje, .standaard:
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title).font(.werk(size: 15, weight: .semibold)).foregroundStyle(ThingsColor.textPrimary)
@@ -279,6 +287,8 @@ struct MailboxTab: View {
                             .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.12), radius: 1.5, y: 1)
                     }
                 }
+        case .diskette:
+            DisketteChip(text: title, isOn: isOn)
         case .standaard:
             name(size: 11.5, on: .semibold, off: .regular)
                 .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)

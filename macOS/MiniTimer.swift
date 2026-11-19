@@ -587,6 +587,12 @@ private struct PillTheme {
             PillTheme(background: ThingsColor.backgroundContent, border: Color.primary.opacity(0.08), text: ThingsColor.textPrimary,
                       text2: ThingsColor.textSecondary, dot: Puls.geel.solid, showsDot: false, buttonFill: ThingsColor.selection,
                       buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.selection, stopIcon: Puls.rood.solid)
+        case .diskette:
+            // Een venstertje: papier met een inktrand, de stopknop in inkt.
+            PillTheme(background: ThingsColor.cardBackground, border: Diskette.line, text: ThingsColor.textPrimary,
+                      text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,
+                      buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.textPrimary, stopIcon: ThingsColor.cardBackground,
+                      radius: 6)
         case .viertakt:
             PillTheme(background: ThingsColor.cardBackground, border: .clear, text: ThingsColor.textPrimary,
                       text2: ThingsColor.textSecondary, dot: ThingsColor.running, buttonFill: ThingsColor.tagBackground,

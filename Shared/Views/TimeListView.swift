@@ -1265,6 +1265,22 @@ private struct TimeTotalFooter: View {
                 PulsGlow(hue: Puls.groen, width: 320, height: 170, light: 0.2, dark: 0.16).offset(y: 60)
             }
             .accessibilityElement(children: .combine)
+        case .diskette:
+            // Het totaal groot in de schreefletter, in oranje, onder de streepjes van een titelbalk.
+            VStack(alignment: .leading, spacing: 6) {
+                Pinstripes(lines: 3)
+                HStack(alignment: .firstTextBaseline) {
+                    DisketteLabel(text: "Totaal")
+                    Spacer()
+                    Text(text)
+                        .font(.werkTitle(size: 40))
+                        .foregroundStyle(ThingsColor.running)
+                }
+                Text("\(count) \(count == 1 ? "regel" : "regels")")
+                    .font(.werk(size: 12))
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .spark, .standaard:
             VStack(spacing: 10) {
                 Rectangle().fill(ThingsColor.separator).frame(height: 1)

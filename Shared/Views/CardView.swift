@@ -596,6 +596,11 @@ private struct CardSurface: View {
                         ], center: .topLeading, startRadiusFraction: 0, endRadiusFraction: 1))
                     }
                 }
+        case .diskette:
+            // Papier met een dunne rand en een harde schaduw eronder; een lopende kaart heeft een oranje rand.
+            DisketteWindow(radius: ThingsMetrics.cardRadius,
+                           border: isRunning ? ThingsColor.running : ThingsColor.textPrimary.opacity(0.24),
+                           lineWidth: isRunning ? 1.5 : 1)
         case .standaard:
             shape.fill(ThingsColor.cardBackground)
                 .shadow(color: ThingsColor.cardShadow, radius: 3, x: 0, y: 1)
@@ -727,6 +732,15 @@ private struct RunningStrip: View {
                 }
                 Spacer(minLength: 0)
             }
+        case .diskette:
+            // "Loopt" in kleine kapitalen en de tijd groot in de schreefletter, onder een dunne lijn.
+            HStack(alignment: .firstTextBaseline) {
+                DisketteLabel(text: "Loopt", color: ThingsColor.accent)
+                Spacer()
+                DisketteTime(text: time, size: 24, color: ThingsColor.running)
+            }
+            .padding(.top, 6)
+            .overlay(alignment: .top) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
         case .standaard:
             HStack {
                 Text("Loopt").font(.werk(size: 10.5)).foregroundStyle(ThingsColor.textSecondary)

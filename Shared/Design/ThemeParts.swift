@@ -167,6 +167,24 @@ struct ThemedHeading: View {
                         .lineLimit(1)
                 }
             }
+        case .diskette:
+            // De naam in de smalle schreefletter, het aantal cursief in oranje erachter (zoals één woord van een kop in
+            // kleur). In een kolom volgen daarna de streepjes van een titelbalk (`BoardView`).
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(title)
+                    .font(.werkTitle(size: baseSize + 9))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let count {
+                    Text("\(count)")
+                        .font(.werkTitle(size: baseSize + 9, italic: true))
+                        .foregroundStyle(highlight ? ThingsColor.running : ThingsColor.accent)
+                        .lineLimit(1)
+                } else if let detail {
+                    DisketteLabel(text: detail)
+                }
+            }
         case .sneeuwwitje:
             // Rechts een paar luidsprekersleuven, zoals in de kast van de SK 4.
             HStack(alignment: .firstTextBaseline, spacing: 6) {

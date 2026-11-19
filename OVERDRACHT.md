@@ -386,6 +386,26 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       per mailbox (koppen en inhoud zonder bijlagen via `format=full`, bijlagen pas bij klikken via
       `messages.attachments.get`), bijgehouden met dezelfde `history`-aanpak, achter een schakelaar in Voorkeuren en
       de eerste weken vergeleken met wat Gmail voor de zichtbare lijst geeft. Stap 3 is lokaal zoeken in die maand.
+42. **Thema Diskette** (19 nov, `WerkbankTheme.diskette`, `Shared/Design/DisketteParts.swift`; naar vijf beelden van de
+    eigenaar, geen schets vooraf). Een bureaucomputer uit de jaren tachtig, gezien door een hedendaagse drukproef. Het
+    gaat om de vormgeving eromheen: geen merk, logo, product of afbeelding uit de beelden is overgenomen.
+    - **Kleur:** platina-beige als vensterkleur met crème panelen los erop (`panelGap` 8, `panelRadius` 12), papierwitte
+      kaarten, stofblauw voor wat gekozen is. Eén oranjerood: fel op `today` en `running` (grote letters en vlakken,
+      minstens 3:1), donkerder op `accent` en `fieldLabel` zodat kleine tekst op crème 4,5:1 haalt. Donker: warm zwart
+      met crème letters; `ThingsColor.onAccent` is daar inkt in plaats van wit.
+    - **Letter:** Charter (staat op macOS en iOS) voor alle tekst; Instrument Serif (SIL OFL, meegeleverd met
+      licentiebestand, `Font.werkTitle`) voor koppen en grote cijfers, met het aantal of het bereik cursief in oranje
+      erachter. Niet onder een punt of zestien gebruiken: de lijnen zijn dun. De cijfers zijn niet even breed, dus een
+      lopende tijd gaat via `DisketteTime` (elk cijfer in een vast vak).
+    - **Details:** de streepjes van een titelbalk in de kolomkop en boven het totaal (`Pinstripes`), een vierkant
+      knopje met een dunne rand voor de plus en de agendapijlen (`DisketteKey`), een gekozen mailbox in omgekeerde
+      kleuren (`DisketteChip`), kaarten en de timerpil als papier met een inktrand en een harde schaduw
+      (`DisketteWindow`), kleine kapitalen voor bijschriften (`DisketteLabel`).
+    - Waar het thema geen eigen geval heeft, volgt het Standaard (rijen in de mail, de tijdlijst, de mailmodus).
+    - Na te gaan in de app: laadt Instrument Serif (anders vallen de koppen terug op de systeemletter), is Charter als
+      leesletter prettig op 13 punt (anders in Voorkeuren een andere letter kiezen), passen de koppen van 22 en 26
+      punt in de kolomkop, de kop van het Mail-paneel (58 hoog) en de dagkoppen van de agenda, en is de harde schaduw
+      onder de kaarten niet te zwaar bij veel kaarten.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

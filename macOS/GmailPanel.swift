@@ -131,6 +131,7 @@ struct GmailPanel: View {
         case .telemetrie: 62
         case .viertakt: 74
         case .puls: 54
+        case .diskette: 58
         default: 46
         }
     }
@@ -249,7 +250,7 @@ struct GmailPanel: View {
                     selection.selectedID = nil
                     Task { await gmail.showCombined() }
                 }
-                if [.standaard, .principes, .drukproef, .karmijn, .telemetrie, .viertakt].contains(look) { Spacer(minLength: 0) }
+                if [.standaard, .principes, .drukproef, .karmijn, .telemetrie, .viertakt, .diskette].contains(look) { Spacer(minLength: 0) }
             }
             .padding(look == .puls ? 2 : 3)
             .background {
@@ -622,6 +623,14 @@ struct GmailRow: View {
                 shape.fill(ThingsColor.cardBackground)
             } else if isHovering {
                 shape.fill(Color.primary.opacity(0.04))
+            }
+        case .diskette:
+            // De gekozen rij in stofblauw, strak afgerond.
+            let row = RoundedRectangle(cornerRadius: 5, style: .continuous)
+            if isSelected {
+                row.fill(ThingsColor.selection)
+            } else if isHovering {
+                row.fill(ThingsColor.selection.opacity(0.5))
             }
         case .viertakt:
             // De gekozen rij als wit kaartje met een zachte schaduw.
