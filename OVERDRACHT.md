@@ -428,6 +428,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - De naam "Werkbank" staat niet meer in de vensterbalk (`window.titleVisibility = .hidden` in
       `DuoWindowFold.attach`): de schakelaar werkbank/mail zegt genoeg. In het menu Venster en in Mission Control
       heet het venster nog wel Werkbank.
+      Zonder titel schoven de knoppen van rechts naar links, tegen de schakelaar aan: de titel was de ruimte die
+      ze rechts hield. In `MainView` staat daarom een rekbare ruimte voor die knoppen (`ToolbarSpacer(.flexible)`
+      vanaf macOS 26, daaronder een `ToolbarItem` met een `Spacer`). Maandagenda is daar nu een knop met alleen een
+      icoon; de naam staat in de tooltip.
     - Na te gaan in de app: blijft de titel weg na volledig scherm en na het opnieuw openen van het venster, en
       werkt ⇧⌘U op de werkbank terwijl de cursor in een tekstveld staat.
 

@@ -241,15 +241,21 @@ struct MainView: View {
                     .help("Mailpaneel tonen of verbergen (⇧⌘L)")
                 }
             }
+            // De naam van het venster staat niet in de balk (`DuoWindowFold.attach`), en daarmee verviel de ruimte die
+            // de knoppen hierna rechts hield: deze rekbare ruimte doet dat nu.
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.flexible, placement: .primaryAction)
+            } else {
+                ToolbarItem(placement: .primaryAction) { Spacer() }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     toggleMonthAgenda()
                 } label: {
                     Label("Maandagenda", systemImage: "calendar")
-                        .labelStyle(.titleAndIcon)
                 }
                 .keyboardShortcut("a", modifiers: [.command, .option])
-                .help("Vier werkweken tegelijk (⌥⌘A)")
+                .help("Maandagenda: vier werkweken tegelijk (⌥⌘A)")
             }
             ToolbarItem(placement: .primaryAction) {
                 // Verbetering inspreken en aanwijzen; regelt zo nodig spraakmodel, microfoon en schermopname.
