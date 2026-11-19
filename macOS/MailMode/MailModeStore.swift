@@ -502,13 +502,17 @@ final class MailModeStore {
             items = result.items
             keepMarks(in: items)
         }
-        if result.error == nil { MailListCache.shared.store(result.items, for: key) }
+        if result.error == nil { MailListCache.shared.store(result.items, for: key, isSearch: listIsSearch) }
         loadError = items.isEmpty ? result.error : nil
         refreshTaskThreads()
         isLoading = false
         if selected == nil { selectedID = listed.first?.id }
         if result.activityChanged { refreshRanking() }
     }
+
+    /// Een lijst met zoektekst, filter, klant of eigen keuze van mailboxen: die telt bij het bewaren niet mee met de
+    /// gewone lijsten van mailboxen en mappen (`MailListCache`).
+    private var listIsSearch: Bool { isFiltering || searchAccounts != nil }
 
     /// Welke lijst er gevraagd wordt: bereik, map, zoektekst, filters, klant en eigen keuze van mailboxen.
     private var listKey: String {
@@ -698,7 +702,7 @@ final class MailModeStore {
         var labels = items[index].labels.filter { $0 != "UNREAD" }
         if unread { labels.append("UNREAD") }
         items[index].labels = labels
-        if let shownKey { MailListCache.shared.store(items, for: shownKey) }
+        if let shownKey { MailListCache.shared.store(items, for: shownKey, isSearch: listIsSearch) }
     }
 
     /// Meldt hoe het ging met een handeling op meer gesprekken; mislukte er een, dan wordt de lijst opnieuw geladen.

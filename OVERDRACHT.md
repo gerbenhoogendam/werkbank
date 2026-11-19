@@ -356,6 +356,36 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     bewust niet gebouwd: dan gaat er mail weg zonder dat je handtekening, ontvangers en citaat ziet. Na te gaan in
     de app: verschijnen de knoppen (meldingen van voor deze versie hebben ze niet), archiveert Archiveer zonder dat
     Werkbank naar voren komt, en opent Beantwoord het antwoord ook als de mailmodus dicht was.
+41. **Mail sneller: stap 1 van de cache** (19 nov; onversleuteld op schijf is afgesproken met de eigenaar). De
+    aanleiding: een mailbox of map openen wachtte op Gmail. Er was al een dunne cache (de laatste lijsten op schijf,
+    de laatste veertig mails in het geheugen); dit maakt hem bruikbaar. Het plan daarna staat onderaan.
+    - **Bewaarde lijsten** (`MailListCache`): gewone lijsten (mailbox of map) en zoeklijsten (zoektekst, filter, klant,
+      eigen keuze van mailboxen; `MailModeStore.listIsSearch`) tellen apart: veertig en zes. Eerder deelden ze twaalf
+      plekken en duwde zoeken de mailboxen eruit.
+    - **Koppen onthouden** (`GmailHeaderCache`, `GmailHistory` in WerkbankCore met tests): `GmailSession.mailItems`
+      haalt alleen de koppen op van mails die nog niet bekend zijn. De labels van bekende mails (gelezen, inbox, map)
+      worden bijgewerkt met `users.history.list` sinds het vorige punt (`startHistoryId`); het eerste punt komt uit
+      `users.getProfile`, vóór de koppen worden opgehaald. Verversen kost zo twee aanvragen per mailbox plus de nieuwe
+      mails, in plaats van 51. Geeft Gmail 404 (punt verlopen, ongeveer een week), is er te veel veranderd (meer dan
+      vier pagina's) of mislukt het drie keer achter elkaar, dan vervalt alles van die mailbox en wordt opnieuw
+      begonnen. Wat de app zelf verandert (gelezen, archiveren, terugzetten, verplaatsen) wordt meteen bijgewerkt
+      (`patch`). Alleen in het geheugen: na opnieuw starten haalt elke lijst zijn koppen één keer volledig op. Welke
+      mails in een lijst staan komt nog steeds elke keer van Gmail; alleen de labels van bekende mails hangen hiervan
+      af. Het Mail-paneel op de werkbank had al een eigen, eenvoudiger hergebruik en is niet aangeraakt.
+    - **Geopende mails op schijf** (`MailDiskCache`, in `~/Library/Caches/Werkbank/Mail/<mailbox>/`): de ruwe mail
+      (`.eml`, tot 4 MB; groter blijft alleen in het geheugen) en per gesprek de lijst van zijn mails (`.json`, zonder
+      "ongelezen"). `rawMessage` kijkt eerst op schijf. `MailThreadModel.load` toont eerst het gesprek van schijf en
+      vraagt Gmail daarna wat er nu staat; alleen als de mails anders zijn wordt het opnieuw neergezet, en zonder
+      internet blijft staan wat er stond. Dertig dagen sinds het laatste openen en hooguit 400 MB (`prune`, 45 s na
+      het starten). Een mailbox loskoppelen of een gesprek weggooien haalt ook daar weg wat erbij hoort. Niet
+      versleuteld, zoals Mail van Apple; buiten Time Machine.
+    - Na te gaan in de app: klopt gelezen/ongelezen in de lijst nadat je een mail op je telefoon las of archiveerde
+      (binnen twee minuten), staat een eerder geopende mail er na opnieuw starten meteen, en blijft een map staan
+      nadat je een paar keer hebt gezocht.
+    - **Vervolg (nog niet gebouwd, eerst overleggen):** stap 2 is een opslag van alle mail van de laatste dertig dagen
+      per mailbox (koppen en inhoud zonder bijlagen via `format=full`, bijlagen pas bij klikken via
+      `messages.attachments.get`), bijgehouden met dezelfde `history`-aanpak, achter een schakelaar in Voorkeuren en
+      de eerste weken vergeleken met wat Gmail voor de zichtbare lijst geeft. Stap 3 is lokaal zoeken in die maand.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

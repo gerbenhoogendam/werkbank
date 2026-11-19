@@ -279,19 +279,23 @@ final class MailThreadModel {
         isLoading = true
         gmail.note(account: ref.account, forMessageID: ref.messageID)
         gmail.note(account: ref.account, forMessageID: ref.threadID)
+        // Eerder geopend op deze Mac: meteen tonen wat er toen stond (ook na opnieuw starten), terwijl Gmail wordt
+        // gevraagd wat er nu staat. De inhoud van de open mails komt intussen ook van schijf.
+        var shown: [GmailThreadMessage]?
+        if mails.isEmpty, let stored = await gmail.storedThread(threadID: ref.threadID, account: ref.account) {
+            if let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
+            let open = present(stored)
+            shown = stored
+            isLoading = false
+            for id in open { Task { await self.loadContent(id) } }
+        }
         do {
             let items = try await gmail.threadMessages(threadID: ref.threadID, account: ref.account)
-            if let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
-            mails = items.map { item in
-                var mail = ThreadMail(item)
-                if let cached = ParsedMailCache.get(item.id) { Self.fill(&mail, with: cached) }
-                return mail
-            }
-            loadError = nil
+            if shown == nil, let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
+            // Staat er al precies dit, dan niet opnieuw neerzetten (dat tekent het hele gesprek opnieuw).
             var open = Set(items.filter(\.isUnread).map(\.id))
-            if let newest = items.last { open.insert(newest.id) }
-            if items.contains(where: { $0.id == ref.messageID }) { open.insert(ref.messageID) }
-            expanded.formUnion(open)
+            if items.map(\.id) != shown?.map(\.id) { open.formUnion(present(items)) } else { expanded.formUnion(open) }
+            loadError = nil
             isLoading = false
             // Geopend is gelezen: het hele gesprek, in Gmail en meteen in de lijsten. Welke mails ongelezen waren is
             // hierboven al gebruikt (die staan opengeklapt). Alleen bij het openen zelf, dus wie de mail daarna weer op
@@ -305,8 +309,24 @@ final class MailThreadModel {
             }
         } catch {
             isLoading = false
-            loadError = "Gesprek ophalen uit Gmail mislukt: \(error.localizedDescription)"
+            // Staat het gesprek er al van schijf, dan blijft dat staan (lezen zonder internet).
+            if shown == nil { loadError = "Gesprek ophalen uit Gmail mislukt: \(error.localizedDescription)" }
         }
+    }
+
+    /// Zet de mails van het gesprek neer en geeft terug welke open staan: de nieuwste, de ongelezen en de gekozen.
+    /// Inhoud die al is ingelezen komt er meteen bij.
+    private func present(_ items: [GmailThreadMessage]) -> Set<String> {
+        mails = items.map { item in
+            var mail = ThreadMail(item)
+            if let cached = ParsedMailCache.get(item.id) { Self.fill(&mail, with: cached) }
+            return mail
+        }
+        var open = Set(items.filter(\.isUnread).map(\.id))
+        if let newest = items.last { open.insert(newest.id) }
+        if items.contains(where: { $0.id == ref.messageID }) { open.insert(ref.messageID) }
+        expanded.formUnion(open)
+        return open
     }
 
     func isExpanded(_ id: String) -> Bool { expanded.contains(id) }

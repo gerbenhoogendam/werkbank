@@ -34,6 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Wat de mailmodus nodig heeft alvast buiten de hoofdthread inlezen, zodat hij meteen opent.
         MailActivityStore.shared.preload()
         MailListCache.shared.preload()
+        // Geopende mails op schijf: ruim na het starten opruimen wat te oud of te veel is.
+        Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(45))
+            MailDiskCache.prune()
+        }
         // WebKit alvast opstarten, zodat de eerste mail niet hoeft te wachten (niet tijdens het starten zelf).
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(3))

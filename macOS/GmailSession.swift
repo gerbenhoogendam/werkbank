@@ -120,6 +120,8 @@ final class GmailSession {
     private static let rawCacheLimit = 40
     /// Laatst opgehaalde inbox per mailbox, zodat schakelen direct iets toont.
     @ObservationIgnored private var messageCache: [String: [GmailMessageSummary]] = [:]
+    /// Koppen die al eens zijn opgehaald (mailmodus, meldingen): verversen haalt alleen op wat nieuw is.
+    private let headerCache = GmailHeaderCache()
     /// Per mailbox de laadbeurt die nu loopt en sinds wanneer.
     @ObservationIgnored private var loading: [String: (token: UUID, since: Date)] = [:]
     /// Wanneer de inbox het laatst is opgevraagd (`reloadIfStale`).
@@ -398,6 +400,8 @@ final class GmailSession {
         Keychain.delete(Self.tokenAccount(email))
         accounts.removeAll { $0 == email }
         messageCache[email] = nil
+        headerCache.forget(account: email)
+        Task.detached(priority: .utility) { MailDiskCache.remove(account: email) }
         saveInboxLater()
         tokenCache[email] = nil
         if activeAccount == email { activeAccount = accounts.first }
@@ -416,6 +420,8 @@ final class GmailSession {
             Keychain.delete(Self.legacyAccount)
             tokenCache[""] = nil
             messageCache[""] = nil
+            headerCache.forget(account: "")
+            Task.detached(priority: .utility) { MailDiskCache.remove(account: "") }
             saveInboxLater()
             refreshVisible()
             state = .signedOut
@@ -716,41 +722,64 @@ final class GmailSession {
 
     /// Haalt de koppen van mails op, steeds acht tegelijk onderweg (zo blijft het binnen wat Gmail per seconde
     /// toestaat): is er één binnen, dan begint de volgende, zonder op de traagste van een groepje te wachten.
+    ///
+    /// De gewone koppen (mailmodus, meldingen) worden onthouden (`GmailHeaderCache`): alleen wat nog niet bekend is
+    /// wordt opgehaald, en de labels van de rest zijn bijgewerkt met wat er sinds de vorige keer in de mailbox
+    /// veranderde. Het resultaat staat in de volgorde van `ids`.
     private func mailItems(ids: [String], account: String?, headers: [String]) async -> [GmailMailItem] {
+        let remembers = headers == GmailAPI.mailItemHeaders
+        let owner = account ?? activeAccount ?? ""
+        var known: [String: GmailMailItem] = [:]
+        if remembers {
+            await headerCache.sync(account: owner) { [weak self] path, query in
+                guard let self else { throw GmailError.notSignedIn }
+                return try await self.api(path, query: query, account: account)
+            }
+            for id in ids {
+                if let item = headerCache.item(id, account: owner) { known[id] = item }
+            }
+        }
+        let missing = ids.filter { known[$0] == nil }
         let query = [URLQueryItem(name: "format", value: "metadata")]
             + headers.map { URLQueryItem(name: "metadataHeaders", value: $0) }
-        let found = await withTaskGroup(of: (Int, GmailMailItem?).self) { group -> [(Int, GmailMailItem)] in
+        let found = await withTaskGroup(of: GmailMailItem?.self) { group -> [GmailMailItem] in
             var next = 0
-            var list: [(Int, GmailMailItem)] = []
-            while next < min(8, ids.count) {
-                let index = next
-                let id = ids[index]
+            var list: [GmailMailItem] = []
+            while next < min(8, missing.count) {
+                let id = missing[next]
                 group.addTask {
                     let data = try? await self.api("messages/\(id)", query: query, account: account)
-                    return (index, data.flatMap(GmailAPI.mailItem(fromMessageJSON:)))
+                    return data.flatMap(GmailAPI.mailItem(fromMessageJSON:))
                 }
                 next += 1
             }
-            for await (index, item) in group {
-                if let item { list.append((index, item)) }
-                if next < ids.count {
-                    let nextIndex = next
-                    let id = ids[nextIndex]
+            for await item in group {
+                if let item { list.append(item) }
+                if next < missing.count {
+                    let id = missing[next]
                     group.addTask {
                         let data = try? await self.api("messages/\(id)", query: query, account: account)
-                        return (nextIndex, data.flatMap(GmailAPI.mailItem(fromMessageJSON:)))
+                        return data.flatMap(GmailAPI.mailItem(fromMessageJSON:))
                     }
                     next += 1
                 }
             }
             return list
         }
+        if remembers { headerCache.store(found, account: owner) }
+        let fetched = Dictionary(found.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // Een bekende mail met de labels van nu: tijdens het ophalen kan er nog iets zijn bijgewerkt.
+        let result = ids.compactMap { id -> GmailMailItem? in
+            if let fresh = fetched[id] { return fresh }
+            guard remembers else { return nil }
+            return headerCache.item(id, account: owner) ?? known[id]
+        }
         let key = account ?? ""
-        for (_, item) in found {
+        for item in result {
             messageAccount[item.id] = key
             messageAccount[item.threadID] = key
         }
-        return found.sorted { $0.0 < $1.0 }.map(\.1)
+        return result
     }
 
     /// De eigen adressen (alle gekoppelde mailboxen), in kleine letters.
@@ -923,6 +952,9 @@ final class GmailSession {
 
     private func trash(threadID: String, account: String?) async throws {
         _ = try await api("threads/\(threadID)/trash", method: "POST", account: account)
+        // Weggegooid: ook niet meer op schijf bij de geopende mails.
+        let owner = account ?? messageAccount[threadID] ?? activeAccount ?? ""
+        Task.detached(priority: .utility) { MailDiskCache.remove(thread: threadID, account: owner) }
     }
 
     /// `messages.insert` via de upload-route (multipart: labels en gesprek als JSON, de mail als message/rfc822),
@@ -1038,7 +1070,23 @@ final class GmailSession {
         let data = try await api("threads/\(threadID)", query: query, account: owner)
         guard let messages = GmailAPI.threadMessages(fromJSON: data) else { throw GmailError.invalidResponse }
         for message in messages { note(account: owner, forMessageID: message.id) }
+        let folder = owner ?? activeAccount ?? ""
+        Task.detached(priority: .utility) { MailDiskCache.store(thread: messages, id: threadID, account: folder) }
         return messages
+    }
+
+    /// Het gesprek zoals het er de vorige keer stond (van schijf, `MailDiskCache`): om meteen te tonen terwijl Gmail
+    /// wordt gevraagd wat er nu staat. `nil`: nog niet eerder geopend op deze Mac.
+    func storedThread(threadID: String, account: String?) async -> [GmailThreadMessage]? {
+        let owner = account ?? messageAccount[threadID]
+        let folder = owner ?? activeAccount ?? ""
+        let stored = await Task.detached(priority: .userInitiated) {
+            MailDiskCache.thread(id: threadID, account: folder)
+        }.value
+        guard let stored, !stored.isEmpty else { return nil }
+        // De inhoud van deze mails wordt hierna opgevraagd: dan moet bekend zijn in welke mailbox ze staan.
+        for message in stored { note(account: owner, forMessageID: message.id) }
+        return stored
     }
 
     /// Alvast ophalen (bladeren in de mailmodus). Wordt één keer gebruikt en hooguit binnen een minuut, zodat een gesprek
@@ -1056,23 +1104,37 @@ final class GmailSession {
 
     private func rawMessage(id: String) async throws -> Data {
         if let cached = rawCache[id] { return cached }
+        // Eerder geopend: van schijf, ook na opnieuw starten en zonder internet (`MailDiskCache`).
+        let folder = messageAccount[id] ?? activeAccount ?? ""
+        let stored = await Task.detached(priority: .userInitiated) { MailDiskCache.raw(id: id, account: folder) }.value
+        if let stored {
+            remember(raw: stored, id: id)
+            return stored
+        }
         let data = try await api("messages/\(id)", query: [URLQueryItem(name: "format", value: "raw")],
                                  account: messageAccount[id])
         guard let raw = GmailAPI.rawMessage(fromJSON: data) else { throw GmailError.invalidResponse }
-        // Een mail verandert niet meer: bewaren, zodat opnieuw openen, antwoorden en analyseren niet opnieuw downloaden.
+        remember(raw: raw, id: id)
+        Task.detached(priority: .utility) { MailDiskCache.store(raw: raw, id: id, account: folder) }
+        return raw
+    }
+
+    /// Een mail verandert niet meer: in het geheugen houden, zodat opnieuw openen, antwoorden en analyseren hem niet
+    /// opnieuw inlezen of downloaden.
+    private func remember(raw: Data, id: String) {
         rawCache[id] = raw
         rawCacheOrder.removeAll { $0 == id }
         rawCacheOrder.append(id)
         while rawCacheOrder.count > Self.rawCacheLimit {
             rawCache[rawCacheOrder.removeFirst()] = nil
         }
-        return raw
     }
 
     /// Archiveert het hele gesprek (haalt het label INBOX weg), zoals de knop "Archiveren" in Gmail.
     private func archive(threadID: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["removeLabelIds": ["INBOX"]])
         _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
+        headerCache.patch(threadID: threadID, removing: ["INBOX"])
     }
 
     /// De knop Archiveer op een melding van nieuwe mail: het gesprek hoeft in geen enkele lijst te staan. Eén keer ⌘Z
@@ -1089,6 +1151,7 @@ final class GmailSession {
         note(account: account, forMessageID: threadID)
         let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["INBOX"]])
         _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: account ?? messageAccount[threadID])
+        headerCache.patch(threadID: threadID, adding: ["INBOX"])
     }
 
     /// Zet een gesprek terug in de inbox (⌘Z na archiveren).
@@ -1096,6 +1159,7 @@ final class GmailSession {
         do {
             let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["INBOX"]])
             _ = try await api("threads/\(threadID)/modify", method: "POST", body: body, account: messageAccount[threadID])
+            headerCache.patch(threadID: threadID, adding: ["INBOX"])
             await reload()
             if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
         } catch {
@@ -1231,6 +1295,9 @@ final class GmailSession {
             let body = try JSONSerialization.data(withJSONObject: request)
             _ = try await self.api("threads/\(id)/modify", method: "POST", body: body, account: change.account)
         }
+        for id in done {
+            if let change = byThread[id] { headerCache.patch(threadID: id, adding: change.add, removing: change.remove) }
+        }
         // Wat uit de inbox ging, ook uit de lijsten van het Mail-paneel.
         for id in done where byThread[id]?.remove.contains("INBOX") == true { removeThreadFromLists(id) }
         return done.compactMap { byThread[$0] }
@@ -1250,6 +1317,7 @@ final class GmailSession {
         } catch {
             return false
         }
+        headerCache.patch(threadID: threadID, adding: unread ? ["UNREAD"] : [], removing: unread ? [] : ["UNREAD"])
         var changed = false
         for key in Array(messageCache.keys) {
             guard let index = messageCache[key]?.firstIndex(where: { $0.threadID == threadID }),

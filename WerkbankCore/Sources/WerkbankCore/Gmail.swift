@@ -251,7 +251,7 @@ public enum GoogleOAuth {
 }
 
 /// Eén mail in een gesprek zoals `threads.get` (metadata) hem geeft: genoeg voor een ingeklapte rij.
-public struct GmailThreadMessage: Equatable {
+public struct GmailThreadMessage: Equatable, Codable {
     public var id: String
     public var date: Date
     public var labels: [String]

@@ -2,8 +2,12 @@ import Foundation
 import WerkbankCore
 
 /// De lijsten van de mailmodus van de vorige keer (per mailbox, map, zoekopdracht en filters), zodat de mailmodus meteen
-/// iets laat zien terwijl Gmail wordt bijgewerkt. In het geheugen, en de laatste twaalf in Application Support (alleen op
-/// deze Mac); bewaren gebeurt even later en buiten de hoofdthread.
+/// iets laat zien terwijl Gmail wordt bijgewerkt. In het geheugen en in Application Support (alleen op deze Mac);
+/// bewaren gebeurt even later en buiten de hoofdthread.
+///
+/// Gewone lijsten (een mailbox of map, zonder zoektekst of filter) en zoeklijsten tellen apart: de laatste veertig
+/// gewone en de laatste zes zoeklijsten blijven. Eerder deelden ze twaalf plekken en duwde een paar keer zoeken de
+/// mailboxen en mappen eruit, die dan weer leeg begonnen.
 @MainActor
 final class MailListCache {
     static let shared = MailListCache()
@@ -11,26 +15,34 @@ final class MailListCache {
     private struct Stored: Codable {
         var order: [String]
         var lists: [String: [GmailMailItem]]
+        /// Ontbreekt in een bestand van voor de splitsing.
+        var searches: [String]?
     }
 
     private var lists: [String: [GmailMailItem]] = [:]
-    /// Oudste eerst.
+    /// De gewone lijsten, oudste eerst.
     private var order: [String] = []
+    /// De zoeklijsten, oudste eerst.
+    private var searches: [String] = []
     private var loaded = false
     private var saveTask: Task<Void, Never>?
-    private static let limit = 12
+    private static let limit = 40
+    private static let searchLimit = 6
 
     func items(for key: String) -> [GmailMailItem]? {
         loadIfNeeded()
         return lists[key]
     }
 
-    func store(_ items: [GmailMailItem], for key: String) {
+    /// `isSearch`: een lijst met zoektekst, filter, klant of eigen keuze van mailboxen.
+    func store(_ items: [GmailMailItem], for key: String, isSearch: Bool) {
         loadIfNeeded()
         lists[key] = items
         order.removeAll { $0 == key }
-        order.append(key)
+        searches.removeAll { $0 == key }
+        if isSearch { searches.append(key) } else { order.append(key) }
         while order.count > Self.limit { lists[order.removeFirst()] = nil }
+        while searches.count > Self.searchLimit { lists[searches.removeFirst()] = nil }
         scheduleSave()
     }
 
@@ -70,12 +82,13 @@ final class MailListCache {
         loaded = true
         guard let stored else { return }
         lists = stored.lists
-        order = stored.order.filter { stored.lists[$0] != nil }
+        searches = (stored.searches ?? []).filter { stored.lists[$0] != nil }
+        order = stored.order.filter { stored.lists[$0] != nil && !searches.contains($0) }
     }
 
     private func scheduleSave() {
         saveTask?.cancel()
-        let stored = Stored(order: order, lists: lists)
+        let stored = Stored(order: order, lists: lists, searches: searches)
         saveTask = Task.detached(priority: .utility) {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled, let file = MailListCache.file,
