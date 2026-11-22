@@ -167,6 +167,22 @@ struct ThemedHeading: View {
                         .lineLimit(1)
                 }
             }
+        case .etiket:
+            // De naam in smalle kapitalen, het aantal met een voorloopnul in de accentkleur erachter ("INBOX 03").
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.werkPoster(size: baseSize + 13))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let count {
+                    Text(String(format: "%02d", count))
+                        .font(.werkPoster(size: baseSize + 13))
+                        .foregroundStyle(highlight ? ThingsColor.running : ThingsColor.accent)
+                } else if let detail {
+                    EtiketLabel(text: detail)
+                }
+            }
         case .diskette:
             // De naam in de smalle schreefletter, het aantal cursief in oranje erachter (zoals één woord van een kop in
             // kleur). In een kolom volgen daarna de streepjes van een titelbalk (`BoardView`).

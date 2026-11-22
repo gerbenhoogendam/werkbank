@@ -105,12 +105,12 @@ enum ThemeRole: String, CaseIterable, Identifiable {
 /// De vormgeving naast de kleuren (kolomkoppen, kaarten, agenda, mail, tijdlijst, timerpil), zoals in de schetsen.
 enum ThemeLook: String {
     case standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark, karmijn
-    case telemetrie, viertakt, puls, diskette
+    case telemetrie, viertakt, puls, diskette, etiket
 
-    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie, Puls, Diskette).
+    /// Losse vlakken met tussenruimte op de vensterkleur (Drukproef, Telemetrie, Puls, Diskette, Etiket).
     var panelGap: CGFloat {
         switch self {
-        case .drukproef, .telemetrie, .diskette: 8
+        case .drukproef, .telemetrie, .diskette, .etiket: 8
         case .puls: 10
         default: 0
         }
@@ -148,7 +148,7 @@ struct WerkbankTheme: Identifiable, Equatable {
     var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
 
     static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark,
-                                       karmijn, telemetrie, viertakt, puls, diskette]
+                                       karmijn, telemetrie, viertakt, puls, diskette, etiket]
 
     static func named(_ id: String) -> WerkbankTheme { all.first { $0.id == id } ?? standaard }
 }
@@ -376,6 +376,27 @@ extension WerkbankTheme {
     ], fontFamily: "Charter", cardRadius: 5)
 }
 
+extension WerkbankTheme {
+    /// Een etikettenfabriek als website: bijna zwart met donkergrijze vlakken en dunne randen, één fel limoen, alles
+    /// rechthoekig, koppen en cijfers in smalle kapitalen (Bebas Neue) en bijschriften met een streepje ervoor (zie
+    /// `EtiketParts`). Licht: gebroken wit met dezelfde vorm; limoen alleen als vlak, kleine accenten olijfgroen.
+    /// Naar het ontwerp in Claude Design ("Werkbank thema Etiket").
+    static let etiket = WerkbankTheme(id: "etiket", name: "Etiket", colors: [
+        .window: ThemeColor(0xECECE6, 0x0A0A0A), .mail: ThemeColor(0xFAFAF7, 0x111111),
+        .mailHeader: ThemeColor(0xFAFAF7, 0x111111), .board: ThemeColor(0xFAFAF7, 0x111111),
+        .column: ThemeColor(0xF2F2EC, 0x161616), .card: ThemeColor(0xFFFFFF, 0x1B1B1B),
+        .agenda: ThemeColor(0xFAFAF7, 0x111111), .timeList: ThemeColor(0xFAFAF7, 0x111111),
+        .surface: ThemeColor(0xFAFAF7, 0x111111), .surfaceAlt: ThemeColor(0xF2F2EC, 0x161616),
+        .text: ThemeColor(0x0B0B0B, 0xF2F2F2), .textSecondary: ThemeColor(0x55554F, 0xA8A8A8),
+        .textTertiary: ThemeColor(0x66665F, 0x8C8C8C), .fieldLabel: ThemeColor(Etiket.oliveHex, Etiket.limeHex),
+        .separator: ThemeColor(0xDCDCD4, 0x262626), .checkbox: ThemeColor(0x8A8A82, 0x6E6E6E),
+        .accent: ThemeColor(Etiket.oliveHex, Etiket.limeHex), .selection: ThemeColor(0xE9E9E1, 0x1E1E1E),
+        .running: ThemeColor(Etiket.oliveHex, Etiket.limeHex), .today: ThemeColor(Etiket.oliveHex, Etiket.limeHex),
+        .deadline: ThemeColor(0xB3300C, 0xFF6A3D), .tag: ThemeColor(0xECECE6, 0x222222),
+        .tagText: ThemeColor(0x55554F, 0xBDBDBD), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0, darkOpacity: 0),
+    ], numberFamily: "Bebas Neue", cardRadius: 0)
+}
+
 // MARK: - Opslag en de kleuren die de app gebruikt
 
 /// Het gekozen thema met je eigen aanpassingen. Views lezen de kleuren en letters via `ThingsColor` en
@@ -390,7 +411,13 @@ final class ThemeStore: @unchecked Sendable {
         static let numberFont = "theme.numberFont"
         static let size = "theme.size"
         static let colors = "theme.colors"
-        static var all: [String] { [theme, font, numberFont, size, colors] }
+        static let appearance = "theme.appearance"
+        static var all: [String] { [theme, font, numberFont, size, colors, appearance] }
+    }
+
+    /// Licht, donker of wat het systeem doet; geldt voor de hele app (menu Weergave, knop in de werkbalk).
+    enum Appearance: String, CaseIterable {
+        case system, light, dark
     }
 
     static let defaultSize: Double = 13
@@ -403,6 +430,7 @@ final class ThemeStore: @unchecked Sendable {
     private(set) var fontChoice = ""
     private(set) var numberFontChoice = ""
     private(set) var baseSize = ThemeStore.defaultSize
+    private(set) var appearance: Appearance = .system
     private(set) var palette: [ThemeRole: Color] = [:]
     /// De letters zoals ze nu gelden (alleen als ze op deze computer staan); bijgewerkt in `reload()`.
     private(set) var fontFamily: String?
@@ -419,6 +447,7 @@ final class ThemeStore: @unchecked Sendable {
     private static func registerBundledFonts() {
         for name in ["Michroma-Regular", "Anton-Regular", "PlayfairDisplay-Regular", "PlayfairDisplay-Italic",
                      "PlayfairDisplay-BoldItalic", "DSEG7Classic-Italic", "InstrumentSerif-Regular", "InstrumentSerif-Italic",
+                     "BebasNeue-Regular",
                      "BarlowCondensed-Regular", "BarlowCondensed-Medium", "BarlowCondensed-SemiBold", "BarlowCondensed-Bold",
                      "BarlowSemiCondensed-Regular", "BarlowSemiCondensed-Medium", "BarlowSemiCondensed-SemiBold"] {
             guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
@@ -493,6 +522,33 @@ final class ThemeStore: @unchecked Sendable {
         reload()
     }
 
+    func setAppearance(_ value: Appearance) {
+        UserDefaults.standard.set(value.rawValue, forKey: Key.appearance)
+        reload()
+    }
+
+    /// Licht wordt donker en andersom, uitgaande van wat er nu te zien is (ook als dat van het systeem komt).
+    func toggleAppearance() {
+        #if os(macOS)
+        let dark = NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        setAppearance(dark ? .light : .dark)
+        #endif
+    }
+
+    private func applyAppearance() {
+        #if os(macOS)
+        let value = appearance
+        let apply = {
+            switch value {
+            case .system: NSApplication.shared.appearance = nil
+            case .light: NSApplication.shared.appearance = NSAppearance(named: .aqua)
+            case .dark: NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+            }
+        }
+        if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
+        #endif
+    }
+
     func setBaseSize(_ size: Double) {
         UserDefaults.standard.set(min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound), forKey: Key.size)
         reload()
@@ -507,6 +563,8 @@ final class ThemeStore: @unchecked Sendable {
         let size = defaults.double(forKey: Key.size)
         baseSize = size == 0 ? Self.defaultSize : min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
         overrides = Self.decode(defaults.dictionary(forKey: Key.colors))
+        appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
+        applyAppearance()
         let installed = Set(Self.installedFamilies)
         fontFamily = Self.resolve(fontChoice, themeDefault: theme.fontFamily, installed: installed)
         numberFamily = Self.resolve(numberFontChoice, themeDefault: theme.numberFamily, installed: installed) ?? fontFamily
@@ -593,6 +651,11 @@ extension Font {
     /// Lcd-cijfers met zeven segmenten (DSEG7, meegeleverd), iets schuin zoals op het schermpje van de ET 66.
     static func werkLCD(size: CGFloat) -> Font {
         .custom("DSEG7Classic-Italic", size: size * ThemeStore.shared.scale)
+    }
+
+    /// Smalle kapitalen voor koppen en grote cijfers (Bebas Neue, meegeleverd; één gewicht). Etiket.
+    static func werkPoster(size: CGFloat) -> Font {
+        .custom("BebasNeue-Regular", size: size * ThemeStore.shared.scale)
     }
 
     /// Smalle schreefletter voor koppen en grote cijfers (Instrument Serif, meegeleverd): recht of cursief. Alleen

@@ -100,6 +100,18 @@ struct WerkbankApp: App {
                     .keyboardShortcut("f", modifiers: [.control, .command])
             }
             // Weergave: wisselen tussen de werkbank en de mailmodus.
+            CommandGroup(after: .toolbar) {
+                // Licht of donker voor de hele app; overal te bereiken, ook in de mailmodus en losse vensters.
+                Button("Licht of donker") { ThemeStore.shared.toggleAppearance() }
+                    .keyboardShortcut("l", modifiers: [.control, .command])
+                Picker("Weergave", selection: Binding(get: { ThemeStore.shared.appearance },
+                                                      set: { ThemeStore.shared.setAppearance($0) })) {
+                    Text("Volg het systeem").tag(ThemeStore.Appearance.system)
+                    Text("Licht").tag(ThemeStore.Appearance.light)
+                    Text("Donker").tag(ThemeStore.Appearance.dark)
+                }
+                Divider()
+            }
             CommandGroup(before: .toolbar) {
                 Button("Werkbank") { WindowRouter.show(mail: false) }
                     .keyboardShortcut("1", modifiers: .command)

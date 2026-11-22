@@ -377,7 +377,7 @@ struct MiniTimerView: View {
         case .sneeuwwitje: .werk(size: size, weight: .light)
         case .tischsuper: .werk(size: size, weight: .ultraLight)
         case .telemetrie: .werkNumbers(size: size, weight: .semibold)
-        case .viertakt, .puls: .werkNumbers(size: size, weight: .bold)
+        case .viertakt, .puls, .etiket: .werkNumbers(size: size, weight: .bold)
         default: .werk(size: size, weight: .medium)
         }
     }
@@ -587,6 +587,11 @@ private struct PillTheme {
             PillTheme(background: ThingsColor.backgroundContent, border: Color.primary.opacity(0.08), text: ThingsColor.textPrimary,
                       text2: ThingsColor.textSecondary, dot: Puls.geel.solid, showsDot: false, buttonFill: ThingsColor.selection,
                       buttonIcon: ThingsColor.textPrimary, stopFill: ThingsColor.selection, stopIcon: Puls.rood.solid)
+        case .etiket:
+            // In licht en donker hetzelfde: inkt met een limoen rand en een limoen stopknop.
+            PillTheme(background: Etiket.ink, border: Etiket.lime, text: Color(hex: 0xF2F2F2), text2: Color(hex: 0xA8A8A8),
+                      dot: Etiket.lime, buttonFill: Color.white.opacity(0.12), buttonIcon: Color(hex: 0xF2F2F2),
+                      stopFill: Etiket.lime, stopIcon: Etiket.ink, radius: 0)
         case .diskette:
             // Een venstertje: papier met een inktrand, de stopknop in inkt.
             PillTheme(background: ThingsColor.cardBackground, border: Diskette.line, text: ThingsColor.textPrimary,

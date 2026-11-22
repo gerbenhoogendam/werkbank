@@ -1020,7 +1020,7 @@ private struct ColumnResizer: View {
 
 enum MailModeMetrics {
     /// Afronding van velden, knoppen en rijen: volgt het thema (Karmijn recht), hooguit 8.
-    static var radius: CGFloat { min(8, max(2, ThingsMetrics.cardRadius)) }
+    static var radius: CGFloat { ThemeStore.shared.look == .etiket ? 0 : min(8, max(2, ThingsMetrics.cardRadius)) }
 }
 
 /// Een handeling op de gekozen mail: icoon en naam (de toets staat alleen in de tooltip). Archiveren is de volle knop.
@@ -1058,15 +1058,20 @@ struct MailModeButtonStyle: ButtonStyle {
     var prominent = false
 
     func makeBody(configuration: Configuration) -> some View {
-        // Puls: glazen capsules van 32 hoog; de hoofdknop felgroen met zwarte letters.
+        // Puls: glazen capsules van 32 hoog; de hoofdknop felgroen met zwarte letters. Etiket: kleine kapitalen, recht,
+        // de hoofdknop limoen met inkt en de rest alleen een rand.
         let puls = ThemeStore.shared.look == .puls
+        let etiket = ThemeStore.shared.look == .etiket
         return configuration.label
-            .font(.werk(size: puls ? 13 : 12.5, weight: prominent || puls ? .semibold : .medium))
-            .foregroundStyle(prominent ? ThingsColor.onAccent : ThingsColor.textPrimary)
-            .padding(.horizontal, puls ? 13 : 10)
-            .frame(height: puls ? 32 : 28)
+            .font(.werk(size: puls ? 13 : (etiket ? 11 : 12.5), weight: prominent || puls || etiket ? .semibold : .medium))
+            .tracking(etiket ? 0.9 : 0)
+            .textCase(etiket ? .uppercase : nil)
+            .foregroundStyle(prominent ? (etiket ? Etiket.ink : ThingsColor.onAccent) : ThingsColor.textPrimary)
+            .padding(.horizontal, puls ? 13 : (etiket ? 12 : 10))
+            .frame(height: puls ? 32 : (etiket ? 30 : 28))
             .background(RoundedRectangle(cornerRadius: puls ? 16 : MailModeMetrics.radius, style: .continuous)
-                .fill(prominent ? (puls ? Puls.groen.solid : ThingsColor.accent) : (puls ? Puls.glass : ThingsColor.cardBackground)))
+                .fill(prominent ? (puls ? Puls.groen.solid : (etiket ? Etiket.lime : ThingsColor.accent))
+                      : (puls ? Puls.glass : (etiket ? Color.clear : ThingsColor.cardBackground))))
             .overlay(RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
                 .strokeBorder(prominent || puls ? Color.clear : ThingsColor.separator))
             .opacity(configuration.isPressed ? 0.7 : 1)
@@ -1097,13 +1102,17 @@ struct MailFilterChipStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let puls = ThemeStore.shared.look == .puls
+        let etiket = ThemeStore.shared.look == .etiket
         return configuration.label
-            .font(.werk(size: 11.5, weight: puls ? .semibold : .medium))
-            .foregroundStyle(isOn ? ThingsColor.onAccent : ThingsColor.textPrimary)
+            .font(.werk(size: etiket ? 10.5 : 11.5, weight: puls || etiket ? .semibold : .medium))
+            .tracking(etiket ? 0.8 : 0)
+            .textCase(etiket ? .uppercase : nil)
+            .foregroundStyle(isOn ? (etiket ? Etiket.ink : ThingsColor.onAccent) : ThingsColor.textPrimary)
             .padding(.horizontal, puls ? 11 : 9)
             .frame(height: puls ? 26 : 24)
             .background(RoundedRectangle(cornerRadius: puls ? 13 : min(6, MailModeMetrics.radius), style: .continuous)
-                .fill(isOn ? (puls ? Puls.groen.solid : ThingsColor.accent) : (puls ? Puls.track : ThingsColor.cardBackground)))
+                .fill(isOn ? (puls ? Puls.groen.solid : (etiket ? Etiket.lime : ThingsColor.accent))
+                      : (puls ? Puls.track : (etiket ? Color.clear : ThingsColor.cardBackground))))
             .overlay(RoundedRectangle(cornerRadius: min(6, MailModeMetrics.radius), style: .continuous)
                 .strokeBorder(isOn || puls ? Color.clear : ThingsColor.separator))
             .opacity(configuration.isPressed ? 0.7 : 1)

@@ -434,6 +434,32 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       icoon; de naam staat in de tooltip.
     - Na te gaan in de app: blijft de titel weg na volledig scherm en na het opnieuw openen van het venster, en
       werkt ⇧⌘U op de werkbank terwijl de cursor in een tekstveld staat.
+44. **Thema Etiket en een schakelaar voor licht/donker** (22 nov; naar een Dribbble-shot van een etikettenwebsite, eerst
+    als ontwerp in Claude Design, "Werkbank thema Etiket", 13 schermen, goedgekeurd). Alleen de vormgeving: geen merk,
+    logo of beeld uit de shot.
+    - **Kleur** (`WerkbankTheme.etiket`): donker bijna zwart (#0A0A0A) met panelen van #111111, kolommen #161616 en
+      kaarten #1B1B1B, elk met een dunne rand; één limoen (#D4FF1E, `Etiket.limeHex`). Licht: gebroken wit met
+      dezelfde vorm. Limoen staat alleen als vlak met inkt erop (gekozen mailbox, vandaag, hoofdknoppen, stopknop,
+      hoekblokjes) of als tekst en lijn op zwart; in licht is dezelfde rol olijfgroen (#4F5E00, `accent`, `running`,
+      `today`), want limoen op wit is onleesbaar. Alles recht (`cardRadius` 0, `MailModeMetrics.radius` 0), panelen
+      los op de vensterkleur met een dunne rand (`themePanel`).
+    - **Letter:** de systeemletter voor tekst, Bebas Neue (SIL OFL, meegeleverd met licentiebestand, `Font.werkPoster`,
+      ook de cijferletter) voor koppen en grote getallen, altijd in hoofdletters; aantallen met een voorloopnul.
+    - **Onderdelen** (`Shared/Design/EtiketParts.swift`): `EtiketEyebrow` (streepje en kleine kapitalen),
+      `EtiketLabel`, `EtiketKey` (vierkant knopje met rand), `EtiketCorners` (limoen blokjes op twee hoeken van wat
+      loopt). Eigen vorm voor kolomkop en kolom, kaart en lopende kaart, de kop van het Mail-paneel en de
+      mailboxtabs, gekozen rij (streep links), agendakop, dagkoppen, navigatie, legenda, afspraken (streep links in
+      de agendakleur), lijn van nu, het totaal in Tijd schrijven, de timerpil en de knoppen en filters van de
+      mailmodus (kleine kapitalen). De mail zelf blijft wit.
+    - **Licht of donker** (`ThemeStore.Appearance`, opgeslagen als `theme.appearance` en dus mee naar je andere Macs):
+      menu Weergave › "Licht of donker" (⌃⌘L, staat in `MailModeKeys.reserved`) en › Weergave (volg het systeem,
+      licht, donker), en een knop met zon of maan in de werkbalk. Zet `NSApplication.appearance` en geldt dus voor
+      alle vensters en elk thema. Op iOS doet de instelling niets.
+    - Niet gebouwd uit het ontwerp: de tellers in de maandagenda, en de velden in het stopvenster en bij snel toevoegen
+      zoals getekend (de app heeft haar eigen velden; daar volgt alleen de stijl).
+    - Na te gaan in de app: laadt Bebas Neue (anders systeemletter in de koppen), passen de koppen van 26–34 punt in
+      de kolomkop en de kop van het Mail-paneel (74 hoog), zijn de hoekblokjes van een lopende kaart niet afgeknipt,
+      en schakelt ⌃⌘L ook in een los mailvenster.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

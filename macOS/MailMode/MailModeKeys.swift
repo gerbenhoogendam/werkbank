@@ -56,7 +56,7 @@ enum MailModeKeys {
     /// Combinaties die van macOS of de app zelf zijn (kopiëren, plakken, ongedaan maken, zoeken, ⌘1 werkbank,
     /// ⌘2 mail, ⌘N nieuwe mail …).
     static let reserved: Set<String> = ["⌘C", "⌘V", "⌘X", "⌘A", "⌘Z", "⇧⌘Z", "⌘Q", "⌘W", "⌘H", "⌘M", "⌘,", "⌘F", "⌘⇥",
-                                        "⌘1", "⌘2", "⌘N"]
+                                        "⌘1", "⌘2", "⌘N", "⌃⌘L"]
 
     /// De toets van een handeling: je eigen keuze, anders de standaard.
     static func key(for action: MailModeAction) -> String {

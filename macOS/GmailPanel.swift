@@ -132,6 +132,7 @@ struct GmailPanel: View {
         case .viertakt: 74
         case .puls: 54
         case .diskette: 58
+        case .etiket: 74
         default: 46
         }
     }
@@ -250,7 +251,7 @@ struct GmailPanel: View {
                     selection.selectedID = nil
                     Task { await gmail.showCombined() }
                 }
-                if [.standaard, .principes, .drukproef, .karmijn, .telemetrie, .viertakt, .diskette].contains(look) { Spacer(minLength: 0) }
+                if [.standaard, .principes, .drukproef, .karmijn, .telemetrie, .viertakt, .diskette, .etiket].contains(look) { Spacer(minLength: 0) }
             }
             .padding(look == .puls ? 2 : 3)
             .background {
@@ -623,6 +624,14 @@ struct GmailRow: View {
                 shape.fill(ThingsColor.cardBackground)
             } else if isHovering {
                 shape.fill(Color.primary.opacity(0.04))
+            }
+        case .etiket:
+            // De gekozen rij iets lichter (donker) of donkerder (licht), met links een streep in de accentkleur.
+            if isSelected {
+                Rectangle().fill(ThingsColor.selection)
+                    .overlay(alignment: .leading) { Rectangle().fill(ThingsColor.accent).frame(width: 2) }
+            } else if isHovering {
+                Rectangle().fill(ThingsColor.selection.opacity(0.5))
             }
         case .diskette:
             // De gekozen rij in platina-beige, strak afgerond.

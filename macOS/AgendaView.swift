@@ -422,6 +422,23 @@ struct AgendaView: View {
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 10)
+        } else if look == .etiket {
+            // Het bereik als bijschrift met een streepje ervoor, "AGENDA" groot in smalle kapitalen eronder.
+            HStack(alignment: .bottom, spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    EtiketEyebrow(text: titleParts.detail.isEmpty ? titleParts.main : "\(titleParts.main) · \(titleParts.detail)")
+                    Text("AGENDA").font(.werkPoster(size: 34)).foregroundStyle(ThingsColor.textPrimary)
+                }
+                .lineLimit(1)
+                navigation(look)
+                    .padding(.bottom, 3)
+                Spacer(minLength: 8)
+                calendarFilters
+                    .padding(.bottom, 5)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
         } else if look == .diskette {
             // De kop als op een drukproef: "Agenda" in de schreefletter met het bereik cursief in oranje erachter.
             HStack(alignment: .center, spacing: 12) {
@@ -1311,6 +1328,11 @@ private struct EventBlock: View {
                 // Een wit kaartje met een zachte schaduw, zoals de panelen naast de motor.
                 shape.fill(ThingsColor.cardBackground)
                     .overlay(shape.strokeBorder(ThingsColor.separator, lineWidth: 0.5))
+            case .etiket:
+                // Een kaart met een dunne rand en links een streep in de kleur van de agenda.
+                Rectangle().fill(ThingsColor.cardBackground)
+                    .overlay(Rectangle().strokeBorder(ThingsColor.separator, lineWidth: 1))
+                    .overlay(alignment: .leading) { Rectangle().fill(event.color).frame(width: 2) }
             case .diskette:
                 // Papier op het stofblauw, met een streep links en een dunne rand in de kleur van de agenda (een
                 // tint zou op het blauw vertroebelen).

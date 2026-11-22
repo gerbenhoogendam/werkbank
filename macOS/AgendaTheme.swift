@@ -63,6 +63,8 @@ struct AgendaNavButton: View {
                     .background(Circle().fill(Puls.glass))
             case .diskette:
                 DisketteKey(symbol: symbol, size: 22)
+            case .etiket:
+                EtiketKey(symbol: symbol, size: 24)
             case .standaard:
                 icon(size: 11, weight: .semibold, color: ThingsColor.textSecondary)
                     .frame(width: 22, height: 22)
@@ -147,6 +149,14 @@ struct AgendaTodayButton: View {
                     .padding(.horizontal, 13)
                     .frame(height: 30)
                     .background(Capsule().fill(Puls.glass))
+            case .etiket:
+                Text("VANDAAG")
+                    .font(.werk(size: 10.5, weight: .semibold))
+                    .tracking(1)
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .overlay(Rectangle().strokeBorder(Etiket.edge, lineWidth: 1))
             case .diskette:
                 // Een knop met een dunne rand, even hoog als de pijlen ernaast.
                 let shape = RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -250,6 +260,14 @@ struct AgendaCalendarChip: View {
             HStack(spacing: 6) {
                 Rectangle().fill(color).frame(width: 14, height: 2).opacity(hidden ? 0.3 : 1)
                 EngineLabel(text: title, color: hidden ? ThingsColor.textTertiary : ThingsColor.textPrimary, size: 10)
+            }
+        case .etiket:
+            // Een vierkantje in de kleur van de agenda (leeg als hij uit staat) en de naam in kleine kapitalen.
+            HStack(spacing: 6) {
+                Rectangle().fill(hidden ? Color.clear : color)
+                    .overlay(Rectangle().strokeBorder(color, lineWidth: 1))
+                    .frame(width: 8, height: 8)
+                EtiketLabel(text: title, color: hidden ? ThingsColor.textTertiary : ThingsColor.textSecondary, size: 10.5)
             }
         case .diskette:
             // Een vakje in de kleur van de agenda (leeg als hij uit staat), zoals een aankruisvakje.
@@ -423,6 +441,19 @@ struct AgendaDayHeader: View {
                 FiringDot(text: number, isOn: isToday, size: 26)
             }
             .frame(maxWidth: .infinity)
+        case .etiket:
+            // De weekdag in kleine kapitalen en het dagnummer in smalle kapitalen; vandaag in een limoen blokje.
+            HStack(alignment: .center, spacing: 6) {
+                EtiketLabel(text: weekday, color: isToday ? ThingsColor.accent : ThingsColor.textTertiary)
+                Text(number)
+                    .font(.werkPoster(size: isToday ? 22 : 24))
+                    .foregroundStyle(isToday ? Etiket.ink : ThingsColor.textPrimary)
+                    .padding(.horizontal, isToday ? 5 : 0)
+                    .padding(.top, isToday ? 3 : 0)
+                    .padding(.bottom, isToday ? 1 : 0)
+                    .background(isToday ? Etiket.lime : Color.clear)
+            }
+            .frame(maxWidth: .infinity)
         case .diskette:
             // De weekdag in kleine kapitalen en het dagnummer groot in de schreefletter; vandaag cursief en oranje.
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -536,6 +567,7 @@ enum AgendaLook {
         case .viertakt: (ThingsColor.running, 2)
         case .puls: (Puls.rood.solid, 2)
         case .diskette: (ThingsColor.running, 1.5)
+        case .etiket: (ThingsColor.running, 1)
         case .standaard: (ThingsColor.deadline, 1.5)
         }
     }
@@ -549,7 +581,7 @@ enum AgendaLook {
         case .tischsuper, .drukproef, .spark: 6
         case .standaard, .diskette: 4
         case .viertakt: 3
-        case .karmijn, .telemetrie: 0
+        case .karmijn, .telemetrie, .etiket: 0
         }
     }
 
@@ -607,6 +639,11 @@ struct NowMarker: View {
             // Een rode stip die een beetje gloeit.
             Circle().fill(color).frame(width: 10, height: 10)
                 .shadow(color: Puls.rood.opacity(light: 0.4, dark: 0.75), radius: 5)
+        case .etiket:
+            // Een limoen blokje met een rand in de kleur van de lijn.
+            Rectangle().fill(Etiket.lime)
+                .overlay(Rectangle().strokeBorder(color, lineWidth: 1))
+                .frame(width: 7, height: 7)
         case .viertakt:
             // Het rode rondje van de cilinder die nu ontsteekt.
             Circle().fill(color).frame(width: 10, height: 10)

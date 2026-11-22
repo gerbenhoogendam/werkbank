@@ -401,6 +401,8 @@ struct BoardView: View {
                 .background(Rectangle().fill(ThingsColor.textPrimary))
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
+        case .etiket:
+            EtiketKey(symbol: "plus", size: 22)
         case .diskette:
             // Het vierkante vakje van een venster, met een plus erin.
             DisketteKey(symbol: "plus", size: 18)
@@ -573,6 +575,10 @@ private struct ColumnSurface: View {
             // Geen vlak: de witte kaarten liggen los op het studiogrijs.
             RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous)
                 .fill(isTarget ? targetColor.opacity(0.10) : Color.clear)
+        case .etiket:
+            // Recht met een dunne rand.
+            Rectangle().fill(fill)
+                .overlay(Rectangle().strokeBorder(isTarget ? targetColor : ThingsColor.separator, lineWidth: 1))
         case .diskette:
             // Een platina vlak met een dunne rand, zoals de kast om het scherm.
             let panel = RoundedRectangle(cornerRadius: 8, style: .continuous)

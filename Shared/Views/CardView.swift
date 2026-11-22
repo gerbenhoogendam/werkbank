@@ -510,7 +510,7 @@ private struct CardFont: ViewModifier {
             switch ThemeStore.shared.look {
             case .drukproef: content.font(.werk(size: kind.size + 2, weight: .medium)).tracking(-0.35)
             case .spark: content.font(.werk(size: kind.size, weight: .semibold))
-            case .wandklok, .principes, .sneeuwwitje, .karmijn, .viertakt, .puls: content.font(.werk(size: kind.size, weight: .medium))
+            case .wandklok, .principes, .sneeuwwitje, .karmijn, .viertakt, .puls, .etiket: content.font(.werk(size: kind.size, weight: .medium))
             case .telemetrie: content.font(.werk(size: kind.size + 0.5, weight: .medium))
             default: content.font(.werk(size: kind.size))
             }
@@ -596,6 +596,11 @@ private struct CardSurface: View {
                         ], center: .topLeading, startRadiusFraction: 0, endRadiusFraction: 1))
                     }
                 }
+        case .etiket:
+            // Recht met een dunne rand; wat loopt krijgt een sterkere rand en limoen blokjes op twee hoeken.
+            Rectangle().fill(ThingsColor.cardBackground)
+                .overlay(Rectangle().strokeBorder(isRunning ? ThingsColor.textTertiary : ThingsColor.separator, lineWidth: 1))
+                .overlay { if isRunning { EtiketCorners() } }
         case .diskette:
             // Papier met een dunne rand en een harde schaduw eronder; een lopende kaart heeft een oranje rand.
             DisketteWindow(radius: ThingsMetrics.cardRadius,
@@ -732,6 +737,17 @@ private struct RunningStrip: View {
                 }
                 Spacer(minLength: 0)
             }
+        case .etiket:
+            // "—— LOOPT" en de tijd groot in smalle kapitalen, onder een dunne lijn.
+            HStack(alignment: .lastTextBaseline) {
+                EtiketEyebrow(text: "Loopt", color: ThingsColor.running, line: 14)
+                Spacer()
+                Text(Self.formatHMS(elapsed))
+                    .font(.werkPoster(size: 30))
+                    .foregroundStyle(ThingsColor.running)
+            }
+            .padding(.top, 8)
+            .overlay(alignment: .top) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
         case .diskette:
             // "Loopt" in kleine kapitalen en de tijd groot in de schreefletter, onder een dunne lijn.
             HStack(alignment: .firstTextBaseline) {

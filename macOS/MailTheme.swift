@@ -141,6 +141,13 @@ struct MailHeaderTitle: View {
                     .foregroundStyle(ThingsColor.textPrimary)
                 PulsValue(value: "\(unread)", unit: "ONGELEZEN", size: 18, color: Puls.blauw.big)
             }
+        case .etiket:
+            // "—— 3 ONGELEZEN" en de naam groot in smalle kapitalen.
+            VStack(alignment: .leading, spacing: 5) {
+                EtiketEyebrow(text: "\(unread) ongelezen")
+                Text(title.uppercased()).font(.werkPoster(size: 32)).foregroundStyle(ThingsColor.textPrimary)
+            }
+            .lineLimit(1)
         case .diskette:
             // De naam in de schreefletter en het aantal ongelezen cursief in oranje erachter.
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -289,6 +296,16 @@ struct MailboxTab: View {
                 }
         case .diskette:
             DisketteChip(text: title, isOn: isOn)
+        case .etiket:
+            // Kleine kapitalen; de gekozen mailbox op een limoen vlak.
+            Text(title.uppercased())
+                .font(.werk(size: 11, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(isOn ? Etiket.ink : ThingsColor.textSecondary)
+                .padding(.horizontal, 8)
+                .tabWidth(fitsContent, padding: 4)
+                .padding(.vertical, 5)
+                .background(Rectangle().fill(isOn ? Etiket.lime : Color.clear))
         case .standaard:
             name(size: 11.5, on: .semibold, off: .regular)
                 .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)

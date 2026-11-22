@@ -115,6 +115,8 @@ enum ThingsColor {
         case .puls: .black
         // Diskette: het accent is in donker een licht oranje; wit staat daar te zwak op.
         case .diskette: Color.dynamic(light: 0xFFFFFF, dark: 0x1D1D1B)
+        // Etiket: wit op olijfgroen, inkt op limoen.
+        case .etiket: Color.dynamic(light: 0xFFFFFF, dark: Etiket.inkHex)
         default: .white
         }
     }

@@ -8,6 +8,7 @@ struct MainView: View {
     @Environment(AppState.self) private var appState
     @Environment(DragCoordinator.self) private var drag
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.colorScheme) private var colorScheme
 
     // Verdeling van het venster; bewaard tussen sessies. Dubbelklik op een scheidingslijn zet hem terug.
     @AppStorage("layout.boardFraction") private var boardFraction = Self.defaultBoardFraction
@@ -267,6 +268,15 @@ struct MainView: View {
                 .help("Verbetering inspreken en aanwijzen (F18)")
             }
             ToolbarItem(placement: .primaryAction) {
+                // Licht of donker voor de hele app (ook in het menu Weergave).
+                Button {
+                    ThemeStore.shared.toggleAppearance()
+                } label: {
+                    Label("Licht of donker", systemImage: colorScheme == .dark ? "sun.max" : "moon")
+                }
+                .help("Licht of donker (⌃⌘L)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 // Snel wisselen van thema; eigen kleuren per thema blijven bewaard.
                 Menu {
                     Picker("Thema", selection: Binding(get: { ThemeStore.shared.theme.id },
@@ -387,7 +397,7 @@ extension MainView {
     fileprivate func dividerFill(_ neighbour: Color) -> Color {
         switch ThemeStore.shared.look {
         case .standaard: ThingsColor.backgroundContent
-        case .drukproef, .karmijn, .telemetrie, .puls, .diskette: ThingsColor.window
+        case .drukproef, .karmijn, .telemetrie, .puls, .diskette, .etiket: ThingsColor.window
         default: neighbour
         }
     }
@@ -410,6 +420,10 @@ extension View {
         if ThemeStore.shared.look == .telemetrie {
             clipShape(ChamferedRect(cut: 16))
                 .overlay(ChamferedRect(cut: 16).strokeBorder(ThingsColor.separator, lineWidth: 1).allowsHitTesting(false))
+        } else if ThemeStore.shared.look == .etiket {
+            // Recht, met een dunne rand: in donker liggen de panelen anders niet los van het zwart.
+            clipShape(Rectangle())
+                .overlay(Rectangle().strokeBorder(ThingsColor.separator, lineWidth: 1).allowsHitTesting(false))
         } else if radius > 0 {
             clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         } else {

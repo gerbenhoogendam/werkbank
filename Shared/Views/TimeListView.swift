@@ -1265,6 +1265,23 @@ private struct TimeTotalFooter: View {
                 PulsGlow(hue: Puls.groen, width: 320, height: 170, light: 0.2, dark: 0.16).offset(y: 60)
             }
             .accessibilityElement(children: .combine)
+        case .etiket:
+            // Twee getallen groot in smalle kapitalen, zoals de cijfers op de website: het totaal en het aantal regels.
+            VStack(alignment: .leading, spacing: 10) {
+                Rectangle().fill(ThingsColor.separator).frame(height: 1)
+                HStack(alignment: .top, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(text).font(.werkPoster(size: 40)).foregroundStyle(ThingsColor.running)
+                        EtiketLabel(text: "Totaal")
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String(format: "%02d", count)).font(.werkPoster(size: 40)).foregroundStyle(ThingsColor.textPrimary)
+                        EtiketLabel(text: count == 1 ? "Regel" : "Regels")
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .diskette:
             // Het totaal groot in de schreefletter, in oranje, onder de streepjes van een titelbalk.
             VStack(alignment: .leading, spacing: 6) {
