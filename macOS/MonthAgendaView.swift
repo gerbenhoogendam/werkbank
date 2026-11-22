@@ -95,6 +95,8 @@ struct MonthAgendaView: View {
 
             Spacer(minLength: 8)
 
+            if service.hasAccess { counters.padding(.trailing, 10) }
+
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.werk(size: 16))
@@ -107,6 +109,48 @@ struct MonthAgendaView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // MARK: Tellers
+
+    /// Over de vier weken: afspraken, uren gepland en vrije werkdagen (`MonthAgendaStats`; alleen werkdagen en
+    /// werkuren).
+    private var counters: some View {
+        let mondays = (0..<4).map { monday(forWeek: weekOffset + $0) }
+        let rangeStart = mondays[0]
+        let rangeEnd = calendar.date(byAdding: .day, value: 28, to: rangeStart) ?? rangeStart
+        _ = service.revision
+        let fetched = service.events(from: rangeStart, to: rangeEnd, hiddenCalendarIDs: hiddenIDs, prefetchNeighbors: false)
+        let days = mondays.flatMap { workDays(of: $0) }
+        let stats = MonthAgendaStats.compute(fetched.map { .init(start: $0.start, end: $0.end, isAllDay: $0.isAllDay) },
+                                             days: days, startHour: startHour, endHour: endHour, calendar: calendar)
+        return HStack(spacing: 22) {
+            counter(String(stats.appointments), stats.appointments == 1 ? "Afspraak" : "Afspraken", strong: true)
+            counter("\(MonthAgendaStats.hoursText(stats.plannedHours)) u", "Gepland")
+            counter(String(stats.freeDays), stats.freeDays == 1 ? "Vrije dag" : "Vrije dagen")
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func counter(_ value: String, _ label: String, strong: Bool = false) -> some View {
+        if ThemeStore.shared.look == .etiket {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value.uppercased())
+                    .font(.werkPoster(size: 28))
+                    .foregroundStyle(strong ? ThingsColor.accent : ThingsColor.textPrimary)
+                EtiketLabel(text: label, color: ThingsColor.textTertiary)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value)
+                    .font(.werkNumbers(size: 18, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(strong ? ThingsColor.accent : ThingsColor.textPrimary)
+                Text(label)
+                    .font(.werk(size: 10.5))
+                    .foregroundStyle(ThingsColor.textSecondary)
+            }
+        }
     }
 
     private func navButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {

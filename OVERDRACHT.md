@@ -455,8 +455,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       menu Weergave › "Licht of donker" (⌃⌘L, staat in `MailModeKeys.reserved`) en › Weergave (volg het systeem,
       licht, donker), en een knop met zon of maan in de werkbalk. Zet `NSApplication.appearance` en geldt dus voor
       alle vensters en elk thema. Op iOS doet de instelling niets.
-    - Niet gebouwd uit het ontwerp: de tellers in de maandagenda, en de velden in het stopvenster en bij snel toevoegen
-      zoals getekend (de app heeft haar eigen velden; daar volgt alleen de stijl).
+    - Niet gebouwd uit het ontwerp: de velden in het stopvenster en bij snel toevoegen zoals getekend (de app heeft haar
+      eigen velden; daar volgt alleen de stijl).
+    - **Tellers in de maandagenda** (op verzoek, in elk thema; in Etiket in Bebas Neue): rechts in de kop het aantal
+      afspraken, de uren gepland en het aantal vrije werkdagen over de vier weken (`MonthAgendaStats` in WerkbankCore,
+      met tests). Alleen werkdagen en werkuren uit Voorkeuren › Agenda en alleen de agenda's die aan staan; overlap
+      telt één keer; een vrije dag is een werkdag zonder afspraak met een tijd binnen de werkuren (een afspraak voor
+      de hele dag, zoals vakantie, maakt een dag niet bezet).
     - Na te gaan in de app: laadt Bebas Neue (anders systeemletter in de koppen), passen de koppen van 26–34 punt in
       de kolomkop en de kop van het Mail-paneel (74 hoog), zijn de hoekblokjes van een lopende kaart niet afgeknipt,
       en schakelt ⌃⌘L ook in een los mailvenster.
