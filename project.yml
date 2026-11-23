@@ -93,6 +93,14 @@ targets:
             CFBundleTypeRole: Editor
             CFBundleURLSchemes:
               - mailto
+        # Een bestand op het Dock-icoon wordt een bijlage van een nieuwe mail. Rang None: Werkbank wordt nooit het
+        # standaardprogramma voor een bestand, het staat alleen in "Open met" en neemt het Dock-icoon aan.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Bijlage
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: None
+            LSItemContentTypes:
+              - public.data
         # Type van de mail die uit het Gmail-paneel naar het board wordt gesleept.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: nl.itgwerkbank.gmail-message

@@ -35,6 +35,18 @@ enum DefaultMailApp {
 }
 
 extension DefaultMailApp {
+    /// Bestanden op het Dock-icoon: het hoofdvenster naar voren en een nieuwe mail met die bestanden als bijlage.
+    static func compose(attaching files: [URL]) {
+        if NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) {
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            WindowRouter.showMain()
+        }
+        var ref = ComposeRef(mode: .new, source: nil)
+        ref.files = files
+        PanelStore.shared.open(.compose(ref))
+    }
+
     /// ⌘N, waar je ook bent in de app: het hoofdvenster naar voren en een lege nieuwe mail.
     static func composeNew() {
         if DuoWindowFold.shared.mainWindow?.isKeyWindow != true { WindowRouter.focusMain() }

@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import WerkbankCore
 
 /// Een adresveld in het opstelvenster (Aan, Cc, Bcc). Elke ontvanger is een blokje met alleen de naam (of het adres als
@@ -32,6 +34,12 @@ struct AddressField<Field: Hashable>: View {
     /// Net gekozen of met Esc weggeklikt: de lijst blijft dicht tot je verder typt.
     @State private var settled: String?
     @State private var prepared = false
+    /// Backspace in een leeg tekstvak. Via een toetsmonitor: het tekstveld van macOS slikt Backspace zelf, zodat
+    /// `onKeyPress(.delete)` hem in de app niet kreeg.
+    @State private var keyMonitor: Any?
+    /// Wie dit veld is, voor het slepen van een blokje naar een ander veld (Aan, Cc, Bcc).
+    @State private var dragKey = UUID()
+    @State private var isDropTarget = false
 
     private var isFocused: Bool { focus.wrappedValue == field }
 
@@ -57,6 +65,11 @@ struct AddressField<Field: Hashable>: View {
                 ForEach(tokens) { token in
                     RecipientChip(token: token, isOpen: openID == token.id,
                                   onToggle: { toggle(token) }, onEdit: { edit(token) }, onRemove: { remove(token) })
+                        // Oppakken en naar Aan, Cc of Bcc slepen: daar komt hij bij, hier gaat hij weg.
+                        .onDrag {
+                            RecipientDrag.begin(text: token.fieldText, source: dragKey) { remove(token) }
+                            return NSItemProvider(object: token.fieldText as NSString)
+                        }
                 }
                 TextField("", text: $draft)
                     .focused(focus, equals: field)
@@ -89,7 +102,6 @@ struct AddressField<Field: Hashable>: View {
                         openID = nil
                         return .handled
                     }
-                    .onKeyPress(.delete) { deleteBackward() }
                     .onSubmit {
                         if !matches.isEmpty, !RecipientTokens.isComplete(draft) {
                             pick(matches[min(highlighted, matches.count - 1)])
@@ -117,7 +129,20 @@ struct AddressField<Field: Hashable>: View {
             if new != written { adopt(new) }
         }
         .onChange(of: draft) { _, new in draftChanged(new) }
+        .padding(.horizontal, isDropTarget ? 4 : 0)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(isDropTarget ? ThingsColor.accent.opacity(0.1) : Color.clear))
+        .onDrop(of: [.plainText], isTargeted: $isDropTarget) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let text = object as? String else { return }
+                Task { @MainActor in receive(text) }
+            }
+            return true
+        }
+        .onDisappear { removeKeyMonitor() }
         .onChange(of: isFocused) { _, focused in
+            if focused { installKeyMonitor() } else { removeKeyMonitor() }
             if focused {
                 guard !prepared else { return }
                 prepared = true
@@ -238,6 +263,42 @@ struct AddressField<Field: Hashable>: View {
         return .handled
     }
 
+    // MARK: Slepen
+
+    /// Er is tekst op het veld gelaten: een blokje uit een ander veld (dat haalt hem daar weg) of adressen van elders.
+    private func receive(_ text: String) {
+        let dragged = RecipientDrag.take(text: text)
+        if let dragged {
+            // Op het eigen veld teruggezet: niets veranderen.
+            guard dragged.source != dragKey else { return }
+            dragged.remove()
+        }
+        RecipientTokens.tokens(from: text).forEach(add)
+        openID = nil
+        write()
+    }
+
+    // MARK: Backspace
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated { handleKey(event) } ? nil : event
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
+
+    /// Backspace zonder andere toets, terwijl dit veld de cursor heeft en er niets getypt staat.
+    private func handleKey(_ event: NSEvent) -> Bool {
+        guard isFocused, event.keyCode == 51,
+              event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return false }
+        return deleteBackward() == .handled
+    }
+
     // MARK: Blokjes
 
     private func toggle(_ token: RecipientToken) {
@@ -262,6 +323,33 @@ struct AddressField<Field: Hashable>: View {
         settled = token.fieldText
         focus.wrappedValue = field
         write()
+    }
+}
+
+// MARK: - Slepen tussen velden
+
+/// Het blokje dat nu versleept wordt, zodat het veld waar het terechtkomt het uit het oude veld kan halen. Geldt een
+/// minuut: een sleep die ergens anders eindigde, haalt later niets weg.
+@MainActor
+enum RecipientDrag {
+    struct Item {
+        let text: String
+        let source: UUID
+        let remove: () -> Void
+        let started: Date
+    }
+
+    private static var current: Item?
+
+    static func begin(text: String, source: UUID, remove: @escaping () -> Void) {
+        current = Item(text: text, source: source, remove: remove, started: Date())
+    }
+
+    /// Het versleepte blokje als `text` daarvan komt; daarna is het op.
+    static func take(text: String) -> Item? {
+        defer { current = nil }
+        guard let item = current, item.text == text, Date().timeIntervalSince(item.started) < 60 else { return nil }
+        return item
     }
 }
 

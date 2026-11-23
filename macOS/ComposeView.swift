@@ -14,6 +14,8 @@ struct ComposeRef: Codable, Hashable {
     var prefill: MailPrefill?
     /// Vanaf welke mailbox (een concept: die waarin het staat); anders die van de mail of de actieve.
     var fromAccount: String?
+    /// Bestanden die als bijlage meegaan (op het Dock-icoon gesleept).
+    var files: [URL]?
 }
 
 /// Mail opstellen als paneel boven het hoofdvenster. Verstuurt via de Gmail API, met de handtekening uit Voorkeuren.
@@ -583,6 +585,7 @@ struct ComposeView: View {
                 showCc = !prefill.cc.isEmpty
                 showBcc = !prefill.bcc.isEmpty
             }
+            if let files = ref.files, !files.isEmpty, attachments.isEmpty { addFiles(files, scoped: true) }
             focus = toText.isEmpty ? .to : .body
             return
         }

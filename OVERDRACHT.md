@@ -451,10 +451,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       mailboxtabs, gekozen rij (streep links), agendakop, dagkoppen, navigatie, legenda, afspraken (streep links in
       de agendakleur), lijn van nu, het totaal in Tijd schrijven, de timerpil en de knoppen en filters van de
       mailmodus (kleine kapitalen). De mail zelf blijft wit.
-    - **Licht of donker** (`ThemeStore.Appearance`, opgeslagen als `theme.appearance` en dus mee naar je andere Macs):
-      menu Weergave › "Licht of donker" (⌃⌘L, staat in `MailModeKeys.reserved`) en › Weergave (volg het systeem,
-      licht, donker), en een knop met zon of maan in de werkbalk. Zet `NSApplication.appearance` en geldt dus voor
-      alle vensters en elk thema. Op iOS doet de instelling niets.
+    - **Licht of donker:** menu Weergave › "Licht of donker" (⌃⌘L, staat in `MailModeKeys.reserved`) en › Weergave
+      (Automatisch, Licht, Donker), en een knop met zon of maan in de werkbalk. Dezelfde instelling als in Voorkeuren
+      (`AppearanceSetting`, `SettingsKey.appearance`, `AppearanceSetting.set`/`toggle`): zet `NSApp.appearance` en
+      geldt dus voor alle vensters en elk thema. (De eerste versie had een eigen tweede instelling in `ThemeStore`;
+      die is weer weg, de twee zouden elkaar overschrijven.)
     - Niet gebouwd uit het ontwerp: de velden in het stopvenster en bij snel toevoegen zoals getekend (de app heeft haar
       eigen velden; daar volgt alleen de stijl).
     - **Tellers in de maandagenda** (op verzoek, in elk thema; in Etiket in Bebas Neue): rechts in de kop het aantal
@@ -465,6 +466,21 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - Na te gaan in de app: laadt Bebas Neue (anders systeemletter in de koppen), passen de koppen van 26–34 punt in
       de kolomkop en de kop van het Mail-paneel (74 hoog), zijn de hoekblokjes van een lopende kaart niet afgeknipt,
       en schakelt ⌃⌘L ook in een los mailvenster.
+45. **Bestand op het Dock-icoon, blokjes slepen, Backspace** (23 nov; PDF "Verbeteringen 2026-11-23 20.58" plus een
+    los verzoek).
+    - **Dock:** een bestand op het Dock-icoon (of "Open met" › Werkbank) opent een nieuwe mail met dat bestand als
+      bijlage (`AppDelegate.application(_:open:)`, `DefaultMailApp.compose(attaching:)`, `ComposeRef.files`). Dat kan
+      doordat Info.plist `CFBundleDocumentTypes` met `public.data` en `LSHandlerRank` None heeft: Werkbank wordt zo nooit
+      het standaardprogramma voor een bestand. Mappen gaan niet. De grens van 25 MB voor bijlagen geldt ook hier.
+    - **D1, slepen:** een naamblokje is op te pakken en in Aan, Cc of Bcc te laten vallen; in het oude veld gaat hij weg
+      (`RecipientDrag`, een minuut geldig; op het eigen veld terugzetten doet niets). Het veld waar je boven hangt
+      licht op. Losse adressen als tekst van elders erop laten vallen werkt ook. Cc of Bcc moet open staan om erheen te
+      slepen.
+    - **D2, Backspace:** zat er al in (eerste keer wijst het laatste blokje aan, tweede keer weg), maar kwam
+      waarschijnlijk nooit aan: het tekstveld van macOS slikt Backspace, dus `onKeyPress(.delete)` kreeg hem niet. Nu
+      via een toetsmonitor zolang het veld de cursor heeft (`AddressField.handleKey`).
+    - Na te gaan in de app: neemt het Dock-icoon een bestand aan (het moet oplichten), werkt slepen tussen de velden
+      naast de klik en dubbelklik op een blokje, en werkt Backspace nu.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

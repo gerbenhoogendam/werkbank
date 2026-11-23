@@ -41,6 +41,20 @@ enum AppearanceSetting: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Kiezen in het menu Weergave of met de knop in de werkbalk; Voorkeuren › Algemeen toont dezelfde instelling.
+    @MainActor
+    static func set(_ value: AppearanceSetting) {
+        UserDefaults.standard.set(value.rawValue, forKey: SettingsKey.appearance)
+        value.applyToApp()
+    }
+
+    /// Licht wordt donker en andersom, uitgaande van wat er nu te zien is (ook als dat van het systeem komt).
+    @MainActor
+    static func toggle() {
+        let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        set(dark ? .light : .dark)
+    }
+
     @MainActor
     static func applyStored() {
         AppearanceSetting(stored: UserDefaults.standard.string(forKey: SettingsKey.appearance)).applyToApp()

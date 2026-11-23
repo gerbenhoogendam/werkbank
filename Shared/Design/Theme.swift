@@ -411,13 +411,7 @@ final class ThemeStore: @unchecked Sendable {
         static let numberFont = "theme.numberFont"
         static let size = "theme.size"
         static let colors = "theme.colors"
-        static let appearance = "theme.appearance"
-        static var all: [String] { [theme, font, numberFont, size, colors, appearance] }
-    }
-
-    /// Licht, donker of wat het systeem doet; geldt voor de hele app (menu Weergave, knop in de werkbalk).
-    enum Appearance: String, CaseIterable {
-        case system, light, dark
+        static var all: [String] { [theme, font, numberFont, size, colors] }
     }
 
     static let defaultSize: Double = 13
@@ -430,7 +424,6 @@ final class ThemeStore: @unchecked Sendable {
     private(set) var fontChoice = ""
     private(set) var numberFontChoice = ""
     private(set) var baseSize = ThemeStore.defaultSize
-    private(set) var appearance: Appearance = .system
     private(set) var palette: [ThemeRole: Color] = [:]
     /// De letters zoals ze nu gelden (alleen als ze op deze computer staan); bijgewerkt in `reload()`.
     private(set) var fontFamily: String?
@@ -522,33 +515,6 @@ final class ThemeStore: @unchecked Sendable {
         reload()
     }
 
-    func setAppearance(_ value: Appearance) {
-        UserDefaults.standard.set(value.rawValue, forKey: Key.appearance)
-        reload()
-    }
-
-    /// Licht wordt donker en andersom, uitgaande van wat er nu te zien is (ook als dat van het systeem komt).
-    func toggleAppearance() {
-        #if os(macOS)
-        let dark = NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        setAppearance(dark ? .light : .dark)
-        #endif
-    }
-
-    private func applyAppearance() {
-        #if os(macOS)
-        let value = appearance
-        let apply = {
-            switch value {
-            case .system: NSApplication.shared.appearance = nil
-            case .light: NSApplication.shared.appearance = NSAppearance(named: .aqua)
-            case .dark: NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
-            }
-        }
-        if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
-        #endif
-    }
-
     func setBaseSize(_ size: Double) {
         UserDefaults.standard.set(min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound), forKey: Key.size)
         reload()
@@ -563,8 +529,6 @@ final class ThemeStore: @unchecked Sendable {
         let size = defaults.double(forKey: Key.size)
         baseSize = size == 0 ? Self.defaultSize : min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
         overrides = Self.decode(defaults.dictionary(forKey: Key.colors))
-        appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
-        applyAppearance()
         let installed = Set(Self.installedFamilies)
         fontFamily = Self.resolve(fontChoice, themeDefault: theme.fontFamily, installed: installed)
         numberFamily = Self.resolve(numberFontChoice, themeDefault: theme.numberFamily, installed: installed) ?? fontFamily

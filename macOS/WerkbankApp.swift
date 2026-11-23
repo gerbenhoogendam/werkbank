@@ -20,6 +20,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { DefaultMailApp.compose(prefill) }
     }
 
+    /// Een bestand op het Dock-icoon (of "Open met" › Werkbank): een nieuwe mail met dat bestand als bijlage. Dat
+    /// kan omdat Werkbank in Info.plist alle bestanden opent, met de laagste rang, zodat het nooit het standaardprogramma
+    /// voor een bestand wordt. mailto-links komen apart binnen (`handleGetURL`).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let files = urls.filter(\.isFileURL)
+        guard !files.isEmpty else { return }
+        MainActor.assumeIsolated { DefaultMailApp.compose(attaching: files) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppearanceSetting.applyStored()
         ScrollBarHider.start()
@@ -84,6 +93,7 @@ struct WerkbankApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState.shared
     @State private var drag = DragCoordinator()
+    @AppStorage(SettingsKey.appearance) private var appearanceRaw = AppearanceSetting.system.rawValue
 
     var body: some Scene {
         Window("Werkbank", id: "main") {
@@ -102,13 +112,13 @@ struct WerkbankApp: App {
             // Weergave: wisselen tussen de werkbank en de mailmodus.
             CommandGroup(after: .toolbar) {
                 // Licht of donker voor de hele app; overal te bereiken, ook in de mailmodus en losse vensters.
-                Button("Licht of donker") { ThemeStore.shared.toggleAppearance() }
+                Button("Licht of donker") { AppearanceSetting.toggle() }
                     .keyboardShortcut("l", modifiers: [.control, .command])
-                Picker("Weergave", selection: Binding(get: { ThemeStore.shared.appearance },
-                                                      set: { ThemeStore.shared.setAppearance($0) })) {
-                    Text("Volg het systeem").tag(ThemeStore.Appearance.system)
-                    Text("Licht").tag(ThemeStore.Appearance.light)
-                    Text("Donker").tag(ThemeStore.Appearance.dark)
+                Picker("Weergave", selection: Binding(get: { AppearanceSetting(stored: appearanceRaw) },
+                                                      set: { AppearanceSetting.set($0) })) {
+                    ForEach(AppearanceSetting.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
                 }
                 Divider()
             }

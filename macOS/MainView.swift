@@ -270,7 +270,7 @@ struct MainView: View {
             ToolbarItem(placement: .primaryAction) {
                 // Licht of donker voor de hele app (ook in het menu Weergave).
                 Button {
-                    ThemeStore.shared.toggleAppearance()
+                    AppearanceSetting.toggle()
                 } label: {
                     Label("Licht of donker", systemImage: colorScheme == .dark ? "sun.max" : "moon")
                 }
