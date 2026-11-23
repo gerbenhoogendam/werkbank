@@ -519,6 +519,16 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     hij al gelezen was (zo gevraagd); de rest van het gesprek blijft gelezen. `OpenedUnread` onthoudt het gelezen
     zetten bij openen en wacht daarop voordat hij weer ongelezen wordt gezet. Niet als je in de mail bezig bent
     (antwoord typen). Na te gaan: of Esc niet al door een veld in de mail wordt opgevangen.
+49. **Later versturen** (23 nov). Klokje naast Verstuur: vanochtend/morgenochtend 07:56, vanmiddag/morgenmiddag 13:07,
+    maandagochtend 07:56 (als die er niet al bij staat), of zelf een tijdstip kiezen (`SendLater` in WerkbankCore,
+    getest). De Gmail-API kent geen ingeplande verzending; gekozen (23 nov) is dat deze Mac verstuurt: `ScheduledSend`
+    bewaart de hele mail in Application Support/Werkbank/Gepland.json (niet gesynchroniseerd, anders verstuurt een
+    andere Mac hem ook) en verstuurt hem op het tijdstip met de Date-kop van dat moment
+    (`MailComposer.replacingDate`). Slaapt de Mac of draait Werkbank niet, dan gaat hij zodra dat weer zo is (bij
+    wakker worden en bij starten). Mislukt het (geen internet), dan elke halve minuut opnieuw, met de fout in de lijst.
+    Het concept in Gmail verdwijnt bij het plannen. Opvolgen en "kaart naar wacht op klant" gebeuren bij het echte
+    versturen; archiveren na een antwoord niet. Werkbalk: "Gepland (n)" zolang er iets staat, met Nu versturen en
+    Terug naar concepten (zet hem als concept in Gmail). Na te gaan: plannen, de Mac laten slapen, wakker maken.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

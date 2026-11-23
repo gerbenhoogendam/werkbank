@@ -194,7 +194,20 @@ public enum MailComposer {
         return result
     }
 
-    private static func dateString(_ date: Date) -> String {
+    /// Dezelfde mail met een andere Date-kop (een geplande mail draagt het moment waarop hij echt weggaat).
+    public static func replacingDate(in raw: Data, with date: Date) -> Data {
+        guard let text = String(data: raw, encoding: .utf8),
+              let end = text.range(of: "\r\n\r\n") else { return raw }
+        var head = String(text[..<end.lowerBound])
+        let lines = head.components(separatedBy: "\r\n")
+        guard let index = lines.firstIndex(where: { $0.hasPrefix("Date: ") }) else { return raw }
+        var changed = lines
+        changed[index] = "Date: \(dateString(date))"
+        head = changed.joined(separator: "\r\n")
+        return Data((head + text[end.lowerBound...]).utf8)
+    }
+
+    static func dateString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"

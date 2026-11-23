@@ -256,6 +256,10 @@ struct MainView: View {
             } else {
                 ToolbarItem(placement: .primaryAction) { Spacer() }
             }
+            // Alleen als er mails gepland staan.
+            if !ScheduledSend.shared.items.isEmpty {
+                ToolbarItem(placement: .primaryAction) { ScheduledSendButton() }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     toggleMonthAgenda()

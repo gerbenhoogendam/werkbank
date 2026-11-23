@@ -103,6 +103,9 @@ struct ComposeView: View {
     /// Het oorspronkelijke bericht onder de handtekening (HTML, één keer opgebouwd) en hoe hoog het is.
     @State private var quoteDocument = ""
     @State private var quoteHeight: CGFloat = 40
+    /// Later versturen: zelf een tijdstip kiezen.
+    @State private var pickingTime = false
+    @State private var customTime = Date()
 
     private static let maxAttachmentBytes = 18_000_000
 
@@ -544,6 +547,7 @@ struct ComposeView: View {
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(isSending || isLoading)
                     .help("Versturen (⌘↩ of ⇧⌘D)")
+                laterMenu
                 // ⇧⌘D: hetzelfde, zoals in Mail.
                 Button("") { sendDirectly() }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
@@ -782,6 +786,79 @@ struct ComposeView: View {
         }
     }
 
+    // MARK: Later versturen
+
+    private var laterMenu: some View {
+        Menu {
+            ForEach(SendLater.choices(now: Date()), id: \.date) { choice in
+                Button(choice.title) { scheduleSend(at: choice.date) }
+            }
+            Divider()
+            Button("Kies tijdstip…") {
+                customTime = SendLater.choices(now: Date()).first?.date ?? Date()
+                pickingTime = true
+            }
+        } label: {
+            Image(systemName: "clock")
+        }
+        .themedMenu()
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(isSending || isLoading)
+        .help("Later versturen")
+        .popover(isPresented: $pickingTime, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 12) {
+                DatePicker("Tijdstip", selection: $customTime, in: Date()...,
+                           displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .environment(\.locale, Locale(identifier: "nl_NL"))
+                HStack {
+                    Text(SendLater.label(customTime, now: Date()))
+                        .font(.werk(size: 12, weight: .semibold))
+                    Spacer()
+                    Button("Annuleer") { pickingTime = false }
+                    Button("Plan") {
+                        pickingTime = false
+                        scheduleSend(at: customTime)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(14)
+        }
+    }
+
+    /// De mail gaat op het tijdstip weg vanaf deze Mac (`ScheduledSend`); het concept in Gmail verdwijnt nu al.
+    private func scheduleSend(at date: Date) {
+        guard !isSending, !isLoading, validate() else { return }
+        var mail = composedMail()
+        mail.date = date
+        let recipients = (mail.to + mail.cc + mail.bcc).map { $0.name ?? $0.address }.joined(separator: ", ")
+        ScheduledSend.shared.add(ScheduledMail(raw: MailComposer.build(mail), threadID: threadIDForSending,
+                                               account: fromAccount, sendAt: date, subject: subject,
+                                               recipients: recipients, followUpDays: followUpDays,
+                                               replyThreadID: isReply ? ref.source?.threadID : nil))
+        sent = true
+        discardDraft()
+        followUpDays = nil
+        appState.announce("Mail gepland: \(SendLater.label(date, now: Date()))")
+        closeAfterSend()
+    }
+
+    private func closeAfterSend() {
+        if embedded {
+            bodyBinding.wrappedValue = ""
+            attachments = []
+            onSent?()
+        } else if detached {
+            onSent?()
+        } else {
+            PanelStore.shared.closeAfterSending(id: PanelKind.compose(ref).id)
+        }
+    }
+
     private func sendDirectly() {
         guard !isSending, !isLoading, validate() else { return }
         Task { await send() }
@@ -875,15 +952,7 @@ struct ComposeView: View {
             } else {
                 appState.announce(message)
             }
-            if embedded {
-                bodyBinding.wrappedValue = ""
-                attachments = []
-                onSent?()
-            } else if detached {
-                onSent?()
-            } else {
-                PanelStore.shared.closeAfterSending(id: PanelKind.compose(ref).id)
-            }
+            closeAfterSend()
         } catch {
             errorText = "Versturen mislukt: \(error.localizedDescription)"
         }
