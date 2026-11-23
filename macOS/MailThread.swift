@@ -301,8 +301,7 @@ final class MailThreadModel {
             // hierboven al gebruikt (die staan opengeklapt). Alleen bij het openen zelf, dus wie de mail daarna weer op
             // ongelezen zet, houdt hem ongelezen zolang hij open blijft staan.
             if items.contains(where: \.isUnread), !Task.isCancelled {
-                let gmail = gmail, ref = ref
-                Task { await gmail.setUnread(false, threadID: ref.threadID, account: ref.account) }
+                OpenedUnread.markRead(threadID: ref.threadID, account: ref.account)
             }
             await withTaskGroup(of: Void.self) { group in
                 for id in open { group.addTask { await self.loadContent(id) } }

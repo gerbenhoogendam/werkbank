@@ -513,6 +513,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - Ruimte "onder" een blok is dezelfde als "boven" het volgende; bij het laatste blok de ruimte onder het geheel.
     - Na te gaan in de app: of de bestaande handtekening goed wordt ingelezen, of de maten in een verstuurde mail
       (Gmail, Outlook, Apple Mail) kloppen met het voorbeeld, typen en opmaken in het voorbeeld, het linkvenster.
+48. **Esc sluit een geopende mail in de werkbank** (23 nov). Esc in het hoofdvenster: eerst de weggezwiepte mail
+    terug, dan een lopend concept op de agenda weg, anders de laatst geopende mail dicht (`PanelStore.closeMailAsUnread`).
+    Was die mail bij openen ongelezen, dan gaat hij weer op ongelezen (`OpenedUnread`: onthoudt het gelezen zetten bij
+    openen en wacht daarop voordat hij weer ongelezen wordt gezet). Een mail die al gelezen was blijft gelezen. Niet als
+    je in de mail bezig bent (antwoord typen). Na te gaan: of Esc niet al door een veld in de mail wordt opgevangen.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

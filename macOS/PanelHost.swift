@@ -52,6 +52,16 @@ final class PanelStore {
 
     func markEngaged(_ id: String) { engagedIDs.insert(id) }
 
+    /// Esc in de werkbank: de laatst geopende mail sluiten, en was hij bij openen ongelezen, dan weer ongelezen.
+    /// Niet als je erin bezig bent (een antwoord typen). `false`: er was geen mail om te sluiten.
+    func closeMailAsUnread() -> Bool {
+        guard let panel = panels.last(where: { if case .mail = $0 { true } else { false } }),
+              case .mail(let ref) = panel, !engagedIDs.contains(panel.id) else { return false }
+        OpenedUnread.restore(threadID: ref.threadID, account: ref.account)
+        close(panel)
+        return true
+    }
+
     /// Klik naast de panelen: sluit wat alleen gelezen werd. Afspraken regelen dat zelf (wijzigingen gaan voor).
     func closeUnengaged() {
         remove(panels.filter { !$0.isEvent && !engagedIDs.contains($0.id) }, part: .mailClose)
@@ -114,6 +124,25 @@ final class PanelStore {
             withAnimation(.easeOut(duration: 0.18)) { panels.removeAll { ghosted.contains($0.id) } }
             try? await Task.sleep(for: .milliseconds(400))
             ghostedIDs.subtract(ghosted)
+        }
+    }
+}
+
+/// Welke gesprekken bij openen ongelezen waren en daarom op gelezen zijn gezet, zodat Esc ze weer ongelezen kan zetten.
+/// Het ongelezen zetten wacht tot het gelezen zetten bij Gmail klaar is (anders kan dat het alsnog overschrijven).
+@MainActor
+enum OpenedUnread {
+    private static var readTasks: [String: Task<Void, Never>] = [:]
+
+    static func markRead(threadID: String, account: String?) {
+        readTasks[threadID] = Task { await GmailSession.shared.setUnread(false, threadID: threadID, account: account) }
+    }
+
+    static func restore(threadID: String, account: String?) {
+        guard let read = readTasks.removeValue(forKey: threadID) else { return }
+        Task {
+            await read.value
+            await GmailSession.shared.setUnread(true, threadID: threadID, account: account)
         }
     }
 }

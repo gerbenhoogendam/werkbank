@@ -173,9 +173,16 @@ struct MainView: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
 
-            // Esc: haalt de weggezwiepte mail terug, of annuleert een lopend concept op de agenda.
+            // Esc: haalt de weggezwiepte mail terug, annuleert een lopend concept op de agenda, of sluit de geopende mail
+            // (weer ongelezen als hij dat bij openen was).
             Button("") {
-                if mailMode.isReceded { mailMode.restore() } else { drag.draft = nil }
+                if mailMode.isReceded {
+                    mailMode.restore()
+                } else if drag.draft != nil {
+                    drag.draft = nil
+                } else {
+                    _ = PanelStore.shared.closeMailAsUnread()
+                }
             }
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
