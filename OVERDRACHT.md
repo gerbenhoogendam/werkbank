@@ -506,6 +506,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       en onder, bij het logo breedte/hoogte/vaste verhouding/link/alt-tekst/vervangen) en alle links. HTML-weergave:
       typen bouwt de blokken opnieuw op, met Kopieer HTML en Importeer…. Ongedaan maken/opnieuw in de werkbalk
       (stappen die snel na elkaar komen tellen als één).
+    - Bewaren gaat vanzelf (0,4 s na een wijziging; getypte HTML na 0,6 s stilte). ⌘S verwerkt getypte HTML meteen,
+      bewaart en toont "Bewaard" met een vinkje midden in het venster (`SignatureSavedHUD`, 1,3 s).
     - Niet gebouwd uit het ontwerp: het voorbeeld licht/donker in de HTML-weergave (een nagemaakte donkere weergave
       klopt toch niet met hoe Gmail of Outlook kleuren omzet).
     - Ruimte "onder" een blok is dezelfde als "boven" het volgende; bij het laatste blok de ruimte onder het geheel.

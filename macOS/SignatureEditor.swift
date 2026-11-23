@@ -98,6 +98,19 @@ final class SignatureEditorModel {
         MailSignatures.setDocument(document, for: key)
     }
 
+    /// ⌘S: wat in de HTML-weergave getypt is meteen verwerken (niet wachten tot het typen stilstaat) en bewaren.
+    func saveExplicitly() {
+        htmlTask?.cancel()
+        if showsHTML, htmlText != document.html() {
+            var imported = SignatureImport.document(fromHTML: htmlText)
+            fixLogoSizes(&imported)
+            document = imported
+            if let selection, block(selection) == nil { self.selection = imported.blocks.first?.id }
+        }
+        dirty = true
+        saveNow()
+    }
+
     func undo() {
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(document)
@@ -308,6 +321,8 @@ struct SignatureEditorWindow: View {
     @State private var importKind: ImportKind?
     @State private var pendingImport: ImportKind = .logo
     @State private var importError: String?
+    /// Net bewaard met ⌘S: de melding midden in het venster.
+    @State private var savedFlash: Date?
     private let gmail = GmailSession.shared
 
     private enum ImportKind { case logo, newLogo, html }
@@ -334,6 +349,20 @@ struct SignatureEditorWindow: View {
             }
         }
         .frame(minWidth: 980, minHeight: 620)
+        .overlay {
+            if savedFlash != nil {
+                SignatureSavedHUD()
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        .background {
+            Button("Bewaar", action: save)
+                .keyboardShortcut("s", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
         .navigationTitle("Handtekening")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -377,6 +406,17 @@ struct SignatureEditorWindow: View {
         .onDisappear { model.saveNow() }
     }
 
+    private func save() {
+        model.saveExplicitly()
+        let stamp = Date()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) { savedFlash = stamp }
+        Task {
+            try? await Task.sleep(for: .seconds(1.3))
+            guard savedFlash == stamp else { return }
+            withAnimation(.easeOut(duration: 0.35)) { savedFlash = nil }
+        }
+    }
+
     private func open(_ kind: ImportKind) {
         pendingImport = kind
         importKind = kind
@@ -418,6 +458,22 @@ struct SignatureEditorWindow: View {
         case .failure(let error):
             importError = error.localizedDescription
         }
+    }
+}
+
+/// "Bewaard" na ⌘S, zoals de melding van macOS bij het volume.
+private struct SignatureSavedHUD: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.werk(size: 46, weight: .semibold))
+                .foregroundStyle(.white, Color.green)
+            Text("Bewaard")
+                .font(.werk(size: 15, weight: .semibold))
+        }
+        .frame(width: 150, height: 150)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .shadow(color: .black.opacity(0.18), radius: 16, y: 4)
     }
 }
 
