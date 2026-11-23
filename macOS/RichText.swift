@@ -815,6 +815,16 @@ final class RichNSTextView: NSTextView {
     /// Bestanden die geen afbeelding zijn, losgelaten op de tekst: die worden gewone bijlagen.
     var onDropFiles: (([URL]) -> Void)?
 
+    /// De regels breken altijd af op de breedte van het vak zelf, ook als die gelijk bleef.
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard let container = textContainer else { return }
+        let width = max(1, newSize.width - textContainerInset.width * 2)
+        if abs(container.containerSize.width - width) > 0.5 {
+            container.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        }
+    }
+
     // MARK: Afbeeldingen in de tekst
 
     /// Een hoekje van de gekozen afbeelding vastpakken: schalen. Klik op een afbeelding: die kiezen (dan verschijnen de

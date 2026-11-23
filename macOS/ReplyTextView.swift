@@ -69,13 +69,26 @@ struct ReplyTextView: NSViewRepresentable {
         context.coordinator.updatePlaceholder()
     }
 
-    /// Zo hoog als de tekst (of de grijze suggestie) bij deze breedte.
+    /// Zo hoog als de tekst (of de grijze suggestie) bij deze breedte. Gemeten in een losse kopie: SwiftUI vraagt
+    /// meerdere breedtes na elkaar, en het tekstvak zelf mag niet op de laatst gevraagde breedte blijven staan. Dat
+    /// gebeurde eerst: de regels braken af op een smallere breedte dan het venster, en de hoogte hoorde bij een bredere,
+    /// zodat de onderste regel half wegviel.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView textView: NSTextView, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0, let container = textView.textContainer,
-              let layout = textView.layoutManager else { return nil }
-        container.containerSize = NSSize(width: max(1, width - Self.inset.width * 2), height: .greatestFiniteMagnitude)
+        guard let width = proposal.width, width > 0, let live = textView.textContainer,
+              let storage = textView.textStorage else { return nil }
+        let copy = NSTextStorage(attributedString: storage)
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: max(1, width - Self.inset.width * 2),
+                                                     height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = live.lineFragmentPadding
+        layout.addTextContainer(container)
+        copy.addLayoutManager(layout)
         layout.ensureLayout(for: container)
         var height = layout.usedRect(for: container).height
+        // Een lege laatste regel (na Enter) telt ook mee.
+        if layout.extraLineFragmentTextContainer === container {
+            height = max(height, layout.extraLineFragmentRect.maxY)
+        }
         if textView.string.isEmpty, let suggestion, !suggestion.isEmpty {
             let padding = container.lineFragmentPadding * 2
             let rect = (suggestion as NSString).boundingRect(
