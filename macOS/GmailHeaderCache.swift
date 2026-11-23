@@ -62,6 +62,17 @@ final class GmailHeaderCache {
         }
     }
 
+    /// De labels van één mail (niet het hele gesprek).
+    func patch(messageID: String, adding: [String] = [], removing: [String] = []) {
+        for account in Array(items.keys) {
+            guard let item = items[account]?[messageID] else { continue }
+            var labels = item.labels.filter { !removing.contains($0) }
+            for label in adding where !labels.contains(label) { labels.append(label) }
+            guard labels != item.labels else { continue }
+            items[account]?[messageID]?.labels = labels
+        }
+    }
+
     func forget(account: String) {
         items[account] = nil
         order[account] = nil

@@ -515,7 +515,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       (Gmail, Outlook, Apple Mail) kloppen met het voorbeeld, typen en opmaken in het voorbeeld, het linkvenster.
 48. **Esc sluit een geopende mail in de werkbank** (23 nov). Esc in het hoofdvenster: eerst de weggezwiepte mail
     terug, dan een lopend concept op de agenda weg, anders de laatst geopende mail dicht (`PanelStore.closeMailAsUnread`).
-    De mail gaat altijd op ongelezen, ook als hij al gelezen was (zo gevraagd). `OpenedUnread` onthoudt het gelezen
+    Alleen de nieuwste mail van het gesprek gaat op ongelezen (`GmailSession.markUnread(messageID:)`), altijd, ook als
+    hij al gelezen was (zo gevraagd); de rest van het gesprek blijft gelezen. `OpenedUnread` onthoudt het gelezen
     zetten bij openen en wacht daarop voordat hij weer ongelezen wordt gezet. Niet als je in de mail bezig bent
     (antwoord typen). Na te gaan: of Esc niet al door een veld in de mail wordt opgevangen.
 

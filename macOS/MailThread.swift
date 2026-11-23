@@ -285,6 +285,7 @@ final class MailThreadModel {
         if mails.isEmpty, let stored = await gmail.storedThread(threadID: ref.threadID, account: ref.account) {
             if let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
             let open = present(stored)
+            OpenedUnread.noteNewest(threadID: ref.threadID, messageID: stored.last?.id)
             shown = stored
             isLoading = false
             for id in open { Task { await self.loadContent(id) } }
@@ -297,6 +298,7 @@ final class MailThreadModel {
             if items.map(\.id) != shown?.map(\.id) { open.formUnion(present(items)) } else { expanded.formUnion(open) }
             loadError = nil
             isLoading = false
+            OpenedUnread.noteNewest(threadID: ref.threadID, messageID: items.last?.id)
             // Geopend is gelezen: het hele gesprek, in Gmail en meteen in de lijsten. Welke mails ongelezen waren is
             // hierboven al gebruikt (die staan opengeklapt). Alleen bij het openen zelf, dus wie de mail daarna weer op
             // ongelezen zet, houdt hem ongelezen zolang hij open blijft staan.

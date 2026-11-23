@@ -52,12 +52,13 @@ final class PanelStore {
 
     func markEngaged(_ id: String) { engagedIDs.insert(id) }
 
-    /// Esc in de werkbank: de laatst geopende mail sluiten en op ongelezen zetten (ook als hij al gelezen was).
+    /// Esc in de werkbank: de laatst geopende mail sluiten en de nieuwste mail van het gesprek op ongelezen zetten (ook
+    /// als hij al gelezen was; de rest van het gesprek blijft gelezen).
     /// Niet als je erin bezig bent (een antwoord typen). `false`: er was geen mail om te sluiten.
     func closeMailAsUnread() -> Bool {
         guard let panel = panels.last(where: { if case .mail = $0 { true } else { false } }),
               case .mail(let ref) = panel, !engagedIDs.contains(panel.id) else { return false }
-        OpenedUnread.restore(threadID: ref.threadID, account: ref.account)
+        OpenedUnread.restore(threadID: ref.threadID, fallbackMessageID: ref.messageID, account: ref.account)
         close(panel)
         return true
     }
@@ -133,16 +134,24 @@ final class PanelStore {
 @MainActor
 enum OpenedUnread {
     private static var readTasks: [String: Task<Void, Never>] = [:]
+    /// De nieuwste mail per gesprek, zoals het gesprek geladen is.
+    private static var newest: [String: String] = [:]
+
+    static func noteNewest(threadID: String, messageID: String?) {
+        newest[threadID] = messageID
+    }
 
     static func markRead(threadID: String, account: String?) {
         readTasks[threadID] = Task { await GmailSession.shared.setUnread(false, threadID: threadID, account: account) }
     }
 
-    static func restore(threadID: String, account: String?) {
+    /// Alleen de nieuwste mail weer ongelezen; nog niet geladen: de mail die je aanklikte.
+    static func restore(threadID: String, fallbackMessageID: String, account: String?) {
         let read = readTasks.removeValue(forKey: threadID)
+        let messageID = newest[threadID] ?? fallbackMessageID
         Task {
             await read?.value
-            await GmailSession.shared.setUnread(true, threadID: threadID, account: account)
+            await GmailSession.shared.markUnread(messageID: messageID, threadID: threadID, account: account)
         }
     }
 }

@@ -1335,6 +1335,33 @@ final class GmailSession {
         return true
     }
 
+    /// Eén mail weer op ongelezen (niet het hele gesprek); in de lijsten staat het gesprek dan als ongelezen.
+    @discardableResult
+    func markUnread(messageID: String, threadID: String, account: String? = nil) async -> Bool {
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["UNREAD"]])
+            _ = try await api("messages/\(messageID)/modify", method: "POST", body: body,
+                              account: account ?? messageAccount[messageID] ?? messageAccount[threadID])
+        } catch {
+            return false
+        }
+        headerCache.patch(messageID: messageID, adding: ["UNREAD"])
+        var changed = false
+        for key in Array(messageCache.keys) {
+            guard let index = messageCache[key]?.firstIndex(where: { $0.threadID == threadID }),
+                  messageCache[key]?[index].isUnread != true else { continue }
+            messageCache[key]?[index].isUnread = true
+            changed = true
+        }
+        if changed {
+            refreshVisible()
+            saveInboxLater()
+        }
+        MailModeStore.shared.noteUnread(true, threadID: threadID)
+        MailNotifier.shared.checkSoon()
+        return true
+    }
+
     /// Meer gesprekken tegelijk; geeft terug bij hoeveel het lukte.
     func setUnread(_ unread: Bool, threads: [(threadID: String, account: String?)]) async -> Int {
         let accounts = Dictionary(threads.map { ($0.threadID, $0.account) }, uniquingKeysWith: { first, _ in first })
