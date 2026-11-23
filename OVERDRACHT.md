@@ -481,6 +481,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       via een toetsmonitor zolang het veld de cursor heeft (`AddressField.handleKey`).
     - Na te gaan in de app: neemt het Dock-icoon een bestand aan (het moet oplichten), werkt slepen tussen de velden
       naast de klik en dubbelklik op een blokje, en werkt Backspace nu.
+46. **Opstelveld: regels zo breed als het venster** (23 nov). `ReplyTextView.sizeThatFits` zette de tekstcontainer van
+    het vak zelf op elke breedte die SwiftUI voorstelde; SwiftUI vraagt er meerdere na elkaar, dus de container bleef
+    op de laatst gevraagde staan. Gevolg: de regels braken af vóór de rand van het venster en de hoogte hoorde bij een
+    andere breedte, zodat de onderste regel half wegviel. Nu gemeten in een losse kopie van de tekst, en
+    `RichNSTextView.setFrameSize` zet de container op de eigen breedte. Na te gaan: los antwoordvenster breed slepen.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
