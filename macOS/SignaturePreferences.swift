@@ -3,9 +3,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Voorkeuren › Mail: gekoppelde mailboxen met per mailbox de naam op de tab en de naam die de ontvanger als afzender
-/// ziet, en de handtekening: HTML en logo (voor `cid:`-afbeeldingen), per mailbox of voor alle.
+/// ziet, en de handtekening (per mailbox of voor alle): het voorbeeld hier, bewerken in het venster Handtekening.
 struct SignaturePreferences: View {
     private let gmail = GmailSession.shared
+    @Environment(\.openWindow) private var openWindow
 
     @State private var key = MailSignatures.defaultKey
     @State private var html = ""
@@ -15,10 +16,7 @@ struct SignaturePreferences: View {
     @State private var notifyAccounts: Set<String> = []
     @State private var notificationsDenied = false
     @State private var logo: Data?
-    @State private var logoImage: NSImage?
     @State private var preview = ""
-    @State private var importing = false
-    @State private var importError: String?
     @State private var disconnecting: String?
     @AppStorage(MailSettings.newestAtBottomKey) private var newestAtBottom = true
 
@@ -116,37 +114,14 @@ struct SignaturePreferences: View {
                 }
             }
 
-            Section("HTML van de handtekening") {
-                TextEditor(text: $html)
-                    .font(.werk(size: 11, design: .monospaced))
-                    .frame(minHeight: 110)
-            }
-
-            Section {
-                HStack(spacing: 10) {
-                    if logo != nil, let image = logoImage {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: 120, maxHeight: 40)
-                    } else {
-                        Text("Geen logo").foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Kies logo…") { importing = true }
-                    if logo != nil {
-                        Button("Verwijder", role: .destructive) { logo = nil }
-                    }
-                }
-                if let importError { Text(importError).foregroundStyle(.red) }
-            } header: {
-                Text("Logo")
-            }
-
             Section("Voorbeeld") {
                 MailWebView(html: preview, allowRemote: true)
                     .frame(height: 170)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                HStack {
+                    Spacer()
+                    Button("Bewerk handtekening…") { openWindow(id: "signature", value: key) }
+                }
             }
         }
         .formStyle(.grouped)
@@ -163,10 +138,8 @@ struct SignaturePreferences: View {
         }
         .onAppear(perform: load)
         .onChange(of: key) { _, _ in load() }
-        .onChange(of: html) { _, new in MailSignatures.setHTML(new, for: key) }
-        .onChange(of: logo) { _, new in MailSignatures.setLogo(new, for: key) }
-        // Het logo één keer ontleden, niet bij elke toetsaanslag in de velden.
-        .onChange(of: logo, initial: true) { _, new in logoImage = new.flatMap(NSImage.init(data:)) }
+        // Bewaard in het venster Handtekening: het voorbeeld opnieuw.
+        .onReceive(NotificationCenter.default.publisher(for: MailSignatures.changed)) { _ in load() }
         // Het voorbeeld (een webvlak dat helemaal opnieuw laadt) pas als het typen even stilstaat.
         .task(id: PreviewInput(html: html, logo: logo)) {
             if !preview.isEmpty {
@@ -175,21 +148,6 @@ struct SignaturePreferences: View {
             }
             preview = MailSignatures.previewHTML(html, logo: logo)
         }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.png, .jpeg, .gif]) { result in
-            switch result {
-            case .success(let url):
-                let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                if let data = try? Data(contentsOf: url), NSImage(data: data) != nil {
-                    logo = data
-                    importError = nil
-                } else {
-                    importError = "Dat bestand kon niet als afbeelding worden gelezen."
-                }
-            case .failure(let error):
-                importError = error.localizedDescription
-            }
-        }
     }
 
     private func load() {
@@ -197,7 +155,7 @@ struct SignaturePreferences: View {
         senderNames = MailSignatures.senderNames()
         notifyAccounts = Set(MailNotifier.accounts)
         Task { notificationsDenied = await MailNotifier.isDenied() }
-        logo = MailSignatures.ownLogo(key)
+        logo = MailSignatures.ownLogo(key) ?? MailSignatures.ownLogo(MailSignatures.defaultKey)
     }
 
     private func senderBinding(_ key: String) -> Binding<String> {

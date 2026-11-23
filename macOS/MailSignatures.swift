@@ -7,6 +7,9 @@ enum MailSignatures {
     private static let htmlKey = "mail.signatureHTML"
     private static let logoKey = "mail.signatureLogo"
     private static let nameKey = "mail.senderName"
+    static let documentKey = "mail.signatureDocument"
+    /// De handtekening is in de editor gewijzigd (Voorkeuren toont het voorbeeld opnieuw).
+    static let changed = Notification.Name("werkbank.signatureChanged")
     static let defaultKey = ""
 
     private static func strings(_ key: String) -> [String: String] {
@@ -59,6 +62,31 @@ enum MailSignatures {
         var all = UserDefaults.standard.dictionary(forKey: logoKey) as? [String: Data] ?? [:]
         all[key] = data
         UserDefaults.standard.set(all, forKey: logoKey)
+    }
+
+    // MARK: Ontwerp (de editor)
+
+    /// Het ontwerp in blokken, zoals de editor het bewaarde.
+    static func document(_ key: String) -> SignatureDocument? {
+        guard let data = (UserDefaults.standard.dictionary(forKey: documentKey) as? [String: Data])?[key] else { return nil }
+        return try? JSONDecoder().decode(SignatureDocument.self, from: data)
+    }
+
+    /// Bewaart het ontwerp en de HTML die eruit volgt (die gaat mee bij versturen).
+    static func setDocument(_ document: SignatureDocument, for key: String) {
+        var all = UserDefaults.standard.dictionary(forKey: documentKey) as? [String: Data] ?? [:]
+        all[key] = try? JSONEncoder().encode(document)
+        UserDefaults.standard.set(all, forKey: documentKey)
+        setHTML(document.html(), for: key)
+        NotificationCenter.default.post(name: changed, object: nil)
+    }
+
+    /// Wat de editor opent: het bewaarde ontwerp als de HTML er nog uit volgt, anders de HTML ingelezen als blokken
+    /// (de eerste keer, of als de HTML ergens anders veranderd is).
+    static func editableDocument(_ key: String) -> SignatureDocument {
+        let html = ownHTML(key)
+        if let document = document(key), document.html() == html { return document }
+        return SignatureImport.document(fromHTML: html)
     }
 
     /// De handtekening zoals de ontvanger hem ziet: `cid:` wijst naar het logo als data-URL (alleen voor de weergave).

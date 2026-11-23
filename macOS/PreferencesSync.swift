@@ -18,7 +18,7 @@ final class PreferencesSync {
         SettingsKey.googleAPIKey, SettingsKey.googleCX, SettingsKey.longRunMinutes, SettingsKey.appearance,
         SettingsKey.miniTimerSize, SettingsKey.officeAddress, SettingsKey.homeAddress, SettingsKey.eventOpacity,
         SettingsKey.mailLogos,
-        calendarColorsKey, "mail.signatureHTML", "mail.signatureLogo", "mail.senderName", MailSettings.newestAtBottomKey,
+        calendarColorsKey, "mail.signatureHTML", "mail.signatureLogo", "mail.senderName", MailSignatures.documentKey, MailSettings.newestAtBottomKey,
         QuoteColors.enabledKey, QuoteColors.colorsKey,
         "gmail.displayNames", ClaudeSettings.modelKey, ClaudeSettings.contextKey,
         FoldSpeed.windowOpen.key, FoldSpeed.windowClose.key, FoldSpeed.mailOpen.key, FoldSpeed.mailClose.key,

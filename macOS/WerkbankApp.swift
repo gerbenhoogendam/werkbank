@@ -159,6 +159,13 @@ struct WerkbankApp: App {
             }
         }
 
+        // De handtekening-editor (per mailbox, "" voor alle), te openen vanuit Voorkeuren › Mail.
+        WindowGroup("Handtekening", id: "signature", for: String.self) { $key in
+            SignatureEditorWindow(key: key ?? MailSignatures.defaultKey)
+                .environment(appState)
+        }
+        .defaultSize(width: 1280, height: 800)
+
         Settings {
             PreferencesView()
                 .scrollIndicators(.never)

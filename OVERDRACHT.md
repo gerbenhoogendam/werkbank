@@ -486,6 +486,31 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     op de laatst gevraagde staan. Gevolg: de regels braken af vóór de rand van het venster en de hoogte hoorde bij een
     andere breedte, zodat de onderste regel half wegviel. Nu gemeten in een losse kopie van de tekst, en
     `RichNSTextView.setFrameSize` zet de container op de eigen breedte. Na te gaan: los antwoordvenster breed slepen.
+47. **Handtekening-editor** (23 nov; ontwerp goedgekeurd op het canvas "Handtekening-editor"). Venster "Handtekening"
+    (`SignatureEditorWindow`, scene id `signature`, waarde = mailbox of "" voor alle), te openen met "Bewerk
+    handtekening…" in Voorkeuren › Mail (het HTML-veld en de logokeuze zijn daar weg; het voorbeeld blijft).
+    - Model in WerkbankCore: `SignatureDocument` (lettertype, grootte, kleur, linkkleur, regelafstand, breedte, ruimte
+      onder) met `SignatureBlock`s (tekst met `SignatureRun`s, logo, of losse HTML), elk met ruimte erboven en
+      uitlijning. `html()` maakt een tabel met inline-stijlen en lege rijen met een vaste hoogte als ruimte, zodat
+      Gmail en Outlook de maten aanhouden; het logo als `cid:logo` (bij versturen het echte Content-ID, ongewijzigd).
+      `SignatureImport` leest bestaande HTML in als blokken (vergevingsgezind; een plaatje van internet of een lijn
+      blijft een HTML-blok). Tests in `SignatureDocumentTests`.
+    - Opslag: `mail.signatureDocument` (per sleutel JSON, gaat mee met de synchronisatie) naast `mail.signatureHTML`.
+      Bewaren schrijft beide; versturen leest nog steeds alleen de HTML. Bij openen: past het bewaarde ontwerp niet
+      meer bij de HTML (de eerste keer, of elders gewijzigd), dan wordt de HTML opnieuw ingelezen.
+    - Venster: links de blokken (slepen om te ordenen, + voor tekst of logo, Delete haalt weg) en de instellingen van
+      de hele handtekening; midden het voorbeeld op ware grootte op wit, tekst direct te bewerken (`SignatureTextView`)
+      met een balkje voor vet/cursief/onderstreept/kleur/link op de selectie (zonder selectie: het hele blok), de
+      ruimtes roze met de maat bij het gekozen blok, het logo met hoekjes (rechtsonder slepen = breedte); rechts het
+      gekozen blok (lettertype, grootte, kleur, stijl, regelafstand als keuze of exact in px, uitlijning, ruimte boven
+      en onder, bij het logo breedte/hoogte/vaste verhouding/link/alt-tekst/vervangen) en alle links. HTML-weergave:
+      typen bouwt de blokken opnieuw op, met Kopieer HTML en Importeer…. Ongedaan maken/opnieuw in de werkbalk
+      (stappen die snel na elkaar komen tellen als één).
+    - Niet gebouwd uit het ontwerp: het voorbeeld licht/donker in de HTML-weergave (een nagemaakte donkere weergave
+      klopt toch niet met hoe Gmail of Outlook kleuren omzet).
+    - Ruimte "onder" een blok is dezelfde als "boven" het volgende; bij het laatste blok de ruimte onder het geheel.
+    - Na te gaan in de app: of de bestaande handtekening goed wordt ingelezen, of de maten in een verstuurde mail
+      (Gmail, Outlook, Apple Mail) kloppen met het voorbeeld, typen en opmaken in het voorbeeld, het linkvenster.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
