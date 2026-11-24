@@ -21,7 +21,8 @@ struct ScheduledMail: Codable, Identifiable, Equatable {
 }
 
 /// Later versturen gebeurt op deze Mac: Werkbank verstuurt de mail zelf op het gekozen tijdstip (de Gmail-API kent geen
-/// ingeplande verzending). Slaapt de Mac of draait Werkbank dan niet, dan gaat hij zodra dat weer zo is. Bewaard in
+/// ingeplande verzending). Zolang er iets gepland staat, valt de Mac niet vanzelf in slaap (het scherm wel); een
+/// dichtgeklapte laptop slaapt toch, en draait Werkbank niet, dan gaat de mail zodra dat weer zo is. Bewaard in
 /// Application Support (niet gesynchroniseerd: een andere Mac zou hem anders ook versturen).
 @MainActor
 @Observable
@@ -32,6 +33,8 @@ final class ScheduledSend {
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var sending = false
     @ObservationIgnored private var started = false
+    /// Houdt de Mac wakker (niet het scherm) zolang er iets gepland staat.
+    @ObservationIgnored private var keepAwake: NSObjectProtocol?
 
     private static let file: URL? = {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
@@ -47,6 +50,7 @@ final class ScheduledSend {
            let stored = try? JSONDecoder().decode([ScheduledMail].self, from: data) {
             items = stored.sorted { $0.sendAt < $1.sendAt }
         }
+        updateKeepAwake()
         // Wakker geworden: wat intussen had moeten gaan meteen versturen.
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { _ in
@@ -142,7 +146,18 @@ final class ScheduledSend {
         }
     }
 
+    private func updateKeepAwake() {
+        if items.isEmpty {
+            if let keepAwake { ProcessInfo.processInfo.endActivity(keepAwake) }
+            keepAwake = nil
+        } else if keepAwake == nil {
+            keepAwake = ProcessInfo.processInfo.beginActivity(options: .idleSystemSleepDisabled,
+                                                              reason: "Geplande mail versturen")
+        }
+    }
+
     private func save() {
+        updateKeepAwake()
         guard let file = Self.file else { return }
         if items.isEmpty {
             try? FileManager.default.removeItem(at: file)
