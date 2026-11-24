@@ -3,9 +3,8 @@ import UserNotifications
 import WerkbankCore
 
 /// Meldingen van nieuwe mail: een melding van macOS per nieuwe mail en het aantal ongelezen mails op het Dock-icoon.
-/// Op de melding van één mail staan twee knoppen: Archiveer (op de achtergrond, Werkbank komt niet naar voren) en
-/// Beantwoord (de mail in de mailmodus met het antwoord open). macOS toont ze als je de muis op de melding houdt;
-/// bij meer dan één knop onder "Opties".
+/// Op de melding van één mail staat één knop: Archiveer (op de achtergrond, Werkbank komt niet naar voren), zodat die
+/// met één klik werkt (bij twee knoppen zet macOS ze onder "Opties"). Beantwoorden: op de melding klikken opent de mail.
 /// Alleen voor de mailboxen die in Voorkeuren › Mail zijn aangezet, en niet voor nieuwsbrieven en meldingen (wat de
 /// mailmodus in de bundel zet). Kijkt elke minuut, ook als het hoofdvenster dicht is of de mailmodus niet open staat:
 /// Gmail stuurt deze app zelf niets.
@@ -21,7 +20,6 @@ final class MailNotifier {
     /// De melding van één mail, met de knoppen. De melding van veel mails tegelijk heeft ze niet.
     private static let category = "mail"
     fileprivate static let archiveAction = "mail.archive"
-    fileprivate static let replyAction = "mail.reply"
 
     private let delegate = NotificationDelegate()
     private var loop: Task<Void, Never>?
@@ -192,10 +190,7 @@ final class MailNotifier {
     private func registerActions() {
         let archive = UNNotificationAction(identifier: Self.archiveAction, title: "Archiveer", options: [],
                                            icon: UNNotificationActionIcon(systemImageName: "archivebox"))
-        // `.foreground`: macOS haalt Werkbank naar voren.
-        let reply = UNNotificationAction(identifier: Self.replyAction, title: "Beantwoord", options: [.foreground],
-                                         icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"))
-        let category = UNNotificationCategory(identifier: Self.category, actions: [archive, reply],
+        let category = UNNotificationCategory(identifier: Self.category, actions: [archive],
                                               intentIdentifiers: [], options: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
@@ -254,11 +249,6 @@ final class MailNotifier {
 
     // MARK: Knoppen op de melding
 
-    /// Beantwoord: als een klik op de melding, met het antwoord open zodra de mail er staat.
-    fileprivate func reply(messageID: String, threadID: String, account: String) {
-        MailModeStore.shared.replyTrigger.replyWhenShown(threadID: threadID, messageID: messageID)
-        opened(messageID: messageID, threadID: threadID, account: account)
-    }
 
     /// Archiveer: het gesprek uit de inbox, zonder Werkbank naar voren te halen. Lukt het niet, dan komt de melding
     /// terug met de reden, zodat de mail niet ongemerkt blijft staan.
@@ -339,8 +329,6 @@ private final class NotificationDelegate: NSObject, UNUserNotificationCenterDele
                             await notifier.archive(messageID: messageID, threadID: threadID, account: account,
                                                    subject: subject)
                         }
-                    case (MailNotifier.replyAction, let messageID?, let threadID?):
-                        notifier.reply(messageID: messageID, threadID: threadID, account: account)
                     case (UNNotificationDefaultActionIdentifier, _, _):
                         notifier.opened(messageID: messageID, threadID: threadID, account: account)
                     default:

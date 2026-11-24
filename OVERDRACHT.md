@@ -534,6 +534,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 50. **⇧⌘O: opstelblok loshalen** (24 nov). Sneltoets voor de knop "Loshalen in een eigen venster" in het opstelblok
     (staat in `MailModeKeys.reserved`, zodat hij niet als toets voor de mailmodus te kiezen is). Zijn er twee
     opstelblokken open, dan bepaalt SwiftUI welke hem krijgt; na te gaan in de app.
+51. **Mailmelding: alleen Archiveer** (24 nov). De knop Beantwoord is weg van de melding (`MailNotifier.registerActions`):
+    met één knop toont macOS hem direct, met twee onder "Opties" (een extra klik). Beantwoorden: op de melding klikken
+    opent de mail. Bestaande meldingen in het meldingencentrum houden hun knoppen tot ze weg zijn.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
