@@ -511,7 +511,8 @@ struct ComposeView: View {
                 }
                 if !detached {
                     Button { detach() } label: { Image(systemName: "macwindow.badge.plus") }
-                        .help("Loshalen in een eigen venster")
+                        .keyboardShortcut("o", modifiers: [.command, .shift])
+                        .help("Loshalen in een eigen venster (⇧⌘O)")
                 }
                 if let onDiscard {
                     Button {

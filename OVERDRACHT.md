@@ -531,6 +531,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Het concept in Gmail verdwijnt bij het plannen. Opvolgen en "kaart naar wacht op klant" gebeuren bij het echte
     versturen; archiveren na een antwoord niet. Werkbalk: "Gepland (n)" zolang er iets staat, met Nu versturen en
     Terug naar concepten (zet hem als concept in Gmail). Na te gaan: plannen, de Mac laten slapen, wakker maken.
+50. **⇧⌘O: opstelblok loshalen** (24 nov). Sneltoets voor de knop "Loshalen in een eigen venster" in het opstelblok
+    (staat in `MailModeKeys.reserved`, zodat hij niet als toets voor de mailmodus te kiezen is). Zijn er twee
+    opstelblokken open, dan bepaalt SwiftUI welke hem krijgt; na te gaan in de app.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
