@@ -1306,6 +1306,9 @@ final class MailModeStore {
 
     /// Het kruisje (in het zoekveld en op het knopje van de mailboxen): de zoekopdracht helemaal weg. De tekst, de
     /// eigen keuze van mailboxen en wat er in het zoekvenster stond; dat opent daarna leeg. De gewone lijst komt terug.
+    /// Er staat een zoekopdracht (tekst of een eigen keuze van mailboxen).
+    var hasSearch: Bool { !query.isEmpty || searchAccounts != nil }
+
     func clearSearch() {
         searchTask?.cancel()
         query = ""

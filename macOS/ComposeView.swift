@@ -591,7 +591,7 @@ struct ComposeView: View {
                 showBcc = !prefill.bcc.isEmpty
             }
             if let files = ref.files, !files.isEmpty, attachments.isEmpty { addFiles(files, scoped: true) }
-            focus = toText.isEmpty ? .to : .body
+            if toText.isEmpty { takeFocus(.to) } else { focus = .body }
             return
         }
         isLoading = preloaded == nil
@@ -636,7 +636,7 @@ struct ComposeView: View {
                 showCc = !prefill.cc.isEmpty
                 showBcc = !prefill.bcc.isEmpty
             }
-            focus = isReply ? .body : .to
+            if isReply { focus = .body } else { takeFocus(.to) }
         } catch {
             errorText = "Oorspronkelijke mail ophalen mislukt: \(error.localizedDescription)"
             subject = ReplyBuilder.subject(source.subject, forward: ref.mode == .forward)
@@ -764,7 +764,22 @@ struct ComposeView: View {
         showCc = draft.showCc
         showBcc = draft.showBcc
         original = draft.original
-        focus = draft.to.isEmpty ? .to : .body
+        if draft.to.isEmpty { takeFocus(.to) } else { focus = .body }
+    }
+
+    /// De cursor naar een veld, ook als een ander veld in het venster hem nog heeft (zoeken, een kaart) of het
+    /// opstelblok nog binnenvouwt: eerst het venster vrijmaken, en kort daarna nog eens kijken.
+    private func takeFocus(_ field: Field) {
+        Task { @MainActor in
+            for delay in [0, 150, 400] {
+                if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
+                guard focus != field else { continue }
+                // Alleen als de gebruiker intussen niet zelf een ander veld van dit blok koos.
+                guard focus == nil else { return }
+                NSApp.keyWindow?.makeFirstResponder(nil)
+                focus = field
+            }
+        }
     }
 
     /// Afzenders van het gesprek, om bij de timer de klant te bepalen.

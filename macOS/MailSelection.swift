@@ -69,6 +69,7 @@ enum MailCommands {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             MainActor.assumeIsolated { handleUnreadKey(event) } ? nil : event
         }
+        IdleSearchReset.start()
     }
 
     private static func handleUnreadKey(_ event: NSEvent) -> Bool {
@@ -163,5 +164,37 @@ enum MailCommands {
             let done = await gmail.setUnread(unread, threads: threads)
             appState.showToast("\(done) \(done == 1 ? "mail" : "mails") \(unread ? "ongelezen" : "gelezen")")
         }
+    }
+}
+
+/// Een minuut niets gedaan in Werkbank (geen toets, klik of scroll in een van zijn vensters, of een andere app voor):
+/// een zoekopdracht in de mailmodus gaat weg, zodat de mail bij terugkomst niet half gefilterd staat. Filters (zoals
+/// Ongelezen) en een gekozen klant blijven.
+@MainActor
+enum IdleSearchReset {
+    static let interval: TimeInterval = 60
+    private static var lastInput = Date()
+    private static var monitor: Any?
+    private static var loop: Task<Void, Never>?
+
+    static func start() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .scrollWheel]) { event in
+            MainActor.assumeIsolated { lastInput = Date() }
+            return event
+        }
+        loop = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                check()
+            }
+        }
+    }
+
+    private static func check() {
+        guard Date().timeIntervalSince(lastInput) >= interval else { return }
+        let store = MailModeStore.shared
+        if store.hasSearch { store.clearSearch() }
+        if !store.clientQuery.isEmpty { store.clientQuery = "" }
     }
 }

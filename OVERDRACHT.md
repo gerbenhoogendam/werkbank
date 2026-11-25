@@ -544,6 +544,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     `MailLook.selectionLine` (de accentkleur; bij Etiket het limoen #D4FF1E, ook in licht, zo gevraagd) in de vorm van
     de rij, ook in de mailmodus (`GmailRow`). Karmijn had al een kader en blijft zo. Slepen naar het board gaat nog
     per mail.
+53. **Nieuwe mail: cursor in Aan; zoeken weg na een minuut** (25 nov).
+    - `ComposeView.takeFocus`: maakt het venster vrij (`makeFirstResponder(nil)`, een ander veld zoals zoeken of een
+      kaart had de cursor soms nog) en zet de cursor in Aan; na 150 en 400 ms nog eens als hij er dan nog niet staat
+      (het opstelblok vouwt nog binnen). Niet als je intussen zelf een ander adresveld koos.
+    - `IdleSearchReset` (in MailSelection.swift): een minuut geen toets, klik of scroll in Werkbank (of een andere app
+      voor) wist de zoekopdracht van de mailmodus (`MailModeStore.clearSearch`: tekst, eigen keuze van mailboxen, het
+      zoekformulier) en het klantzoekveld. Filters (Ongelezen e.d.) en een gekozen klant blijven staan.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
