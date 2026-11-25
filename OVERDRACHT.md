@@ -540,7 +540,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 52. **Mail-paneel: meer mails kiezen, lijntje om de gekozen mail** (25 nov). `MailSelection` houdt nu een set bij:
     klik = één, ⌘-klik = erbij/eruit, ⇧-klik = alles tussen de vorige klik en deze. Bij meer dan één staat boven de
     lijst "n gekozen" met Gelezen/Ongelezen, Archiveer en ✕; ⇧⌘A en de toets voor gelezen/ongelezen werken op alle
-    gekozen mails (`MailCommands.archive`/`setUnread`). Onder elke gekozen mail is de scheidingslijn 1 pt dikker en in
+    gekozen mails (`MailCommands.archive`/`setUnread`). Boven en onder elke gekozen mail is de scheidingslijn 1 pt dikker en in
     `MailLook.selectionLine` (de accentkleur; bij Etiket het limoen #D4FF1E, ook in licht). Eerst een kader om de hele
     rij geprobeerd; dat zag er niet netjes uit (25 nov). Thema's met kaartjes (zonder scheidingslijnen) en de
     mailmodus (geen lijnen tussen de rijen) houden hun eigen manier van tonen. Slepen naar het board gaat nog per mail.

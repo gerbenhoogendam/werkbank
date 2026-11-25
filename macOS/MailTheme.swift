@@ -393,7 +393,7 @@ enum MailLook {
         }
     }
 
-    /// De lijn onder een gekozen mail in het Mail-paneel: de accentkleur van het thema (Etiket: het limoen, ook in licht).
+    /// De lijnen boven en onder een gekozen mail in het Mail-paneel: de accentkleur van het thema (Etiket: het limoen, ook in licht).
     static var selectionLine: Color {
         ThemeStore.shared.look == .etiket ? Etiket.lime : ThingsColor.accent
     }
