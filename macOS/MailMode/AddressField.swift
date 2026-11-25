@@ -161,11 +161,11 @@ struct AddressField<Field: Hashable>: View {
                 if let name = candidate.name {
                     Text(name)
                         .font(.werk(size: 13, weight: .medium))
-                        .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
+                        .foregroundStyle(isOn ? ThingsColor.onAccent : ThingsColor.textPrimary)
                 }
                 Text(candidate.address)
                     .font(.werk(size: 12.5))
-                    .foregroundStyle(isOn ? Color.white.opacity(0.8) : ThingsColor.textSecondary)
+                    .foregroundStyle(isOn ? ThingsColor.onAccent.opacity(0.8) : ThingsColor.textSecondary)
                 Spacer(minLength: 6)
                 if let client = candidate.client {
                     HStack(spacing: 4) {
@@ -173,7 +173,7 @@ struct AddressField<Field: Hashable>: View {
                         Text(client)
                     }
                     .font(.werk(size: 11, weight: .medium))
-                    .foregroundStyle(isOn ? Color.white : ThingsColor.textSecondary)
+                    .foregroundStyle(isOn ? ThingsColor.onAccent : ThingsColor.textSecondary)
                 }
             }
             .lineLimit(1)

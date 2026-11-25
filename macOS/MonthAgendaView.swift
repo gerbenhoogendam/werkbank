@@ -320,7 +320,7 @@ private struct WeekPage: View {
                         .foregroundStyle(isToday ? ThingsColor.accent : ThingsColor.textSecondary)
                     Text("\(calendar.component(.day, from: day))")
                         .font(.werk(size: 12, weight: .bold))
-                        .foregroundStyle(isToday ? Color.white : ThingsColor.textPrimary)
+                        .foregroundStyle(isToday ? ThingsColor.onAccent : ThingsColor.textPrimary)
                         .frame(minWidth: 20, minHeight: 20)
                         .background(Circle().fill(isToday ? ThingsColor.accent : .clear))
                 }

@@ -551,6 +551,11 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - `IdleSearchReset` (in MailSelection.swift): een minuut geen toets, klik of scroll in Werkbank (of een andere app
       voor) wist de zoekopdracht van de mailmodus (`MailModeStore.clearSearch`: tekst, eigen keuze van mailboxen, het
       zoekformulier) en het klantzoekveld. Filters (Ongelezen e.d.) en een gekozen klant blijven staan.
+54. **Etiket: leesbaarheid op limoen, geen groen bij gekozen mail** (25 nov). Tekst op een accentvlak gebruikt
+    `ThingsColor.onAccent` in plaats van wit (Etiket donker: inkt op limoen): de adressuggesties in Aan/Cc/Bcc, de
+    tegels bij het slepen naar een andere mailbox, vandaag in de maandagenda, het gekozen tijdstip bij inplannen. De
+    gekozen mail in de lijst heeft in Etiket geen groene streep links meer; alleen de donkerdere (licht) of lichtere
+    (donker) achtergrond.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

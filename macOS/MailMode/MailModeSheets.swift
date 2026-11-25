@@ -343,7 +343,7 @@ private struct MailPlanSheet: View {
                                         Spacer(minLength: 6)
                                         Text(option.fromMail ? "Uit de mail" : "Vrij")
                                             .font(.werk(size: 10.5, weight: .semibold))
-                                            .foregroundStyle(chosen == index ? Color.white.opacity(0.85)
+                                            .foregroundStyle(chosen == index ? ThingsColor.onAccent.opacity(0.85)
                                                              : (option.fromMail ? ThingsColor.accent : ThingsColor.textSecondary))
                                     }
                                     .frame(maxWidth: .infinity)

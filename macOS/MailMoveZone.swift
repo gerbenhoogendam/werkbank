@@ -90,19 +90,19 @@ struct MailMoveZone: View {
         let isOn = hovered == email
         return HStack(spacing: 10) {
             ZStack {
-                Circle().fill(isOn ? Color.white.opacity(0.22) : ThingsColor.accent.opacity(0.12))
+                Circle().fill(isOn ? ThingsColor.onAccent.opacity(0.22) : ThingsColor.accent.opacity(0.12))
                 Image(systemName: isOn ? "tray.and.arrow.down.fill" : "tray.fill")
                     .font(.werk(size: 13, weight: .semibold))
-                    .foregroundStyle(isOn ? Color.white : ThingsColor.accent)
+                    .foregroundStyle(isOn ? ThingsColor.onAccent : ThingsColor.accent)
             }
             .frame(width: 30, height: 30)
             VStack(alignment: .leading, spacing: 1) {
                 Text(gmail.displayName(email))
                     .font(.werk(size: 13.5, weight: .semibold))
-                    .foregroundStyle(isOn ? Color.white : ThingsColor.textPrimary)
+                    .foregroundStyle(isOn ? ThingsColor.onAccent : ThingsColor.textPrimary)
                 Text(email)
                     .font(.werk(size: 11))
-                    .foregroundStyle(isOn ? Color.white.opacity(0.8) : ThingsColor.textSecondary)
+                    .foregroundStyle(isOn ? ThingsColor.onAccent.opacity(0.8) : ThingsColor.textSecondary)
             }
             .lineLimit(1)
             Spacer(minLength: 0)

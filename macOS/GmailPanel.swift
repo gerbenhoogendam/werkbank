@@ -664,12 +664,11 @@ struct GmailRow: View {
                 shape.fill(Color.primary.opacity(0.04))
             }
         case .etiket:
-            // De gekozen rij lichter (donker) of donkerder (licht), met links een streep in de accentkleur. Een tik meer
-            // dan de selectiekleur van het thema, zodat goed te zien is welke mails gekozen zijn.
+            // De gekozen rij lichter (donker) of donkerder (licht): een tik meer dan de selectiekleur van het thema. Geen
+            // groene streep of lijnen (25 nov: te opvallend).
             if isSelected {
                 Rectangle().fill(ThingsColor.selection)
                     .overlay(Color.primary.opacity(0.06))
-                    .overlay(alignment: .leading) { Rectangle().fill(ThingsColor.accent).frame(width: 2) }
             } else if isHovering {
                 Rectangle().fill(ThingsColor.selection.opacity(0.5))
             }
