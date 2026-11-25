@@ -572,8 +572,11 @@ struct GmailPanel: View {
                                 )
                             if !MailLook.cardRows {
                                 // Principes: een regel van 2 pt tussen de rijen, zoals de lijst met principes.
-                                Rectangle().fill(look == .principes ? ThemeParts.rowRule : ThingsColor.separator)
-                                    .frame(height: look == .principes ? 2 : 1)
+                                // Onder een gekozen mail: dezelfde lijn, een tikje dikker en in de accentkleur.
+                                let chosenRow = selection.selectedIDs.contains(message.id)
+                                Rectangle().fill(chosenRow ? MailLook.selectionLine
+                                                 : (look == .principes ? ThemeParts.rowRule : ThingsColor.separator))
+                                    .frame(height: (look == .principes ? 2 : 1) + (chosenRow ? 1 : 0))
                                     .padding(.horizontal, look == .standaard ? 0 : 12)
                             }
                         }
@@ -612,27 +615,8 @@ struct GmailRow: View {
         header
             .frame(maxWidth: .infinity, alignment: .leading)
             .background { rowBackground }
-            .overlay { selectionOutline }
             .opacity(isBusy ? 0.5 : 1)
             .onHover { isHovering = $0 }
-    }
-
-    /// Een dun lijntje in de accentkleur om elke gekozen mail, in de vorm van de rij (Karmijn heeft al een kader).
-    @ViewBuilder private var selectionOutline: some View {
-        let look = ThemeStore.shared.look
-        if isSelected, look != .karmijn {
-            let radius: CGFloat = switch look {
-            case .principes, .sneeuwwitje, .rekenmachine: 14
-            case .drukproef: 10
-            case .wandklok, .tischsuper, .puls: 12
-            case .diskette: 5
-            case .viertakt: 3
-            default: 0
-            }
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(MailLook.selectionLine, lineWidth: 1.5)
-                .allowsHitTesting(false)
-        }
     }
 
     /// Gekozen of aangewezen rij, zoals het thema hem tekent.

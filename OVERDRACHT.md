@@ -540,10 +540,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 52. **Mail-paneel: meer mails kiezen, lijntje om de gekozen mail** (25 nov). `MailSelection` houdt nu een set bij:
     klik = één, ⌘-klik = erbij/eruit, ⇧-klik = alles tussen de vorige klik en deze. Bij meer dan één staat boven de
     lijst "n gekozen" met Gelezen/Ongelezen, Archiveer en ✕; ⇧⌘A en de toets voor gelezen/ongelezen werken op alle
-    gekozen mails (`MailCommands.archive`/`setUnread`). Elke gekozen mail krijgt een lijntje van 1,5 pt in
-    `MailLook.selectionLine` (de accentkleur; bij Etiket het limoen #D4FF1E, ook in licht, zo gevraagd) in de vorm van
-    de rij, ook in de mailmodus (`GmailRow`). Karmijn had al een kader en blijft zo. Slepen naar het board gaat nog
-    per mail.
+    gekozen mails (`MailCommands.archive`/`setUnread`). Onder elke gekozen mail is de scheidingslijn 1 pt dikker en in
+    `MailLook.selectionLine` (de accentkleur; bij Etiket het limoen #D4FF1E, ook in licht). Eerst een kader om de hele
+    rij geprobeerd; dat zag er niet netjes uit (25 nov). Thema's met kaartjes (zonder scheidingslijnen) en de
+    mailmodus (geen lijnen tussen de rijen) houden hun eigen manier van tonen. Slepen naar het board gaat nog per mail.
 53. **Nieuwe mail: cursor in Aan; zoeken weg na een minuut** (25 nov).
     - `ComposeView.takeFocus`: maakt het venster vrij (`makeFirstResponder(nil)`, een ander veld zoals zoeken of een
       kaart had de cursor soms nog) en zet de cursor in Aan; na 150 en 400 ms nog eens als hij er dan nog niet staat
