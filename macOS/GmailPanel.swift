@@ -100,6 +100,41 @@ struct GmailPanel: View {
 
     // MARK: Acties
 
+    /// Boven de lijst zolang er meer mails gekozen zijn: hoeveel, en wat je ermee kunt.
+    private func selectionBar(_ chosen: [GmailMessageSummary]) -> some View {
+        let anyUnread = chosen.contains(where: \.isUnread)
+        return HStack(spacing: 10) {
+            Text("\(chosen.count) gekozen")
+                .font(.werk(size: 12, weight: .semibold))
+                .foregroundStyle(ThingsColor.textPrimary)
+            Spacer(minLength: 4)
+            Button {
+                MailCommands.setUnread(!anyUnread, chosen, appState: appState)
+            } label: {
+                Label(anyUnread ? "Gelezen" : "Ongelezen", systemImage: anyUnread ? "envelope.open" : "envelope.badge")
+            }
+            .help(anyUnread ? "Alle gekozen mails op gelezen" : "Alle gekozen mails op ongelezen")
+            Button {
+                MailCommands.archive(chosen, appState: appState)
+            } label: {
+                Label("Archiveer", systemImage: "archivebox")
+            }
+            .help("Alle gekozen mails archiveren (⇧⌘A)")
+            Button {
+                selection.selectedID = nil
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .help("Niets meer gekozen")
+        }
+        .buttonStyle(.borderless)
+        .labelStyle(.titleAndIcon)
+        .font(.werk(size: 12))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+    }
+
     private func archive(_ message: GmailMessageSummary) {
         if selection.selectedID == message.id { selection.selectedID = nil }
         Task { await gmail.archiveMessage(message, appState: appState) }
@@ -513,6 +548,8 @@ struct GmailPanel: View {
                     .padding(.vertical, 9)
                     .overlay(alignment: .bottom) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
                 }
+                let chosen = selection.selected(in: gmail.messages)
+                if chosen.count > 1 { selectionBar(chosen) }
                 // ScrollView, geen List: een List nam het slepen van de rij over. De veegacties (twee vingers op het
                 // trackpad: links archiveert, rechts maakt een taak) staan los in `TrackpadSwipe`.
                 ScrollView {
@@ -520,10 +557,11 @@ struct GmailPanel: View {
                         ForEach(gmail.messages) { message in
                             GmailRow(message: message,
                                      isBusy: gmail.busyMessageIDs.contains(message.id),
-                                     isSelected: selection.selectedID == message.id,
+                                     isSelected: selection.selectedIDs.contains(message.id),
                                      accountLabel: gmail.isCombined ? gmail.account(for: message.id).map(gmail.displayName) : nil,
                                 accountColor: gmail.account(for: message.id).map(mailboxColor),
-                                     onSelect: { selection.selectedID = message.id },
+                                     showsActionsWhenSelected: selection.selectedIDs.count <= 1,
+                                     onSelect: { selection.click(message.id, in: gmail.messages.map(\.id)) },
                                      onArchive: { archive(message) },
                                      onDragStarted: { dragState.begin(account: gmail.account(for: message.id)) })
                                 .trackpadSwipe(
@@ -574,8 +612,27 @@ struct GmailRow: View {
         header
             .frame(maxWidth: .infinity, alignment: .leading)
             .background { rowBackground }
+            .overlay { selectionOutline }
             .opacity(isBusy ? 0.5 : 1)
             .onHover { isHovering = $0 }
+    }
+
+    /// Een dun lijntje in de accentkleur om elke gekozen mail, in de vorm van de rij (Karmijn heeft al een kader).
+    @ViewBuilder private var selectionOutline: some View {
+        let look = ThemeStore.shared.look
+        if isSelected, look != .karmijn {
+            let radius: CGFloat = switch look {
+            case .principes, .sneeuwwitje, .rekenmachine: 14
+            case .drukproef: 10
+            case .wandklok, .tischsuper, .puls: 12
+            case .diskette: 5
+            case .viertakt: 3
+            default: 0
+            }
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(MailLook.selectionLine, lineWidth: 1.5)
+                .allowsHitTesting(false)
+        }
     }
 
     /// Gekozen of aangewezen rij, zoals het thema hem tekent.

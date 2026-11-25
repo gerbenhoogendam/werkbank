@@ -1,13 +1,54 @@
 import AppKit
 import Foundation
 import Observation
+import WerkbankCore
 
-/// De aangeklikte mail in het Gmail-paneel (gedeeld, zodat ⇧⌘A ook werkt als het paneel niet de focus heeft).
+/// De gekozen mails in het Gmail-paneel (gedeeld, zodat ⇧⌘A ook werkt als het paneel niet de focus heeft).
+/// Klik kiest één mail, ⌘-klik zet er een bij of haalt hem eruit, ⇧-klik kiest alles tussen de vorige klik en deze.
 @MainActor
 @Observable
 final class MailSelection {
     static let shared = MailSelection()
-    var selectedID: String?
+    /// De laatst aangeklikte mail. Op nil of een andere mail zetten (van buiten) maakt de keuze weer één mail.
+    var selectedID: String? {
+        didSet {
+            guard let selectedID else {
+                selectedIDs = []
+                return
+            }
+            if !selectedIDs.contains(selectedID) { selectedIDs = [selectedID] }
+        }
+    }
+    private(set) var selectedIDs: Set<String> = []
+    @ObservationIgnored private var anchorID: String?
+
+    /// Een klik op een mail in de lijst (`order`: de mails zoals ze onder elkaar staan).
+    func click(_ id: String, in order: [String]) {
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.command) {
+            if selectedIDs.contains(id) {
+                selectedIDs.remove(id)
+                selectedID = selectedIDs.isEmpty ? nil : order.last { selectedIDs.contains($0) }
+            } else {
+                selectedIDs.insert(id)
+                selectedID = id
+            }
+            anchorID = id
+        } else if flags.contains(.shift), let anchorID, let from = order.firstIndex(of: anchorID),
+                  let to = order.firstIndex(of: id) {
+            selectedIDs = Set(order[min(from, to)...max(from, to)])
+            selectedID = id
+        } else {
+            selectedIDs = [id]
+            selectedID = id
+            anchorID = id
+        }
+    }
+
+    /// De gekozen mails die nog in de lijst staan, in de volgorde van de lijst.
+    func selected(in messages: [GmailMessageSummary]) -> [GmailMessageSummary] {
+        messages.filter { selectedIDs.contains($0.id) }
+    }
 }
 
 enum MailSettings {
@@ -57,6 +98,12 @@ enum MailCommands {
             Task { await gmail.toggleUnread(message, appState: appState) }
             return true
         }
+        let chosen = MailSelection.shared.selected(in: gmail.messages)
+        if chosen.count > 1 {
+            // Meer mails: staat er één ongelezen tussen, dan alles gelezen; anders alles ongelezen.
+            setUnread(!chosen.contains(where: \.isUnread), chosen, appState: appState)
+            return true
+        }
         guard let id = MailSelection.shared.selectedID,
               let message = gmail.messages.first(where: { $0.id == id }) else { return false }
         Task { await gmail.toggleUnread(message, appState: appState) }
@@ -77,6 +124,11 @@ enum MailCommands {
             Task { await gmail.archiveMessage(ref.summary, appState: appState) }
             return
         }
+        let chosen = MailSelection.shared.selected(in: gmail.messages)
+        if chosen.count > 1 {
+            archive(chosen, appState: appState)
+            return
+        }
         guard let id = MailSelection.shared.selectedID,
               let index = gmail.messages.firstIndex(where: { $0.id == id }) else {
             appState.showToast("Geen mail geselecteerd")
@@ -88,5 +140,28 @@ enum MailCommands {
             : (index > 0 ? gmail.messages[index - 1].id : nil)
         MailSelection.shared.selectedID = next
         Task { await gmail.archiveMessage(message, appState: appState) }
+    }
+
+    /// Meer gekozen mails archiveren; daarna is de mail onder de laatste gekozen.
+    static func archive(_ messages: [GmailMessageSummary], appState: AppState) {
+        let gmail = GmailSession.shared
+        let ids = Set(messages.map(\.id))
+        let lastIndex = gmail.messages.lastIndex { ids.contains($0.id) }
+        let next = lastIndex.flatMap { index in gmail.messages[(index + 1)...].first { !ids.contains($0.id) }?.id }
+        MailSelection.shared.selectedID = next
+        Task {
+            for message in messages { await gmail.archiveMessage(message, appState: appState, announce: false) }
+            appState.showToast(messages.count == 1 ? "Mail gearchiveerd in Gmail" : "\(messages.count) mails gearchiveerd in Gmail")
+        }
+    }
+
+    /// Meer gekozen mails op gelezen of ongelezen.
+    static func setUnread(_ unread: Bool, _ messages: [GmailMessageSummary], appState: AppState) {
+        let gmail = GmailSession.shared
+        Task {
+            let threads = messages.map { (threadID: $0.threadID, account: gmail.account(for: $0.id)) }
+            let done = await gmail.setUnread(unread, threads: threads)
+            appState.showToast("\(done) \(done == 1 ? "mail" : "mails") \(unread ? "ongelezen" : "gelezen")")
+        }
     }
 }

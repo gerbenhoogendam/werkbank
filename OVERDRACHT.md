@@ -537,6 +537,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 51. **Mailmelding: alleen Archiveer** (24 nov). De knop Beantwoord is weg van de melding (`MailNotifier.registerActions`):
     met één knop toont macOS hem direct, met twee onder "Opties" (een extra klik). Beantwoorden: op de melding klikken
     opent de mail. Bestaande meldingen in het meldingencentrum houden hun knoppen tot ze weg zijn.
+52. **Mail-paneel: meer mails kiezen, lijntje om de gekozen mail** (25 nov). `MailSelection` houdt nu een set bij:
+    klik = één, ⌘-klik = erbij/eruit, ⇧-klik = alles tussen de vorige klik en deze. Bij meer dan één staat boven de
+    lijst "n gekozen" met Gelezen/Ongelezen, Archiveer en ✕; ⇧⌘A en de toets voor gelezen/ongelezen werken op alle
+    gekozen mails (`MailCommands.archive`/`setUnread`). Elke gekozen mail krijgt een lijntje van 1,5 pt in
+    `MailLook.selectionLine` (de accentkleur; bij Etiket het limoen #D4FF1E, ook in licht, zo gevraagd) in de vorm van
+    de rij, ook in de mailmodus (`GmailRow`). Karmijn had al een kader en blijft zo. Slepen naar het board gaat nog
+    per mail.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
