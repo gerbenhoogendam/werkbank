@@ -553,13 +553,6 @@ struct GmailPanel: View {
                 // ScrollView, geen List: een List nam het slepen van de rij over. De veegacties (twee vingers op het
                 // trackpad: links archiveert, rechts maakt een taak) staan los in `TrackpadSwipe`.
                 ScrollView {
-                    // De lijnen boven en onder een gekozen mail (de lijn onder de mail ervoor en die eronder).
-                    let messages = gmail.messages
-                    let chosen = selection.selectedIDs
-                    let accentLines = Set(messages.indices.filter { index in
-                        chosen.contains(messages[index].id)
-                            || (index + 1 < messages.count && chosen.contains(messages[index + 1].id))
-                    }.map { messages[$0].id })
                     LazyVStack(spacing: MailLook.cardRows ? 2 : 0) {
                         ForEach(gmail.messages) { message in
                             GmailRow(message: message,
@@ -579,11 +572,8 @@ struct GmailPanel: View {
                                 )
                             if !MailLook.cardRows {
                                 // Principes: een regel van 2 pt tussen de rijen, zoals de lijst met principes.
-                                // Boven en onder een gekozen mail: dezelfde lijn, een tikje dikker en in de accentkleur.
-                                let chosenRow = accentLines.contains(message.id)
-                                Rectangle().fill(chosenRow ? MailLook.selectionLine
-                                                 : (look == .principes ? ThemeParts.rowRule : ThingsColor.separator))
-                                    .frame(height: (look == .principes ? 2 : 1) + (chosenRow ? 1 : 0))
+                                Rectangle().fill(look == .principes ? ThemeParts.rowRule : ThingsColor.separator)
+                                    .frame(height: look == .principes ? 2 : 1)
                                     .padding(.horizontal, look == .standaard ? 0 : 12)
                             }
                         }
@@ -674,9 +664,11 @@ struct GmailRow: View {
                 shape.fill(Color.primary.opacity(0.04))
             }
         case .etiket:
-            // De gekozen rij iets lichter (donker) of donkerder (licht), met links een streep in de accentkleur.
+            // De gekozen rij lichter (donker) of donkerder (licht), met links een streep in de accentkleur. Een tik meer
+            // dan de selectiekleur van het thema, zodat goed te zien is welke mails gekozen zijn.
             if isSelected {
                 Rectangle().fill(ThingsColor.selection)
+                    .overlay(Color.primary.opacity(0.06))
                     .overlay(alignment: .leading) { Rectangle().fill(ThingsColor.accent).frame(width: 2) }
             } else if isHovering {
                 Rectangle().fill(ThingsColor.selection.opacity(0.5))
