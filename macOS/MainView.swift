@@ -315,9 +315,9 @@ struct MainView: View {
     /// Links in de werkbalk: wisselen tussen werkbank en mailmodus, en het Mail-paneel tonen of verbergen.
     @ToolbarContentBuilder private var navigationItems: some ToolbarContent {
             ToolbarItem(placement: .navigation) {
-                // Wisselen tussen werkbank en mailmodus, direct naast de vensterknopjes.
-                if mailMode.isActive {
-                    Button { mailMode.close() } label: {
+                // Wisselen tussen werkbank en mailmodus (of de kolommen), direct naast de vensterknopjes.
+                if mailMode.isActive || columns.isActive {
+                    Button { if columns.isActive { columns.close() } else { mailMode.close() } } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left").font(.werk(size: 10, weight: .semibold))
                             Text("Werkbank")
@@ -338,8 +338,8 @@ struct MainView: View {
                 }
             }
             ToolbarItem(placement: .navigation) {
-                // Het Mail-paneel hoort bij de werkbank; in de mailmodus doet dit knopje niets zichtbaars.
-                if !mailMode.isActive {
+                // Het Mail-paneel hoort bij de werkbank; in de mailmodus en de kolommen doet dit knopje niets zichtbaars.
+                if !mailMode.isActive && !columns.isActive {
                     Button {
                         withAnimation(.easeOut(duration: 0.2)) { gmailVisible.toggle() }
                     } label: {

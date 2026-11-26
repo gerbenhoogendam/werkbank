@@ -145,7 +145,8 @@ struct MailHeaderTitle: View {
             // "—— 3 ONGELEZEN" en de naam groot in smalle kapitalen.
             VStack(alignment: .leading, spacing: 5) {
                 EtiketEyebrow(text: "\(unread) ongelezen")
-                Text(title.uppercased()).font(.werkPoster(size: 32)).foregroundStyle(ThingsColor.textPrimary)
+                // De hoofdletters (0,7 × de grootte) zo hoog als de knopjes ernaast (30 pt).
+                Text(title.uppercased()).font(.werkPoster(size: 43)).foregroundStyle(ThingsColor.textPrimary)
             }
             .lineLimit(1)
         case .diskette:

@@ -176,13 +176,22 @@ private struct MailModeToolbar: View {
     @AppStorage(MailModeClients.visibleKey) private var showsClients = true
 
     var body: some View {
-        HStack(spacing: 12) {
+        // Etiket: op de grondlijn van MAIL, zodat de knopjes en de letters van MAIL even hoog naast elkaar staan.
+        HStack(alignment: ThemeStore.shared.look == .etiket ? .lastTextBaseline : .center, spacing: 12) {
             // Terug naar de werkbank staat in de werkbalk van het venster, naast de vensterknopjes (MainView).
             Button { showsFolders.toggle() } label: {
                 Image(systemName: "sidebar.left")
             }
             .buttonStyle(MailModeButtonStyle(prominent: false))
             .accessibilityLabel("Mappen")
+            .help("Mappen tonen of verbergen")
+            // De mailboxen in kolommen naast elkaar (over het hele venster).
+            Button { MailColumnsStore.shared.open() } label: {
+                Image(systemName: "rectangle.split.3x1")
+            }
+            .buttonStyle(MailModeButtonStyle(prominent: false))
+            .accessibilityLabel("Kolommen")
+            .help("Mailboxen in kolommen")
 
             MailHeaderTitle(title: "Mail", unread: store.items.filter(\.isUnread).count, total: store.items.count,
                             mailbox: store.title(of: store.scope))

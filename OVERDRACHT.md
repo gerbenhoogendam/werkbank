@@ -572,6 +572,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       staat), ⌘1 of de mailmodus.
     - Niet gebouwd: zelf verversen op de achtergrond (de knop verversen en bij openen), meer mails tegelijk kiezen
       in de kolommen.
+    - Ook in de kop van de mailmodus: het kolommenknopje direct rechts van het mappenknopje, voor MAIL (zo bedoeld,
+      26 nov). Etiket: die kop staat op de grondlijn van MAIL en MAIL is Bebas 43 (hoofdletters ≈ 30 pt, zo hoog als
+      de knopjes). Zolang de kolommen open staan toont de wisselknop in de werkbalk "‹ Werkbank" (sluit de kolommen).
     - Etiket: de wisselknop Mail/Werkbank in de werkbalk zonder glas (rechthoek met dunne rand, kleine kapitalen;
       `ToolbarSwitchStyle`), en op macOS 26 zonder het gedeelde glas om de knoppen links in de werkbalk
       (`sharedBackgroundVisibility(.hidden)` op `MainView.navigationItems`).
