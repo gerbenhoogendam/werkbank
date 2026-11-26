@@ -569,6 +569,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       staat), ⌘1 of de mailmodus.
     - Niet gebouwd: zelf verversen op de achtergrond (de knop verversen en bij openen), meer mails tegelijk kiezen
       in de kolommen.
+    - ⌘F in de kolommen: het uitgebreide zoeken van de mailmodus (`MailSearchSheet`) over de kolommen. Een resultaat
+      aanklikken opent die mail als paneel over de kolommen; alle resultaten tonen (Enter) gaat naar de mailmodus met
+      die zoekopdracht. Esc sluit eerst het zoeken, daarna de kolommen.
     - Ook in de kop van de mailmodus: het kolommenknopje direct rechts van het mappenknopje, voor MAIL (zo bedoeld,
       26 nov). Etiket: die kop staat op de grondlijn van MAIL en MAIL is Bebas 43 (hoofdletters ≈ 30 pt, zo hoog als
       de knopjes); de knopjes staan met hun onderrand op die grondlijn (`alignmentGuide(.lastTextBaseline)`, zonder

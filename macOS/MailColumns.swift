@@ -135,6 +135,8 @@ final class MailColumnsStore {
 struct MailColumnsView: View {
     private let store = MailColumnsStore.shared
     private let gmail = GmailSession.shared
+    private let mailMode = MailModeStore.shared
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -148,7 +150,49 @@ struct MailColumnsView: View {
             .padding(.bottom, 14)
         }
         .background(ThingsColor.mailBackground)
+        // ⌘F: het uitgebreide zoeken van de mailmodus, over de kolommen.
+        .overlay {
+            if mailMode.sheet == .search {
+                MailModeSheetHost(sheet: .search, item: nil)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: mailMode.sheet)
         .task { await store.reloadAll() }
+        .onAppear(perform: installKeys)
+        .onDisappear {
+            removeKeys()
+            if mailMode.sheet == .search, !mailMode.isActive { mailMode.closeSheet() }
+        }
+    }
+
+    /// ⌘F opent het zoeken (ook vanuit een veld); Esc sluit het weer, en niet de kolommen.
+    private func installKeys() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated { handle(event) } ? nil : event
+        }
+    }
+
+    private func removeKeys() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
+
+    private func handle(_ event: NSEvent) -> Bool {
+        guard store.isActive, !mailMode.isActive, event.window === DuoWindowFold.shared.mainWindow,
+              !PanelStore.shared.hasFocusPanels else { return false }
+        if mailMode.sheet == .search {
+            guard event.keyCode == 53 else { return false }
+            mailMode.closeSheet()
+            return true
+        }
+        if event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            mailMode.openSheet(.search)
+            return true
+        }
+        return false
     }
 
     private var header: some View {

@@ -1261,6 +1261,16 @@ private struct MailSearchSheet: View {
     /// Naar de lijst (en eventueel meteen een resultaat open).
     private func show(selecting id: String?) {
         guard !form.isEmpty, !mailboxes.isEmpty else { return }
+        if MailColumnsStore.shared.isActive && !store.isActive {
+            // Vanuit de kolommen: een resultaat opent als paneel over de kolommen; alle resultaten in een lijst gaat
+            // naar de mailmodus.
+            if let id, let item = results.first(where: { $0.id == id }) {
+                store.closeSheet()
+                PanelStore.shared.open(.mail(MailRef(message: item.summary)))
+                return
+            }
+            store.open()
+        }
         store.applySearch(form, mailboxes: gmail.accounts.filter { mailboxes.contains($0) }, selecting: id)
     }
 }
