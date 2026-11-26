@@ -1084,7 +1084,25 @@ struct MailModeButtonStyle: ButtonStyle {
 /// thema's los in. Daarom overal wat in Puls al goed stond: een capsule van neutraal grijs glas zonder rand, even rond
 /// als de werkbalk zelf, met de tekstkleur van het systeem; alleen de letter komt uit het thema.
 struct ToolbarSwitchStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+    @ViewBuilder func makeBody(configuration: Configuration) -> some View {
+        if ThemeStore.shared.look == .etiket {
+            // Etiket: geen glas, een rechthoek met een dunne rand en kleine kapitalen.
+            configuration.label
+                .font(.werk(size: 11.5, weight: .semibold))
+                .tracking(1.4)
+                .textCase(.uppercase)
+                .foregroundStyle(ThingsColor.textPrimary)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .overlay(Rectangle().strokeBorder(ThingsColor.textPrimary, lineWidth: 1))
+                .opacity(configuration.isPressed ? 0.7 : 1)
+                .contentShape(Rectangle())
+        } else {
+            standard(configuration)
+        }
+    }
+
+    private func standard(_ configuration: Configuration) -> some View {
         configuration.label
             .font(.werk(size: 13, weight: .semibold))
             .foregroundStyle(Color.primary)

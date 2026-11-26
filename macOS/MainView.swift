@@ -223,40 +223,11 @@ struct MainView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                // Wisselen tussen werkbank en mailmodus, direct naast de vensterknopjes.
-                if mailMode.isActive {
-                    Button { mailMode.close() } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left").font(.werk(size: 10, weight: .semibold))
-                            Text("Werkbank")
-                        }
-                    }
-                    .buttonStyle(ToolbarSwitchStyle())
-                    .help("Terug naar de werkbank (⌘1 of Esc)")
-                } else {
-                    Button { mailMode.open() } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "envelope")
-                            Text("Mail")
-                            Image(systemName: "chevron.right").font(.werk(size: 10, weight: .semibold))
-                        }
-                    }
-                    .buttonStyle(ToolbarSwitchStyle())
-                    .help("Mailmodus (⌘2)")
-                }
-            }
-            ToolbarItem(placement: .navigation) {
-                // Het Mail-paneel hoort bij de werkbank; in de mailmodus doet dit knopje niets zichtbaars.
-                if !mailMode.isActive {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) { gmailVisible.toggle() }
-                    } label: {
-                        Label("Gmail", systemImage: "sidebar.left")
-                    }
-                    .keyboardShortcut("l", modifiers: [.command, .shift])
-                    .help("Mailpaneel tonen of verbergen (⇧⌘L)")
-                }
+            // Etiket: zonder het glas van macOS eromheen (het thema tekent zijn eigen rand).
+            if #available(macOS 26.0, *) {
+                navigationItems.sharedBackgroundVisibility(ThemeStore.shared.look == .etiket ? .hidden : .automatic)
+            } else {
+                navigationItems
             }
             // De naam van het venster staat niet in de balk (`DuoWindowFold.attach`), en daarmee verviel de ruimte die
             // de knoppen hierna rechts hield: deze rekbare ruimte doet dat nu.
@@ -342,6 +313,45 @@ struct MainView: View {
     }
 
     /// De werkbank is te gebruiken: geen mailmodus, of de mail is weg (of komt nog terug).
+    /// Links in de werkbalk: wisselen tussen werkbank en mailmodus, en het Mail-paneel tonen of verbergen.
+    @ToolbarContentBuilder private var navigationItems: some ToolbarContent {
+            ToolbarItem(placement: .navigation) {
+                // Wisselen tussen werkbank en mailmodus, direct naast de vensterknopjes.
+                if mailMode.isActive {
+                    Button { mailMode.close() } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left").font(.werk(size: 10, weight: .semibold))
+                            Text("Werkbank")
+                        }
+                    }
+                    .buttonStyle(ToolbarSwitchStyle())
+                    .help("Terug naar de werkbank (⌘1 of Esc)")
+                } else {
+                    Button { mailMode.open() } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "envelope")
+                            Text("Mail")
+                            Image(systemName: "chevron.right").font(.werk(size: 10, weight: .semibold))
+                        }
+                    }
+                    .buttonStyle(ToolbarSwitchStyle())
+                    .help("Mailmodus (⌘2)")
+                }
+            }
+            ToolbarItem(placement: .navigation) {
+                // Het Mail-paneel hoort bij de werkbank; in de mailmodus doet dit knopje niets zichtbaars.
+                if !mailMode.isActive {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { gmailVisible.toggle() }
+                    } label: {
+                        Label("Gmail", systemImage: "sidebar.left")
+                    }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                    .help("Mailpaneel tonen of verbergen (⇧⌘L)")
+                }
+            }
+    }
+
     private var workbenchLive: Bool {
         (!mailMode.isActive || mailMode.isReceded || mailMode.isReturning) && !columns.isActive
     }

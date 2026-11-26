@@ -572,6 +572,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       staat), ⌘1 of de mailmodus.
     - Niet gebouwd: zelf verversen op de achtergrond (de knop verversen en bij openen), meer mails tegelijk kiezen
       in de kolommen.
+    - Etiket: de wisselknop Mail/Werkbank in de werkbalk zonder glas (rechthoek met dunne rand, kleine kapitalen;
+      `ToolbarSwitchStyle`), en op macOS 26 zonder het gedeelde glas om de knoppen links in de werkbalk
+      (`sharedBackgroundVisibility(.hidden)` op `MainView.navigationItems`).
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
