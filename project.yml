@@ -152,6 +152,9 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Werkbank
+        # Gmail (OAuth met PKCE), hetzelfde client-id als op de Mac.
+        GoogleClientID: $(GOOGLE_CLIENT_ID)
+        NSContactsUsageDescription: Werkbank zet de afzender van een mail in je contacten.
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt om naar een tijdregel, op dit toestel.
@@ -193,6 +196,10 @@ targets:
       properties:
         com.apple.developer.icloud-container-identifiers:
           - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
+        # CloudDocuments: dezelfde map Werkbank in iCloud Drive als de Mac (Voorkeuren.plist).
         com.apple.developer.icloud-services:
           - CloudKit
+          - CloudDocuments
+        com.apple.developer.ubiquity-container-identifiers:
+          - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
         aps-environment: development

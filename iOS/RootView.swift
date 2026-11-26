@@ -2,21 +2,15 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// iPhone/iPad: twee tabs (Board, Tijd) in Things-stijl. De Magic Plus rechtsonder schrijft tijd (klant, case,
-/// uitgevoerd; eerst kiezen tussen inspreken en typen), net als de snelle acties op het beginscherm.
+/// De iPhone-app (nieuw ontwerp, canvas "Werkbank iOS"): vier onderdelen onder een eigen tabbalk in de stijl Etiket.
+/// Snelle acties op het beginscherm openen nog steeds de tijdinvoer.
 struct RootView: View {
-    enum Tab: Hashable { case board, time }
-
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
-    @AppStorage(SettingsKey.appearance) private var appearanceRaw = AppearanceSetting.system.rawValue
-    @State private var tab: Tab = .board
-    @State private var showSettings = false
-    @State private var showArchive = false
-    @State private var isImporting = false
+    @State private var tab: PhTab = .mail
     /// Verbetering: eerst het scherm vastleggen, dan het blad.
     @State private var feedback: FeedbackStart?
 
@@ -24,27 +18,23 @@ struct RootView: View {
         @Bindable var state = appState
 
         ZStack {
-            TabView(selection: $tab) {
-                NavigationStack {
-                    BoardListView()
-                        .toolbar { boardToolbar }
-                        .tabChrome(running: running, plus: enterTime, feedback: startFeedback)
+            Group {
+                switch tab {
+                case .mail: MailHome()
+                case .agenda: AgendaHome()
+                case .tijd: TijdHome()
+                case .board: BoardHome()
                 }
-                .tabItem { Label("Board", systemImage: "square.grid.2x2") }
-                .tag(Tab.board)
-
-                NavigationStack {
-                    TimeListView()
-                        .toolbar { settingsToolbar }
-                        .tabChrome(running: [], plus: enterTime, feedback: startFeedback)
-                }
-                .tabItem { Label("Tijd", systemImage: "clock") }
-                .tag(Tab.time)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PhTabBar(tab: $tab, timerRunning: !running.isEmpty)
             }
 
             ToastOverlay(message: appState.toast)
         }
-        .preferredColorScheme(AppearanceSetting(stored: appearanceRaw).colorScheme)
+        .phScreen()
+        .preferredColorScheme(.light)
         .scrollIndicators(.never)
         .sheet(item: $state.timeEntry) { start in
             TimeEntrySheet(start: start) { appState.timeEntry = nil }
@@ -54,95 +44,96 @@ struct RootView: View {
             FeedbackDictationSheet(screenshot: start.screenshot)
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showArchive) {
-            NavigationStack {
-                ArchiveView()
-                    .navigationTitle("Archief")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Klaar") { showArchive = false } } }
-            }
-        }
-        .sheet(isPresented: $showSettings) {
-            NavigationStack {
-                PreferencesView()
-                    .navigationTitle("Voorkeuren")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Klaar") { showSettings = false } } }
-            }
-        }
         .sheet(item: $state.stopContext) { stop in
             if let entry = TimerService.entry(withID: stop.entryID, in: context) {
                 StopSheet(entry: entry, defaultEnd: stop.defaultEnd)
                     .presentationDetents([.large])
             }
         }
-        .fileImporter(isPresented: $isImporting,
-                      allowedContentTypes: [UTType(filenameExtension: "eml") ?? .data, .emailMessage],
-                      allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result {
-                MailImporter.handle(urls: urls, context: context, appState: appState)
-            }
+        .task {
+            PhoneDictation.shared.refresh()
+            await PhonePreferencesSync.shared.pull()
         }
-        // Slepen van .eml-bestanden (iPad, Split View).
-        .onDrop(of: [.emailMessage, .fileURL], isTargeted: $state.isDropTargeted) { providers in
-            MailImporter.handle(providers: providers, context: context, appState: appState)
-        }
-        .overlay {
-            if appState.isDropTargeted {
-                ZStack {
-                    ThingsColor.accent.opacity(0.10)
-                    Text("Laat los om de mail aan de Inbox toe te voegen")
-                        .thingsFont(.listTitle)
-                        .foregroundStyle(ThingsColor.accent)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-            }
-        }
-        .task { PhoneDictation.shared.refresh() }
         // Het spraakmodel uit het geheugen als de app weg is; terug in beeld gaat een onderbroken download verder.
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background: PhoneDictation.shared.unload()
-            case .active: PhoneDictation.shared.refresh()
+            case .active:
+                PhoneDictation.shared.refresh()
+                Task { await PhonePreferencesSync.shared.pull() }
             default: break
             }
         }
     }
+}
 
-    private func startFeedback() {
-        Task { feedback = FeedbackStart(screenshot: await FeedbackScreenshot.capture()) }
-    }
+enum PhTab: String, CaseIterable {
+    case mail, agenda, tijd, board
 
-    private func enterTime() {
-        appState.timeEntry = .choose
-    }
-
-    @ToolbarContentBuilder private var settingsToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                .accessibilityLabel("Instellingen")
+    var title: String {
+        switch self {
+        case .mail: "Mail"
+        case .agenda: "Agenda"
+        case .tijd: "Tijd"
+        case .board: "Board"
         }
     }
 
-    @ToolbarContentBuilder private var boardToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                .accessibilityLabel("Instellingen")
+    var symbol: String {
+        switch self {
+        case .mail: "envelope"
+        case .agenda: "calendar"
+        case .tijd: "clock"
+        case .board: "rectangle.split.3x1"
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button { showArchive = true } label: { Image(systemName: "archivebox") }
-                .accessibilityLabel("Archief")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                Button { isImporting = true } label: { Label("Importeer .eml…", systemImage: "envelope") }
-            } label: {
-                Image(systemName: "ellipsis.circle")
+    }
+}
+
+/// De tabbalk: inktlijn erboven, het gekozen onderdeel limoen en verzonken; een oranje stip als er tijd loopt.
+struct PhTabBar: View {
+    @Binding var tab: PhTab
+    let timerRunning: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(PhTab.allCases, id: \.self) { item in
+                let on = item == tab
+                Button {
+                    tab = item
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 17, weight: .medium))
+                        Text(item.title.uppercased())
+                            .font(Ph.text(10, .semibold))
+                            .tracking(1.6)
+                    }
+                    .foregroundStyle(on ? Ph.ink : Ph.ink2)
+                    .frame(maxWidth: .infinity, minHeight: 49)
+                    .background {
+                        if on {
+                            Rectangle().fill(Ph.lime.shadow(.inner(color: Ph.ink.opacity(0.22), radius: 1.5, y: 2)))
+                        }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if item == .tijd && timerRunning {
+                            Circle().fill(Ph.late).frame(width: 7, height: 7)
+                                .overlay(Circle().stroke(Ph.paper, lineWidth: 2))
+                                .padding(.top, 6).padding(.trailing, 14)
+                                .accessibilityLabel("Tijd loopt")
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.top, 7)
+        .padding(.bottom, 4)
+        .background(Ph.paper.shadow(.drop(color: Ph.ink.opacity(0.05), radius: 7, y: -4)).ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { Rectangle().fill(Ph.ink).frame(height: 2) }
     }
 }
 
@@ -182,33 +173,6 @@ struct QuickAddSheet: View {
         guard BoardService.addQuickEntry(text, column: column, in: context) != nil else { return }
         appState.showToast("Toegevoegd aan \(column.title)")
         dismiss()
-    }
-}
-
-private extension View {
-    /// Lopende-timerbalk, Magic Plus (tijd schrijven) en de knop Verbetering binnen een tab, zodat ze boven de
-    /// tabbalk staan.
-    func tabChrome(running: [TimeEntry], plus: @escaping () -> Void, feedback: @escaping () -> Void) -> some View {
-        self
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !running.isEmpty {
-                    VStack(spacing: 6) {
-                        ForEach(running) { entry in RunningTimerRow(entry: entry) }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.bar)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                MagicPlusButton(title: "Tijd schrijven", action: plus)
-                    .padding(ThingsMetrics.magicPlusInset)
-            }
-            .overlay(alignment: .bottomLeading) {
-                FeedbackButton(action: feedback)
-                    .padding(.leading, ThingsMetrics.magicPlusInset)
-                    .padding(.bottom, ThingsMetrics.magicPlusInset + (ThingsMetrics.magicPlusSize - 44) / 2)
-            }
     }
 }
 
