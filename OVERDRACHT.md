@@ -594,6 +594,23 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       dan het zoeken. (Eerst gebouwd als los macOS-venster; op verzoek een paneel geworden, 26 nov.)
     - De vinkjes in het zoeken in de stijl van het thema (`ThemedCheckboxStyle`: Etiket recht; aan limoen met een
       zwart vinkje zonder rand, uit leeg met een zwarte rand; elders afgerond in de accentkleur).
+57. **Kolommen: ster bovenin, meer mails kiezen over de kolommen** (26/27 nov; ontwerp goedgekeurd op het canvas
+    "Kolommen: ster en selectie").
+    - Mails met een ster (Gmail-label STARRED) die in de inbox staan, staan bovenin hun kolom in een band
+      (`MailColumn.starredBand`, Etiket: 2 pt inktlijn eronder; meer dan vijf: scrollen binnen de band). Gearchiveerd
+      met ster komt er niet in ("gearchiveerd is klaar"). Per mail (`StarredMailRow`): ster, datum als dag/maand
+      (`StarredMail.dayMonth`), voornaam (`StarredMail.firstName`: wat na een | staat en de achternaam gaan eraf),
+      onderwerp; eronder de inhoud op één regel (`oneLine`), kleiner en lichter. Datum na meer dan 4 dagen knaloranje
+      (#FF6A00), na meer dan 6 rood/fuchsia (#FF0055) (`StarredMail.age`, `ThingsColor.starLate/starOverdue`).
+    - De ster (`StarButton`): limoen met een schaduw aan de binnenkant (verzonken), bij aanwijzen 1,5 pt omhoog met een
+      schaduw eronder (0,2 s). Geen lijn erom (op verzoek weg). Klik haalt de ster eraf. Een ster zetten: het
+      sterknopje bij aanwijzen op een gewone mail (`GmailRow.onStar`, alleen in de kolommen).
+    - `GmailSession.setStarred` (één gesprek of meer, acht tegelijk) werkt de kolommen meteen bij
+      (`MailColumnsStore.noteStarred`) en draait dat terug als Gmail weigert.
+    - Kiezen: klik één mail, ⌘-klik erbij of eraf (ook in een andere kolom), ⇧-klik een reeks binnen één kolom
+      (`MailColumnsStore.chosenIDs`/`click`). Bij twee of meer staat op de plek van de mailboxknoppen de balk
+      `ColumnsChoiceBar`: aantal, Archiveer, Gelezen/Ongelezen, Ster/Ster eraf, Verwijder (naar de prullenbak in
+      Gmail, `trashBulk`, ⌘Z zet terug), ✕. Esc haalt eerst de keuze weg.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

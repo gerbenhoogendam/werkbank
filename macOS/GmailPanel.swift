@@ -605,6 +605,8 @@ struct GmailRow: View {
     var onOpen: (() -> Void)? = nil
     /// De knoppen rechtsonder ook zonder muis erboven als de rij gekozen is (niet bij meer gekozen rijen).
     var showsActionsWhenSelected = true
+    /// Kolommen: een knop om een ster te zetten (de mail komt dan bovenin de kolom).
+    var onStar: (() -> Void)? = nil
     let onSelect: () -> Void
     let onArchive: () -> Void
     let onDragStarted: () -> Void
@@ -843,6 +845,19 @@ struct GmailRow: View {
 
     private var hoverActions: some View {
         HStack(spacing: 0) {
+            if let onStar {
+                Button(action: onStar) {
+                    Image(systemName: "star")
+                        .font(.werk(size: 12))
+                        .foregroundStyle(ThingsColor.textSecondary)
+                        .frame(width: 26, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("Ster: bovenin de kolom")
+                .accessibilityLabel("Ster op mail van \(message.senderDisplay)")
+            }
             Button(action: analyze) {
                 ClaudeSpark()
                     .frame(width: 14, height: 14)

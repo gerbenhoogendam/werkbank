@@ -19,7 +19,10 @@ final class MailColumnsStore {
     private(set) var lists: [String: [GmailMailItem]] = [:]
     private(set) var loading: Set<String> = []
     private(set) var errors: [String: String] = [:]
-    var selectedID: String?
+    /// De gekozen mails, over alle kolommen. Klik: één mail; ⌘-klik: erbij of eraf (ook in een andere kolom);
+    /// ⇧-klik: alles in die kolom tussen de vorige klik en deze.
+    private(set) var chosenIDs: Set<String> = []
+    @ObservationIgnored private var anchor: (id: String, account: String)?
     /// De kolom waar een mail boven hangt tijdens het slepen.
     var dropTarget: String?
 
@@ -44,7 +47,7 @@ final class MailColumnsStore {
 
     func close() {
         withAnimation(.easeOut(duration: 0.2)) { isActive = false }
-        selectedID = nil
+        chosenIDs = []
     }
 
     /// Klik op een mailbox: alleen die. ⌘-klik: erbij of eraf (de laatste blijft staan).
@@ -95,6 +98,18 @@ final class MailColumnsStore {
         for key in Array(lists.keys) { lists[key]?.removeAll { $0.threadID == threadID } }
     }
 
+    /// Een ster gezet of eraf gehaald.
+    func noteStarred(_ starred: Bool, threadID: String) {
+        for key in Array(lists.keys) {
+            guard let indices = lists[key]?.indices.filter({ lists[key]?[$0].threadID == threadID }) else { continue }
+            for index in indices {
+                var labels = lists[key]?[index].labels.filter { $0 != "STARRED" } ?? []
+                if starred { labels.append("STARRED") }
+                lists[key]?[index].labels = labels
+            }
+        }
+    }
+
     /// Gelezen of ongelezen gezet (waar dan ook in de app).
     func noteUnread(_ unread: Bool, threadID: String) {
         for key in Array(lists.keys) {
@@ -109,11 +124,98 @@ final class MailColumnsStore {
         lists.first { $0.value.contains { $0.threadID == threadID } }?.key
     }
 
+    // MARK: Kiezen
+
+    /// De mails van een kolom zoals ze onder elkaar staan: eerst die met een ster.
+    func order(_ account: String) -> [GmailMailItem] {
+        let items = lists[account] ?? []
+        return items.filter(\.isStarred) + items.filter { !$0.isStarred }
+    }
+
+    func click(_ item: GmailMailItem, in account: String) {
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.command) {
+            if chosenIDs.contains(item.id) { chosenIDs.remove(item.id) } else { chosenIDs.insert(item.id) }
+            anchor = (item.id, account)
+        } else if flags.contains(.shift), let anchor, anchor.account == account {
+            let ids = order(account).map(\.id)
+            if let from = ids.firstIndex(of: anchor.id), let to = ids.firstIndex(of: item.id) {
+                chosenIDs.formUnion(ids[min(from, to)...max(from, to)])
+            }
+        } else {
+            chosenIDs = [item.id]
+            anchor = (item.id, account)
+        }
+    }
+
+    /// De gekozen mails die nog in de kolommen staan.
+    var chosen: [GmailMailItem] {
+        shown.flatMap { order($0) }.filter { chosenIDs.contains($0.id) }
+    }
+
+    func clearChoice() { chosenIDs = [] }
+
     // MARK: Handelingen
 
     func archive(_ item: GmailMailItem) {
-        if selectedID == item.id { selectedID = nil }
+        chosenIDs.remove(item.id)
         Task { await gmail.archiveMessage(item.summary, appState: AppState.shared) }
+    }
+
+    func toggleStar(_ item: GmailMailItem) {
+        let starred = !item.isStarred
+        Task {
+            if !(await gmail.setStarred(starred, threadID: item.threadID, account: account(of: item.threadID))) {
+                AppState.shared.showToast(starred ? "Ster zetten mislukt" : "Ster weghalen mislukt", seconds: 5)
+            }
+        }
+    }
+
+    /// De gekozen gesprekken (elk één keer).
+    private func chosenThreads() -> [(threadID: String, account: String?)] {
+        var seen: Set<String> = []
+        return chosen.compactMap { item in
+            guard seen.insert(item.threadID).inserted else { return nil }
+            return (threadID: item.threadID, account: account(of: item.threadID))
+        }
+    }
+
+    func archiveChosen() {
+        let threads = chosenThreads()
+        chosenIDs = []
+        Task {
+            let done = await gmail.archiveBulk(threadIDs: threads.map(\.threadID))
+            AppState.shared.showToast(done.count == 1 ? "Mail gearchiveerd in Gmail" : "\(done.count) mails gearchiveerd in Gmail")
+        }
+    }
+
+    func trashChosen() {
+        let threads = chosenThreads()
+        chosenIDs = []
+        Task {
+            let done = await gmail.trashBulk(threadIDs: threads.map(\.threadID))
+            AppState.shared.showToast(done.count == 1 ? "Mail in de prullenbak" : "\(done.count) mails in de prullenbak")
+        }
+    }
+
+    /// Staat er één ongelezen tussen, dan alles gelezen; anders alles ongelezen.
+    func toggleUnreadChosen() {
+        let unread = !chosen.contains(where: \.isUnread)
+        let threads = chosenThreads()
+        Task {
+            let done = await gmail.setUnread(unread, threads: threads)
+            AppState.shared.showToast("\(done) \(done == 1 ? "mail" : "mails") \(unread ? "ongelezen" : "gelezen")")
+        }
+    }
+
+    /// Hebben ze allemaal een ster, dan gaan die eraf; anders krijgen ze er allemaal een.
+    func toggleStarChosen() {
+        let starred = !chosen.allSatisfy(\.isStarred)
+        let threads = chosenThreads()
+        Task {
+            let done = await gmail.setStarred(starred, threads: threads)
+            if done < threads.count { AppState.shared.showToast("Ster mislukt bij \(threads.count - done) mails", seconds: 5) }
+        }
     }
 
     /// Een mail op een andere kolom laten vallen: het gesprek verhuist naar die mailbox.
@@ -187,6 +289,11 @@ struct MailColumnsView: View {
             mailMode.closeSheet()
             return true
         }
+        // Esc met meer gekozen mails: eerst de keuze weg, niet de kolommen.
+        if event.keyCode == 53, store.chosen.count > 1 {
+            store.clearChoice()
+            return true
+        }
         if event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
            event.charactersIgnoringModifiers?.lowercased() == "f" {
             mailMode.openSheet(.search)
@@ -214,12 +321,16 @@ struct MailColumnsView: View {
             MailHeaderTitle(title: "Mail", unread: store.unreadCount, total: 0, mailbox: "")
                 .lineLimit(1)
                 .fixedSize()
-            HStack(spacing: 4) {
-                ForEach(gmail.accounts, id: \.self) { account in
-                    MailboxTab(title: gmail.displayName(account), isOn: store.shown.contains(account), fitsContent: true) {
-                        store.tap(account)
+            if store.chosen.count > 1 {
+                ColumnsChoiceBar()
+            } else {
+                HStack(spacing: 4) {
+                    ForEach(gmail.accounts, id: \.self) { account in
+                        MailboxTab(title: gmail.displayName(account), isOn: store.shown.contains(account), fitsContent: true) {
+                            store.tap(account)
+                        }
+                        .help("\(account) · ⌘-klik om erbij te zetten of weg te halen")
                     }
-                    .help("\(account) · ⌘-klik om erbij te zetten of weg te halen")
                 }
             }
             Spacer(minLength: 0)
@@ -251,6 +362,8 @@ private struct MailColumn: View {
     private let gmail = GmailSession.shared
 
     private var items: [GmailMailItem] { store.lists[account] ?? [] }
+    private var starred: [GmailMailItem] { items.filter(\.isStarred) }
+    private var others: [GmailMailItem] { items.filter { !$0.isStarred } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -274,13 +387,16 @@ private struct MailColumn: View {
                     .foregroundStyle(ThingsColor.deadline)
                     .padding(12)
             }
+            if !starred.isEmpty { starredBand }
             ScrollView {
                 LazyVStack(spacing: MailLook.cardRows ? 2 : 0) {
-                    ForEach(items) { item in
+                    ForEach(others) { item in
                         GmailRow(message: item.summary,
                                  isBusy: gmail.busyMessageIDs.contains(item.id),
-                                 isSelected: store.selectedID == item.id,
-                                 onSelect: { store.selectedID = item.id },
+                                 isSelected: store.chosenIDs.contains(item.id),
+                                 showsActionsWhenSelected: store.chosen.count <= 1,
+                                 onStar: { store.toggleStar(item) },
+                                 onSelect: { store.click(item, in: account) },
                                  onArchive: { store.archive(item) },
                                  onDragStarted: {})
                         if !MailLook.cardRows {
@@ -319,5 +435,226 @@ private struct MailColumn: View {
             }
             return true
         }
+    }
+}
+
+// MARK: - Ster
+
+extension ThingsColor {
+    /// De datum van een mail met een ster die al meer dan 4 dagen ligt: knaloranje.
+    static let starLate = Color(red: 1, green: 0x6A / 255, blue: 0)
+    /// Meer dan 6 dagen: knalrood/fuchsia.
+    static let starOverdue = Color(red: 1, green: 0, blue: 0x55 / 255)
+}
+
+extension MailColumn {
+    /// De mails met een ster: bovenin, elk op een compacte regel. Meer dan vijf: die scrollen binnen de band.
+    @ViewBuilder var starredBand: some View {
+        let etiket = ThemeStore.shared.look == .etiket
+        let rows = VStack(spacing: 0) {
+            ForEach(starred) { item in
+                StarredMailRow(item: item, account: account)
+                if item.id != starred.last?.id {
+                    Rectangle().fill(ThingsColor.separator.opacity(0.6)).frame(height: 1)
+                }
+            }
+        }
+        Group {
+            if starred.count > 5 {
+                ScrollView { rows }
+                    .scrollIndicators(.never)
+                    .frame(height: 5 * 44)
+            } else {
+                rows
+            }
+        }
+        .background(Color.primary.opacity(0.03))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(etiket ? ThingsColor.textPrimary : ThingsColor.separator).frame(height: etiket ? 2 : 1)
+        }
+    }
+}
+
+/// Eén mail met een ster: ster, datum (dag/maand, oranje of rood als hij blijft liggen), voornaam en onderwerp; daaronder
+/// de inhoud op één regel. Klik kiest, dubbelklik opent, slepen verhuist hem naar een andere kolom.
+private struct StarredMailRow: View {
+    let item: GmailMailItem
+    let account: String
+    private let store = MailColumnsStore.shared
+    @State private var isHovering = false
+
+    var body: some View {
+        let selected = store.chosenIDs.contains(item.id)
+        HStack(alignment: .top, spacing: 8) {
+            StarButton { store.toggleStar(item) }
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    if let date = item.date { dateText(date) }
+                    Text(StarredMail.firstName(item.fromName, address: item.fromAddress))
+                        .font(.werk(size: 13, weight: item.isUnread ? .semibold : .medium))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    Text(item.subject)
+                        .font(.werk(size: 13))
+                        .foregroundStyle(ThingsColor.textPrimary)
+                        .lineLimit(1)
+                }
+                if !item.snippet.isEmpty {
+                    Text(StarredMail.oneLine(item.snippet))
+                        .font(.werk(size: 11.5))
+                        .foregroundStyle(ThingsColor.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            // Eerst dubbelklik, dan enkele klik: anders wint de enkele klik altijd.
+            .onTapGesture(count: 2) { PanelStore.shared.open(.mail(MailRef(message: item.summary))) }
+            .onTapGesture { store.click(item, in: account) }
+            .onDrag { GmailSession.shared.dragProvider(for: item.summary) }
+            .contextMenu {
+                Button("Openen") { PanelStore.shared.open(.mail(MailRef(message: item.summary))) }
+                Button(item.isUnread ? "Markeer als gelezen" : "Markeer als ongelezen") {
+                    Task { await GmailSession.shared.toggleUnread(item.summary, appState: AppState.shared) }
+                }
+                Button("Ster eraf") { store.toggleStar(item) }
+                Button("Archiveren") { store.archive(item) }
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 14)
+        .padding(.vertical, 6)
+        .background {
+            if selected {
+                Rectangle().fill(ThingsColor.selection).overlay(Color.primary.opacity(0.06))
+            } else if isHovering {
+                Rectangle().fill(ThingsColor.selection.opacity(0.5))
+            }
+        }
+        .opacity(GmailSession.shared.busyMessageIDs.contains(item.id) ? 0.5 : 1)
+        .onHover { isHovering = $0 }
+    }
+
+    private func dateText(_ date: Date) -> some View {
+        let age = StarredMail.age(of: date, now: .now)
+        let color: Color = switch age {
+        case .fresh: ThingsColor.textSecondary
+        case .late: ThingsColor.starLate
+        case .overdue: ThingsColor.starOverdue
+        }
+        return Text(StarredMail.dayMonth(date))
+            .font(.werk(size: 12, weight: age == .fresh ? .regular : .semibold))
+            .monospacedDigit()
+            .foregroundStyle(color)
+    }
+}
+
+/// De ster voor een mail met een ster: verzonken (schaduw aan de binnenkant), bij aanwijzen komt hij omhoog met een
+/// schaduw eronder. Geen lijn erom: de schaduw houdt hem ook in licht leesbaar.
+private struct StarButton: View {
+    let action: () -> Void
+    @State private var isHovering = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let fill = ThemeStore.shared.look == .etiket ? Etiket.lime : ThingsColor.accent
+        let light = scheme == .light
+        let inner = light ? ThingsColor.textSecondary : Color.black.opacity(0.9)
+        let drop = light ? ThingsColor.textSecondary.opacity(0.6) : Color.black.opacity(0.8)
+        Button(action: action) {
+            Image(systemName: "star.fill")
+                .font(.werk(size: 14))
+                .foregroundStyle(fill.shadow(.inner(color: isHovering ? .clear : inner, radius: 0.6, x: 0.35, y: 0.9)))
+            .offset(y: isHovering ? -1.5 : 0)
+            .shadow(color: isHovering ? drop : .clear, radius: 0.8, y: 1.5)
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.timingCurve(0.2, 0.8, 0.3, 1, duration: 0.2)) { isHovering = hovering }
+        }
+        .help("Ster eraf")
+        .accessibilityLabel("Ster eraf")
+    }
+}
+
+// MARK: - Keuze over de kolommen
+
+/// Zolang er meer mails gekozen zijn (⌘-klik, ook in verschillende kolommen): in plaats van de mailboxknoppen.
+private struct ColumnsChoiceBar: View {
+    private let store = MailColumnsStore.shared
+
+    var body: some View {
+        let chosen = store.chosen
+        let etiket = ThemeStore.shared.look == .etiket
+        let anyUnread = chosen.contains(where: \.isUnread)
+        let allStarred = chosen.allSatisfy(\.isStarred)
+        HStack(spacing: 6) {
+            Text(caption("\(chosen.count) gekozen"))
+                .font(.werk(size: 12, weight: .semibold))
+                .tracking(etiket ? 1.8 : 0)
+                .foregroundStyle(ThingsColor.backgroundContent)
+                .padding(.horizontal, 14)
+                .frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: etiket ? 0 : min(6, ThingsMetrics.cardRadius), style: .continuous)
+                    .fill(ThingsColor.textPrimary))
+            Button { store.archiveChosen() } label: {
+                Label(caption("Archiveer"), systemImage: "archivebox")
+            }
+            .buttonStyle(ChoiceButtonStyle(kind: .primary))
+            Button { store.toggleUnreadChosen() } label: {
+                Label(caption(anyUnread ? "Gelezen" : "Ongelezen"), systemImage: anyUnread ? "envelope.open" : "envelope.badge")
+            }
+            .buttonStyle(ChoiceButtonStyle(kind: .plain))
+            Button { store.toggleStarChosen() } label: {
+                Label(caption(allStarred ? "Ster eraf" : "Ster"), systemImage: allStarred ? "star.slash" : "star")
+            }
+            .buttonStyle(ChoiceButtonStyle(kind: .plain))
+            Button { store.trashChosen() } label: {
+                Label(caption("Verwijder"), systemImage: "trash")
+            }
+            .buttonStyle(ChoiceButtonStyle(kind: .danger))
+            .help("Naar de prullenbak in Gmail (⌘Z zet ze terug)")
+            Button { store.clearChoice() } label: {
+                Image(systemName: "xmark")
+                    .font(.werk(size: 11, weight: .semibold))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Niets meer gekozen (Esc)")
+        }
+    }
+
+    private func caption(_ text: String) -> String {
+        ThemeStore.shared.look == .etiket ? text.uppercased() : text
+    }
+}
+
+private struct ChoiceButtonStyle: ButtonStyle {
+    enum Kind { case primary, plain, danger }
+    let kind: Kind
+
+    func makeBody(configuration: Configuration) -> some View {
+        let etiket = ThemeStore.shared.look == .etiket
+        let shape = RoundedRectangle(cornerRadius: etiket ? 0 : min(6, ThingsMetrics.cardRadius), style: .continuous)
+        let tint: Color = kind == .danger ? ThingsColor.deadline : ThingsColor.textPrimary
+        return configuration.label
+            .labelStyle(.titleAndIcon)
+            .font(.werk(size: 12, weight: .semibold))
+            .tracking(etiket ? 1.8 : 0)
+            .foregroundStyle(kind == .primary ? (etiket ? Etiket.ink : ThingsColor.onAccent) : tint)
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .background(shape.fill(kind == .primary ? (etiket ? Etiket.lime : ThingsColor.accent) : Color.clear))
+            .overlay {
+                if kind != .primary { shape.strokeBorder(tint, lineWidth: 1) }
+            }
+            .contentShape(shape)
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

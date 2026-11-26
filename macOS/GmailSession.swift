@@ -1381,6 +1381,37 @@ final class GmailSession {
         return done.count
     }
 
+    // MARK: Ster
+
+    /// Zet een ster op een gesprek of haalt hem eraf (het label STARRED op alle mails van het gesprek), en werkt de
+    /// kolommen meteen bij. `false`: het lukte niet.
+    @discardableResult
+    func setStarred(_ starred: Bool, threadID: String, account: String? = nil) async -> Bool {
+        MailColumnsStore.shared.noteStarred(starred, threadID: threadID)
+        do {
+            let change = starred ? ["addLabelIds": ["STARRED"]] : ["removeLabelIds": ["STARRED"]]
+            let body = try JSONSerialization.data(withJSONObject: change)
+            _ = try await api("threads/\(threadID)/modify", method: "POST", body: body,
+                              account: account ?? messageAccount[threadID])
+        } catch {
+            MailColumnsStore.shared.noteStarred(!starred, threadID: threadID)
+            return false
+        }
+        headerCache.patch(threadID: threadID, adding: starred ? ["STARRED"] : [], removing: starred ? [] : ["STARRED"])
+        return true
+    }
+
+    /// Meer gesprekken tegelijk; geeft terug bij hoeveel het lukte.
+    func setStarred(_ starred: Bool, threads: [(threadID: String, account: String?)]) async -> Int {
+        let accounts = Dictionary(threads.map { ($0.threadID, $0.account) }, uniquingKeysWith: { first, _ in first })
+        let done = await forEachThread(Array(accounts.keys)) { id in
+            guard await self.setStarred(starred, threadID: id, account: accounts[id] ?? nil) else {
+                throw GmailError.invalidResponse
+            }
+        }
+        return done.count
+    }
+
     /// Rechtermuisknop op een mail: gelezen wordt ongelezen en andersom.
     func toggleUnread(_ message: GmailMessageSummary, appState: AppState) async {
         let unread = !message.isUnread
