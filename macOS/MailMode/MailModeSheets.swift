@@ -1011,7 +1011,10 @@ private struct MailSearchSheet: View {
     /// Waar nu naar gezocht is of wordt (niet twee keer hetzelfde vragen).
     @State private var requested: Request?
     @FocusState private var focused: Bool
+    /// Het resultaat waarvan het voorbeeld open staat.
+    @State private var previewID: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openWindow) private var openMailWindow
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
 
@@ -1136,7 +1139,8 @@ private struct MailSearchSheet: View {
                 .padding(6)
                 .frame(maxWidth: .infinity)
             }
-            .frame(height: 250)
+            // Met een voorbeeld open meer ruimte, zodat het voorbeeld past.
+            .frame(height: previewID == nil ? 250 : 440)
             .clipShape(Self.resultFrame)
             .overlay(Self.resultFrame.strokeBorder(ThingsColor.separator))
         }
@@ -1157,10 +1161,12 @@ private struct MailSearchSheet: View {
             removal: AnyTransition.move(edge: .trailing).combined(with: .opacity).animation(ThingsMotion.enter))
     }
 
-    /// Eén resultaat als kaartje; een klik zet de zoekopdracht in de lijst en opent die mail.
+    /// Eén resultaat als kaartje. Klik: het voorbeeld klapt open in de kaart (nog een klik: dicht). Dubbelklik (of
+    /// Openen): de mail in een eigen venster naast het zoeken, dat open blijft.
     private func resultRow(_ item: GmailMailItem) -> some View {
         let shape = RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
-        return Button { show(selecting: item.id) } label: {
+        let isOpen = previewID == item.id
+        return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Text(item.senderDisplay)
                     .font(.werk(size: 12.5, weight: item.isUnread ? .semibold : .medium))
@@ -1200,11 +1206,32 @@ private struct MailSearchSheet: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(shape.fill(ThingsColor.cardBackground))
-            .overlay(shape.strokeBorder(ThingsColor.separator))
-            .contentShape(shape)
+            .contentShape(Rectangle())
+            // Eerst dubbelklik, dan enkele klik: anders wint de enkele klik altijd.
+            .onTapGesture(count: 2) { openWindow(item) }
+            .onTapGesture {
+                withAnimation(.easeOut(duration: 0.18)) { previewID = isOpen ? nil : item.id }
+            }
+            .accessibilityAddTraits(.isButton)
+            if isOpen {
+                MailSearchPreview(item: item, words: highlightWords) { openWindow(item) }
+                    .transition(.opacity)
+            }
         }
-        .buttonStyle(.plain)
+        .background(shape.fill(isOpen ? ThingsColor.selection : ThingsColor.cardBackground))
+        .overlay(shape.strokeBorder(isOpen ? ThingsColor.textPrimary.opacity(0.55) : ThingsColor.separator))
+        .clipShape(shape)
+    }
+
+    /// De mail in een eigen venster (`MailStandaloneWindow`); het zoeken blijft open staan.
+    private func openWindow(_ item: GmailMailItem) {
+        openMailWindow(value: MailRef(message: item.summary))
+    }
+
+    /// De woorden uit "Met de woorden" om in het voorbeeld te markeren (zonder zoekopdrachten als from: of -woord).
+    private var highlightWords: [String] {
+        form.words.split(separator: " ").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\"'()")) }
+            .filter { !$0.isEmpty && !$0.contains(":") && !$0.hasPrefix("-") && $0.count > 1 }
     }
 
     private var detail: String {
@@ -1272,5 +1299,132 @@ private struct MailSearchSheet: View {
             store.open()
         }
         store.applySearch(form, mailboxes: gmail.accounts.filter { mailboxes.contains($0) }, selecting: id)
+    }
+}
+
+// MARK: - Voorbeeld in een zoekresultaat
+
+/// Het voorbeeld onder een zoekresultaat: van, aan en datum, het begin van de mail met de zoekwoorden gemarkeerd, en
+/// de bijlagen. Openen zet de mail in een eigen venster.
+private struct MailSearchPreview: View {
+    let item: GmailMailItem
+    let words: [String]
+    var onOpen: () -> Void
+
+    @State private var content: MailContent?
+    @State private var failed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let content {
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 3) {
+                    row("Van", content.from)
+                    if !content.to.isEmpty { row("Aan", content.to) }
+                    if !content.cc.isEmpty { row("Cc", content.cc) }
+                    row("Datum", content.date)
+                }
+                Text(highlighted(excerpt(content)))
+                    .font(.werk(size: 13))
+                    .foregroundStyle(ThingsColor.textPrimary)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity, maxHeight: 170, alignment: .topLeading)
+                    .clipped()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(ThingsColor.mailPaper)
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [ThingsColor.mailPaper.opacity(0), ThingsColor.mailPaper],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: 36)
+                            .allowsHitTesting(false)
+                    }
+                HStack(spacing: 6) {
+                    ForEach(Array(content.files.prefix(4).enumerated()), id: \.offset) { _, file in
+                        HStack(spacing: 4) {
+                            Image(systemName: "paperclip").font(.werk(size: 10))
+                            Text(file.name).lineLimit(1)
+                            Text("· " + ByteCountFormatter.string(fromByteCount: Int64(file.data.count), countStyle: .file))
+                                .foregroundStyle(ThingsColor.textSecondary)
+                        }
+                        .font(.werk(size: 11.5))
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .overlay(RoundedRectangle(cornerRadius: min(4, MailModeMetrics.radius)).strokeBorder(ThingsColor.separator))
+                    }
+                    if content.files.count > 4 {
+                        Text("+\(content.files.count - 4)").font(.werk(size: 11.5)).foregroundStyle(ThingsColor.textSecondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Openen", action: onOpen)
+                        .buttonStyle(MailModeButtonStyle(prominent: false))
+                        .help("In een eigen venster (of dubbelklik op het resultaat)")
+                }
+            } else if failed {
+                Text("De mail kon niet worden opgehaald.")
+                    .font(.werk(size: 12))
+                    .foregroundStyle(ThingsColor.deadline)
+            } else {
+                ProgressView().controlSize(.small).frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.leading, 172)
+        .padding(.trailing, 14)
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { Rectangle().fill(ThingsColor.separator).frame(height: 1) }
+        .task(id: item.id) { await load() }
+    }
+
+    @ViewBuilder private func row(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(.werk(size: 11.5, weight: .semibold))
+                .foregroundStyle(Color.fieldLabel)
+            Text(value)
+                .font(.werk(size: 11.5))
+                .foregroundStyle(ThingsColor.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            let raw = try await GmailSession.shared.rawMessageData(id: item.id)
+            let parsed = await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value
+            content = parsed
+        } catch {
+            failed = true
+        }
+    }
+
+    /// Het begin van de tekst (zonder het citaat), witregels samengevoegd.
+    private func excerpt(_ content: MailContent) -> String {
+        let text = content.quotableText.isEmpty ? item.snippet : content.quotableText
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        var result: [String] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix(">") { continue }
+            if trimmed.isEmpty, result.last?.isEmpty ?? true { continue }
+            result.append(trimmed)
+        }
+        return String(result.joined(separator: "\n").prefix(900))
+    }
+
+    /// De zoekwoorden gemarkeerd (hoofdletters maken niet uit).
+    private func highlighted(_ text: String) -> AttributedString {
+        var attributed = AttributedString(text)
+        let etiket = ThemeStore.shared.look == .etiket
+        for word in words {
+            var searchStart = attributed.startIndex
+            while searchStart < attributed.endIndex,
+                  let range = attributed[searchStart...].range(of: word, options: .caseInsensitive) {
+                attributed[range].backgroundColor = etiket ? Etiket.lime : ThingsColor.accent.opacity(0.28)
+                if etiket { attributed[range].foregroundColor = Etiket.ink }
+                searchStart = range.upperBound
+            }
+        }
+        return attributed
     }
 }

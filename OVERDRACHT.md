@@ -579,6 +579,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - Etiket: de wisselknop Mail/Werkbank in de werkbalk zonder glas (rechthoek met dunne rand, kleine kapitalen;
       `ToolbarSwitchStyle`), en op macOS 26 zonder het gedeelde glas om de knoppen links in de werkbalk
       (`sharedBackgroundVisibility(.hidden)` op `MainView.navigationItems`).
+56. **Zoeken: voorbeeld in de kaart, mail in een eigen venster** (26 nov; ontwerp goedgekeurd op het canvas "Zoeken
+    met voorbeeld"). Geldt overal waar het uitgebreide zoeken opent (mailmodus, kolommen).
+    - Klik op een resultaat: het voorbeeld klapt open in de kaart (`MailSearchPreview`): van, aan, cc, datum, het begin
+      van de tekst (zonder citaat, hooguit 900 tekens) met de woorden uit "Met de woorden" gemarkeerd (Etiket: limoen),
+      bijlagen en Openen. Nog een klik klapt dicht; één voorbeeld tegelijk. Het kader van de resultaten is dan 440
+      hoog in plaats van 250. Een klik zet de zoekopdracht dus niet meer in de lijst; dat doet "Toon in de lijst".
+    - Dubbelklik of Openen: de mail in een echt eigen venster (`WindowGroup` id `mail`, waarde `MailRef`,
+      `MailStandaloneWindow`, rechts geplaatst); het zoeken blijft staan. `MailWindowView.onClose` sluit dat venster
+      waar het gesprek anders als paneel dichtgaat (archiveren, versturen).
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

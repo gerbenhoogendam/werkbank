@@ -160,6 +160,18 @@ struct WerkbankApp: App {
             }
         }
 
+        // Een mail in een eigen venster (dubbelklik op een zoekresultaat).
+        WindowGroup("Mail", id: "mail", for: MailRef.self) { $ref in
+            if let ref {
+                MailStandaloneWindow(ref: ref)
+                    .environment(appState)
+                    .environment(drag)
+                    .modelContainer(Persistence.container)
+            }
+        }
+        .defaultSize(width: 760, height: 820)
+        .defaultPosition(.trailing)
+
         // De handtekening-editor (per mailbox, "" voor alle), te openen vanuit Voorkeuren › Mail.
         WindowGroup("Handtekening", id: "signature", for: String.self) { $key in
             SignatureEditorWindow(key: key ?? MailSignatures.defaultKey)
