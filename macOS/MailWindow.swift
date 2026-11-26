@@ -85,13 +85,9 @@ struct MailWindowView: View {
     /// onder het gesprek, zodat het laatste stuk er niet achter verdwijnt.
     @State private var footerHeight: CGFloat = 0
 
-    /// In een eigen venster (vanuit het zoeken): dicht in plaats van het paneel.
-    var onClose: (() -> Void)?
-
     init(ref: MailRef, embedded: Bool = false, trigger: MailReplyTrigger? = nil, opensDraft: Bool = false,
-         onReplySent: (() -> Void)? = nil, onDraftDiscarded: (() -> Void)? = nil, onClose: (() -> Void)? = nil) {
+         onReplySent: (() -> Void)? = nil, onDraftDiscarded: (() -> Void)? = nil) {
         self.ref = ref
-        self.onClose = onClose
         self.embedded = embedded
         self.trigger = trigger
         self.opensDraft = opensDraft
@@ -136,9 +132,7 @@ struct MailWindowView: View {
         }
     }
 
-    private func dismiss() {
-        if let onClose { onClose() } else { PanelStore.shared.closeMail(messageID: ref.messageID) }
-    }
+    private func dismiss() { PanelStore.shared.closeMail(messageID: ref.messageID) }
 
     private func markEngaged() { PanelStore.shared.markEngaged(PanelKind.mail(ref).id) }
 
@@ -500,10 +494,8 @@ struct MailWindowView: View {
                                     self.replyRef = nil
                                     onReplySent?()
                                 } else {
-                                    // Verstuurd: het gesprek vouwt weg (een eigen venster gaat dicht).
-                                    if let onClose { onClose() } else {
-                                        PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
-                                    }
+                                    // Verstuurd: het gesprek vouwt weg.
+                                    PanelStore.shared.closeAfterSending(id: PanelKind.mail(ref).id)
                                 }
                             },
                             onDiscard: {
@@ -1158,19 +1150,5 @@ struct MailWebView: NSViewRepresentable {
                 decisionHandler(.allow)   // alleen het laden van onze eigen HTML
             }
         }
-    }
-}
-
-/// Een mail in een eigen venster (dubbelklik op een zoekresultaat): te verschuiven, naar een ander scherm te slepen en
-/// met ⌘W te sluiten; het zoeken in het hoofdvenster blijft staan.
-struct MailStandaloneWindow: View {
-    let ref: MailRef
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        MailWindowView(ref: ref, onClose: { dismiss() })
-            .frame(minWidth: 520, minHeight: 480)
-            .background(ThingsColor.mailBackground)
-            .navigationTitle(ref.subject.isEmpty ? "Mail" : ref.subject)
     }
 }

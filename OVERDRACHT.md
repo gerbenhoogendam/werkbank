@@ -585,9 +585,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       van de tekst (zonder citaat, hooguit 900 tekens) met de woorden uit "Met de woorden" gemarkeerd (Etiket: limoen),
       bijlagen en Openen. Nog een klik klapt dicht; één voorbeeld tegelijk. Het kader van de resultaten is dan 440
       hoog in plaats van 250. Een klik zet de zoekopdracht dus niet meer in de lijst; dat doet "Toon in de lijst".
-    - Dubbelklik of Openen: de mail in een echt eigen venster (`WindowGroup` id `mail`, waarde `MailRef`,
-      `MailStandaloneWindow`, rechts geplaatst); het zoeken blijft staan. `MailWindowView.onClose` sluit dat venster
-      waar het gesprek anders als paneel dichtgaat (archiveren, versturen).
+    - Dubbelklik of Openen: de mail vouwt vanuit onder open als paneel, zoals een nieuwe mail
+      (`PanelStore.openBesideSearch`). Zolang het zoeken open staat (`isBesideSearch`): het zoeken op de linkerhelft,
+      de mail op de rechterhelft, elk de helft min 16 pt langs de randen en ertussen, geen vervaging (het zoeken blijft
+      te gebruiken). Een volgende dubbelklik vervangt de mail. Esc sluit eerst de mail (zonder hem ongelezen te zetten),
+      dan het zoeken. (Eerst gebouwd als los macOS-venster; op verzoek een paneel geworden, 26 nov.)
+    - De vinkjes in het zoeken in de stijl van het thema (`ThemedCheckboxStyle`: Etiket recht, limoen met inkt; elders
+      afgerond in de accentkleur).
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

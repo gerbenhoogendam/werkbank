@@ -50,6 +50,26 @@ final class PanelStore {
     /// Mail- en Claude-panelen: daarvoor gaat de rest van de app in de blur.
     var hasFocusPanels: Bool { panels.contains { !$0.isEvent } }
 
+    /// Een mail geopend vanuit het zoeken: het zoeken staat op de linkerhelft, de mail op de rechter (geen vervaging,
+    /// het zoeken blijft te gebruiken).
+    private(set) var besideSearch = false
+    /// Ruimte langs de randen en tussen het zoeken en de mail.
+    static let besideMargin: CGFloat = 16
+    static let besideTop: CGFloat = 20
+
+    var isBesideSearch: Bool {
+        besideSearch && MailModeStore.shared.sheet == .search
+            && panels.contains { if case .mail = $0 { true } else { false } }
+    }
+
+    /// Dubbelklik op een zoekresultaat: de mail vouwt vanuit onder open naast het zoeken (een vorige gaat weg).
+    func openBesideSearch(_ ref: MailRef) {
+        let previous = panels.filter { if case .mail = $0 { true } else { false } }
+        remove(previous.filter { $0.id != PanelKind.mail(ref).id }, part: .mailClose, snapshot: false)
+        open(.mail(ref))
+        besideSearch = true
+    }
+
     func markEngaged(_ id: String) { engagedIDs.insert(id) }
 
     /// Esc in de werkbank: de laatst geopende mail sluiten en de nieuwste mail van het gesprek op ongelezen zetten (ook
@@ -58,7 +78,10 @@ final class PanelStore {
     func closeMailAsUnread() -> Bool {
         guard let panel = panels.last(where: { if case .mail = $0 { true } else { false } }),
               case .mail(let ref) = panel, !engagedIDs.contains(panel.id) else { return false }
-        OpenedUnread.restore(threadID: ref.threadID, fallbackMessageID: ref.messageID, account: ref.account)
+        // Naast het zoeken alleen dicht (niet ongelezen: het is een zoekresultaat).
+        if !isBesideSearch {
+            OpenedUnread.restore(threadID: ref.threadID, fallbackMessageID: ref.messageID, account: ref.account)
+        }
         close(panel)
         return true
     }
@@ -69,6 +92,7 @@ final class PanelStore {
     }
 
     func open(_ panel: PanelKind) {
+        besideSearch = false
         ghostedIDs.remove(panel.id)
         withAnimation(panel.foldsLikeDuo ? DuoFold.opening(.mailOpen) : .easeOut(duration: 0.18)) {
             panels.removeAll { $0.id == panel.id }
@@ -177,6 +201,7 @@ struct PanelOverlay: View {
     var body: some View {
         GeometryReader { geo in
             let single = store.panels.count < 2
+            let beside = single && store.isBesideSearch
             let height = max(geo.size.height - 40, 1)
             let available = max(geo.size.width - 24, 1)
             HStack(spacing: 0) {
@@ -198,14 +223,17 @@ struct PanelOverlay: View {
                                     ? AnyTransition.duoFold(height: height,
                                                             hidesInstantly: store.ghostedIDs.contains(panel.id))
                                     : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
-                        .frame(width: width(of: index, single: single, available: available, total: geo.size.width))
+                        .frame(width: beside ? max((geo.size.width - PanelStore.besideMargin * 3) / 2, 1)
+                               : width(of: index, single: single, available: available, total: geo.size.width))
                         .frame(maxHeight: .infinity)
-                        .overlay(alignment: .leading) { if single { edge(sign: -1, total: geo.size.width) } }
-                        .overlay(alignment: .trailing) { if single { edge(sign: 1, total: geo.size.width) } }
+                        .overlay(alignment: .leading) { if single && !beside { edge(sign: -1, total: geo.size.width) } }
+                        .overlay(alignment: .trailing) { if single && !beside { edge(sign: 1, total: geo.size.width) } }
                 }
             }
-            .frame(width: geo.size.width)
-            .padding(.vertical, 20)
+            // Naast het zoeken: op de rechterhelft, met ruimte langs de rand.
+            .padding(.trailing, beside ? PanelStore.besideMargin : 0)
+            .frame(width: geo.size.width, alignment: beside ? .trailing : .center)
+            .padding(.vertical, PanelStore.besideTop)
             .opacity(dragState.isDragging ? 0 : 1)
             .allowsHitTesting(!dragState.isDragging)
             .animation(.easeOut(duration: 0.15), value: dragState.isDragging)

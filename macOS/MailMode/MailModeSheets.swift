@@ -19,8 +19,12 @@ struct MailModeSheetHost: View {
     let sheet: MailModeSheet
     let item: GmailMailItem?
 
+    /// Een mail uit het zoeken staat open: het zoeken op de linkerhelft, de mail op de rechter.
+    private var sideBySide: Bool { sheet == .search && PanelStore.shared.isBesideSearch }
+
     var body: some View {
-        ZStack(alignment: .top) {
+        GeometryReader { geo in
+        ZStack(alignment: sideBySide ? .topLeading : .top) {
             Color.black.opacity(0.22)
                 .contentShape(Rectangle())
                 .onTapGesture { MailModeStore.shared.closeSheet() }
@@ -28,7 +32,7 @@ struct MailModeSheetHost: View {
                 if sheet == .bulk {
                     MailBulkSheet()
                 } else if sheet == .search {
-                    MailSearchSheet()
+                    MailSearchSheet(width: sideBySide ? max((geo.size.width - PanelStore.besideMargin * 3) / 2, 420) : 780)
                 } else if let item {
                     switch sheet {
                     case .task: MailTaskSheet(item: item)
@@ -39,8 +43,40 @@ struct MailModeSheetHost: View {
                     }
                 }
             }
-            .padding(.top, 60)
+            .padding(.top, sideBySide ? PanelStore.besideTop : 60)
+            .padding(.leading, sideBySide ? PanelStore.besideMargin : 0)
         }
+        .frame(width: geo.size.width, height: geo.size.height, alignment: sideBySide ? .topLeading : .top)
+        .animation(.easeOut(duration: 0.2), value: sideBySide)
+        }
+    }
+}
+
+/// Een vinkje in de stijl van het thema: Etiket recht met limoen en inkt, de rest afgerond in de accentkleur.
+struct ThemedCheckboxStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let etiket = ThemeStore.shared.look == .etiket
+        let shape = RoundedRectangle(cornerRadius: etiket ? 0 : min(4, ThingsMetrics.cardRadius), style: .continuous)
+        return Button { configuration.isOn.toggle() } label: {
+            HStack(spacing: 7) {
+                ZStack {
+                    shape.fill(configuration.isOn ? (etiket ? Etiket.lime : ThingsColor.accent) : Color.clear)
+                    shape.strokeBorder(configuration.isOn ? (etiket ? Etiket.ink : Color.clear) : ThingsColor.textSecondary,
+                                       lineWidth: 1)
+                    if configuration.isOn {
+                        Image(systemName: "checkmark")
+                            .font(.werk(size: 10, weight: .bold))
+                            .foregroundStyle(etiket ? Etiket.ink : ThingsColor.onAccent)
+                    }
+                }
+                .frame(width: 16, height: 16)
+                configuration.label
+                    .foregroundStyle(ThingsColor.textPrimary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(configuration.isOn ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -999,6 +1035,8 @@ private struct Initials: View {
 // MARK: - Uitgebreid zoeken (⌘F)
 
 private struct MailSearchSheet: View {
+    /// Naast een geopende mail: de helft van het venster.
+    var width: CGFloat = 780
     @State private var form = MailModeStore.shared.searchForm
     @State private var mailboxes = Set(MailModeStore.shared.searchAccountChoice)
     @State private var results: [GmailMailItem] = []
@@ -1014,7 +1052,6 @@ private struct MailSearchSheet: View {
     /// Het resultaat waarvan het voorbeeld open staat.
     @State private var previewID: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openWindow) private var openMailWindow
     private let store = MailModeStore.shared
     private let gmail = GmailSession.shared
 
@@ -1029,7 +1066,7 @@ private struct MailSearchSheet: View {
     }
 
     var body: some View {
-        SheetFrame(title: "Zoeken", systemImage: "magnifyingglass", detail: detail, width: 780) {
+        SheetFrame(title: "Zoeken", systemImage: "magnifyingglass", detail: detail, width: width) {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                 GridRow {
                     field("Met de woorden", $form.words, focus: true)
@@ -1050,7 +1087,7 @@ private struct MailSearchSheet: View {
                 Toggle("Met ster", isOn: $form.starred)
                 Toggle("Ook spam en prullenbak", isOn: $form.includeSpamTrash)
             }
-            .toggleStyle(.checkbox)
+            .toggleStyle(ThemedCheckboxStyle())
             .font(.werk(size: 12.5))
             SheetField(label: "Periode") {
                 HStack(spacing: 6) {
@@ -1066,7 +1103,7 @@ private struct MailSearchSheet: View {
                         Toggle(gmail.displayName(account), isOn: Binding(
                             get: { mailboxes.contains(account) },
                             set: { on in if on { mailboxes.insert(account) } else { mailboxes.remove(account) } }))
-                            .toggleStyle(.checkbox)
+                            .toggleStyle(ThemedCheckboxStyle())
                             .font(.werk(size: 12.5))
                             .help(account)
                     }
@@ -1162,7 +1199,7 @@ private struct MailSearchSheet: View {
     }
 
     /// Eén resultaat als kaartje. Klik: het voorbeeld klapt open in de kaart (nog een klik: dicht). Dubbelklik (of
-    /// Openen): de mail in een eigen venster naast het zoeken, dat open blijft.
+    /// Openen): de mail vouwt open naast het zoeken, dat open blijft.
     private func resultRow(_ item: GmailMailItem) -> some View {
         let shape = RoundedRectangle(cornerRadius: MailModeMetrics.radius, style: .continuous)
         let isOpen = previewID == item.id
@@ -1223,9 +1260,9 @@ private struct MailSearchSheet: View {
         .clipShape(shape)
     }
 
-    /// De mail in een eigen venster (`MailStandaloneWindow`); het zoeken blijft open staan.
+    /// De mail vouwt vanuit onder open naast het zoeken (zoals een nieuwe mail); het zoeken blijft open staan.
     private func openWindow(_ item: GmailMailItem) {
-        openMailWindow(value: MailRef(message: item.summary))
+        PanelStore.shared.openBesideSearch(MailRef(message: item.summary))
     }
 
     /// De woorden uit "Met de woorden" om in het voorbeeld te markeren (zonder zoekopdrachten als from: of -woord).

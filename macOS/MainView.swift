@@ -166,7 +166,8 @@ struct MainView: View {
 
             // Boven het board en de agenda (rechts van het Gmail-paneel), niet in de blur.
             PanelOverlay()
-                .padding(.leading, gmailVisible && !columns.isActive ? clamp(gmailWidth, Self.gmailRange) + 7 : 0)
+                .padding(.leading, gmailVisible && !columns.isActive && !PanelStore.shared.isBesideSearch
+                         ? clamp(gmailWidth, Self.gmailRange) + 7 : 0)
 
             if appState.isDropTargeted { dropOverlay }
 
@@ -381,7 +382,10 @@ struct MainView: View {
     }
 
     /// Blur en "klik ernaast om te sluiten" zolang er een mail- of Claude-paneel open is (niet tijdens slepen).
-    private var focusMode: Bool { PanelStore.shared.hasFocusPanels && !MailDragState.shared.isDragging }
+    /// Een mail naast het zoeken laat het zoeken bruikbaar: dan geen vervaging.
+    private var focusMode: Bool {
+        PanelStore.shared.hasFocusPanels && !PanelStore.shared.isBesideSearch && !MailDragState.shared.isDragging
+    }
 
     private func toggleMonthAgenda() {
         if monthShown && monthOpen {
