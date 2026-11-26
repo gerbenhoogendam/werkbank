@@ -61,8 +61,10 @@ struct ThemedCheckboxStyle: ToggleStyle {
             HStack(spacing: 7) {
                 ZStack {
                     shape.fill(configuration.isOn ? (etiket ? Etiket.lime : ThingsColor.accent) : Color.clear)
-                    shape.strokeBorder(configuration.isOn ? (etiket ? Etiket.ink : Color.clear) : ThingsColor.textSecondary,
-                                       lineWidth: 1)
+                    // Aan: alleen het vlak met het vinkje. Uit: leeg met een rand (Etiket zwart).
+                    if !configuration.isOn {
+                        shape.strokeBorder(etiket ? ThingsColor.textPrimary : ThingsColor.textSecondary, lineWidth: 1)
+                    }
                     if configuration.isOn {
                         Image(systemName: "checkmark")
                             .font(.werk(size: 10, weight: .bold))

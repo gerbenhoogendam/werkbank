@@ -590,8 +590,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       de mail op de rechterhelft, elk de helft min 16 pt langs de randen en ertussen, geen vervaging (het zoeken blijft
       te gebruiken). Een volgende dubbelklik vervangt de mail. Esc sluit eerst de mail (zonder hem ongelezen te zetten),
       dan het zoeken. (Eerst gebouwd als los macOS-venster; op verzoek een paneel geworden, 26 nov.)
-    - De vinkjes in het zoeken in de stijl van het thema (`ThemedCheckboxStyle`: Etiket recht, limoen met inkt; elders
-      afgerond in de accentkleur).
+    - De vinkjes in het zoeken in de stijl van het thema (`ThemedCheckboxStyle`: Etiket recht; aan limoen met een
+      zwart vinkje zonder rand, uit leeg met een zwarte rand; elders afgerond in de accentkleur).
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
