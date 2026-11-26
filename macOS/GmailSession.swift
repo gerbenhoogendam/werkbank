@@ -220,6 +220,7 @@ final class GmailSession {
 
     private func removeThreadFromLists(_ threadID: String) {
         MailNotifier.shared.noteHandled(threadID: threadID)
+        MailColumnsStore.shared.removeThread(threadID)
         for key in Array(messageCache.keys) { messageCache[key]?.removeAll { $0.threadID == threadID } }
         refreshVisible()
         saveInboxLater()
@@ -853,6 +854,11 @@ final class GmailSession {
         do {
             guard let move = try await transfer(threadID: threadID, from: source, to: target) else { return }
             if isCombined || activeAccount == target { await reload() }
+            // Verplaatst via de rechtermuisknop terwijl de kolommen open staan: die ook bijwerken.
+            if MailColumnsStore.shared.isActive {
+                MailColumnsStore.shared.removeThread(threadID)
+                Task { await MailColumnsStore.shared.reload(target) }
+            }
             appState.announce("Verplaatst naar \(displayName(target))")
             UndoCenter.shared.record("Mail verplaatsen", undo: { [weak self] in
                 Task { await self?.undoMoves([move]) }
@@ -1330,6 +1336,7 @@ final class GmailSession {
             saveInboxLater()
         }
         MailModeStore.shared.noteUnread(unread, threadID: threadID)
+        MailColumnsStore.shared.noteUnread(unread, threadID: threadID)
         // Het Dock-icoon: gelezen telt meteen niet meer mee, weer ongelezen na een korte controle.
         if unread { MailNotifier.shared.checkSoon() } else { MailNotifier.shared.noteHandled(threadID: threadID) }
         return true
@@ -1358,6 +1365,7 @@ final class GmailSession {
             saveInboxLater()
         }
         MailModeStore.shared.noteUnread(true, threadID: threadID)
+        MailColumnsStore.shared.noteUnread(true, threadID: threadID)
         MailNotifier.shared.checkSoon()
         return true
     }

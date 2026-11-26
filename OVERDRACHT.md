@@ -556,6 +556,22 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     tegels bij het slepen naar een andere mailbox, vandaag in de maandagenda, het gekozen tijdstip bij inplannen. De
     gekozen mail in de lijst heeft in Etiket geen groene streep links meer; alleen de donkerdere (licht) of lichtere
     (donker) achtergrond.
+55. **Mail in kolommen** (26 nov; ontwerp goedgekeurd op het canvas "Mail in kolommen").
+    - Kop van het Mail-paneel: links twee knopjes, het paneel verbergen (`sidebar.left`, net als het knopje in de
+      werkbalk en ⇧⌘L; dat in de werkbalk blijft om het paneel terug te halen) en de kolommen
+      (`rectangle.split.3x1`). Etiket: de kop is "—— n ONGELEZEN" met daaronder op één regel de knopjes (32 pt,
+      vierkant met rand), MAIL in Bebas 45 (hoofdletters ongeveer 32 pt hoog, op de grondlijn uitgelijnd met de
+      knopjes) en rechts verversen, nieuwe mail en de mailbox (`GmailPanel.etiketHeader`, kophoogte 92).
+    - `MailColumnsStore`/`MailColumnsView` (MailColumns.swift): over het hele venster (in `MainView` naast de
+      mailmodus; de werkbank erachter is niet bereikbaar) de inbox van elke gekozen mailbox als kolom (50 per
+      mailbox, nieuwste boven). Bovenin alle mailboxen: klik = alleen die, ⌘-klik = erbij/eraf (bewaard in
+      `mailColumns.accounts`; leeg = de eerste drie). Klik kiest een mail, dubbelklik opent hem als paneel (midden,
+      de kolommen vervagen), slepen naar een andere kolom verhuist het gesprek (`GmailSession.moveThread`); de
+      rechtermuisknop › Verplaats naar werkt ook. Archiveren en gelezen/ongelezen elders in de app werken de
+      kolommen bij (`removeThread`, `noteUnread`). Dicht met het limoen knopje links, Esc (als er geen mail open
+      staat), ⌘1 of de mailmodus.
+    - Niet gebouwd: zelf verversen op de achtergrond (de knop verversen en bij openen), meer mails tegelijk kiezen
+      in de kolommen.
 
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 

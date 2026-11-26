@@ -33,6 +33,7 @@ struct MainView: View {
     private static let agendaRange = 0.35...0.85
 
     private var mailMode: MailModeStore { MailModeStore.shared }
+    private var columns: MailColumnsStore { MailColumnsStore.shared }
 
     /// Het board, de agenda en Tijd schrijven, met links het Mail-paneel.
     @ViewBuilder private var workbench: some View {
@@ -123,6 +124,12 @@ struct MainView: View {
                             .animation(Self.swoop(receded: mailMode.isReceded), value: mailMode.isReceded)
                             .allowsHitTesting(!mailMode.isReceded)
                     }
+                    // Mail in kolommen: de inboxen van een paar mailboxen naast elkaar over het hele venster.
+                    if columns.isActive && !mailMode.isActive {
+                        MailColumnsView()
+                            .themePanel()
+                            .transition(.opacity)
+                    }
                 }
                 .clipped()
             }
@@ -159,7 +166,7 @@ struct MainView: View {
 
             // Boven het board en de agenda (rechts van het Gmail-paneel), niet in de blur.
             PanelOverlay()
-                .padding(.leading, gmailVisible ? clamp(gmailWidth, Self.gmailRange) + 7 : 0)
+                .padding(.leading, gmailVisible && !columns.isActive ? clamp(gmailWidth, Self.gmailRange) + 7 : 0)
 
             if appState.isDropTargeted { dropOverlay }
 
@@ -180,8 +187,8 @@ struct MainView: View {
                     mailMode.restore()
                 } else if drag.draft != nil {
                     drag.draft = nil
-                } else {
-                    _ = PanelStore.shared.closeMailAsUnread()
+                } else if !PanelStore.shared.closeMailAsUnread(), columns.isActive {
+                    columns.close()
                 }
             }
                 .keyboardShortcut(.cancelAction)
@@ -191,6 +198,8 @@ struct MainView: View {
         }
         // De mail komt terug: een half ingepland concept op de agenda verdwijnt, alsof er niets is gebeurd.
         .onChange(of: mailMode.isReceded) { _, receded in if !receded { drag.draft = nil } }
+        // De mailmodus neemt het venster over: de kolommen gaan dicht.
+        .onChange(of: mailMode.isActive) { _, active in if active { columns.close() } }
         .providingSubtasks()
         .coordinateSpace(.named("main"))
         // Openen en sluiten met de Duo-vouw.
@@ -333,7 +342,9 @@ struct MainView: View {
     }
 
     /// De werkbank is te gebruiken: geen mailmodus, of de mail is weg (of komt nog terug).
-    private var workbenchLive: Bool { !mailMode.isActive || mailMode.isReceded || mailMode.isReturning }
+    private var workbenchLive: Bool {
+        (!mailMode.isActive || mailMode.isReceded || mailMode.isReturning) && !columns.isActive
+    }
 
     /// Wegzwiepen: na een klein optillen versnellend naar beneden. Terug: veerkrachtig omhoog, licht doorschietend.
     private static func swoop(receded: Bool) -> Animation {

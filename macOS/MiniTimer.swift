@@ -33,6 +33,7 @@ enum WindowRouter {
     /// ⌘1 en ⌘2 (menu Weergave): de werkbank of de mailmodus, in het hoofdvenster.
     static func show(mail: Bool) {
         let store = MailModeStore.shared
+        if !mail { MailColumnsStore.shared.close() }
         if mail {
             if !store.isActive { store.open() } else if store.isReceded { store.restore() }
         } else if store.isActive {
