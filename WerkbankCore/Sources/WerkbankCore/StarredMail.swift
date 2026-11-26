@@ -1,6 +1,6 @@
 import Foundation
 
-/// Mails met een ster (Gmail: label STARRED) staan in de kolommen bovenin, op een compacte regel: ster, datum als
+/// Mails met een ster (alleen in Werkbank, niet in Gmail) staan in de kolommen bovenin, op een compacte regel: ster, datum als
 /// dag/maand, de voornaam van de afzender en het onderwerp, met daaronder de inhoud op één regel.
 public enum StarredMail {
     /// Hoe lang een mail met een ster al ligt: na meer dan 4 dagen oranje, na meer dan 6 dagen rood.
@@ -38,8 +38,4 @@ public enum StarredMail {
     public static func oneLine(_ text: String) -> String {
         text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
     }
-}
-
-extension GmailMailItem {
-    public var isStarred: Bool { labels.contains("STARRED") }
 }

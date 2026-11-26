@@ -12,6 +12,8 @@ import WerkbankCore
 final class MailColumnsStore {
     static let shared = MailColumnsStore()
     static let accountsKey = "mailColumns.accounts"
+    /// Gesprekken met een ster: alleen in Werkbank (Gmail krijgt geen ster), gaat mee naar je andere Macs.
+    nonisolated static let starredKey = "mailColumns.starred"
 
     private(set) var isActive = false
     /// De gekozen mailboxen (leeg: de eerste drie).
@@ -23,6 +25,17 @@ final class MailColumnsStore {
     /// ⇧-klik: alles in die kolom tussen de vorige klik en deze.
     private(set) var chosenIDs: Set<String> = []
     @ObservationIgnored private var anchor: (id: String, account: String)?
+    private(set) var starredThreads: Set<String> = Set(UserDefaults.standard.stringArray(forKey: MailColumnsStore.starredKey) ?? [])
+
+    private init() {
+        // Van een andere Mac binnengekomen (PreferencesSync): de sterren bijwerken.
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                let stored = Set(UserDefaults.standard.stringArray(forKey: MailColumnsStore.starredKey) ?? [])
+                if stored != MailColumnsStore.shared.starredThreads { MailColumnsStore.shared.starredThreads = stored }
+            }
+        }
+    }
     /// De kolom waar een mail boven hangt tijdens het slepen.
     var dropTarget: String?
 
@@ -93,21 +106,10 @@ final class MailColumnsStore {
         }
     }
 
-    /// Gearchiveerd of verplaatst (waar dan ook in de app): uit de kolommen.
+    /// Gearchiveerd of verplaatst (waar dan ook in de app): uit de kolommen. Een ster gaat mee weg: gearchiveerd is klaar.
     func removeThread(_ threadID: String) {
         for key in Array(lists.keys) { lists[key]?.removeAll { $0.threadID == threadID } }
-    }
-
-    /// Een ster gezet of eraf gehaald.
-    func noteStarred(_ starred: Bool, threadID: String) {
-        for key in Array(lists.keys) {
-            guard let indices = lists[key]?.indices.filter({ lists[key]?[$0].threadID == threadID }) else { continue }
-            for index in indices {
-                var labels = lists[key]?[index].labels.filter { $0 != "STARRED" } ?? []
-                if starred { labels.append("STARRED") }
-                lists[key]?[index].labels = labels
-            }
-        }
+        if starredThreads.contains(threadID) { setStarred(false, threadIDs: [threadID]) }
     }
 
     /// Gelezen of ongelezen gezet (waar dan ook in de app).
@@ -129,7 +131,7 @@ final class MailColumnsStore {
     /// De mails van een kolom zoals ze onder elkaar staan: eerst die met een ster.
     func order(_ account: String) -> [GmailMailItem] {
         let items = lists[account] ?? []
-        return items.filter(\.isStarred) + items.filter { !$0.isStarred }
+        return items.filter { isStarred($0) } + items.filter { !isStarred($0) }
     }
 
     func click(_ item: GmailMailItem, in account: String) {
@@ -162,13 +164,19 @@ final class MailColumnsStore {
         Task { await gmail.archiveMessage(item.summary, appState: AppState.shared) }
     }
 
-    func toggleStar(_ item: GmailMailItem) {
-        let starred = !item.isStarred
-        Task {
-            if !(await gmail.setStarred(starred, threadID: item.threadID, account: account(of: item.threadID))) {
-                AppState.shared.showToast(starred ? "Ster zetten mislukt" : "Ster weghalen mislukt", seconds: 5)
-            }
+    // MARK: Ster (alleen in Werkbank)
+
+    func isStarred(_ item: GmailMailItem) -> Bool { starredThreads.contains(item.threadID) }
+
+    func setStarred(_ starred: Bool, threadIDs: [String]) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            if starred { starredThreads.formUnion(threadIDs) } else { starredThreads.subtract(threadIDs) }
         }
+        UserDefaults.standard.set(starredThreads.sorted(), forKey: Self.starredKey)
+    }
+
+    func toggleStar(_ item: GmailMailItem) {
+        setStarred(!isStarred(item), threadIDs: [item.threadID])
     }
 
     /// De gekozen gesprekken (elk één keer).
@@ -210,12 +218,7 @@ final class MailColumnsStore {
 
     /// Hebben ze allemaal een ster, dan gaan die eraf; anders krijgen ze er allemaal een.
     func toggleStarChosen() {
-        let starred = !chosen.allSatisfy(\.isStarred)
-        let threads = chosenThreads()
-        Task {
-            let done = await gmail.setStarred(starred, threads: threads)
-            if done < threads.count { AppState.shared.showToast("Ster mislukt bij \(threads.count - done) mails", seconds: 5) }
-        }
+        setStarred(!chosen.allSatisfy { isStarred($0) }, threadIDs: chosenThreads().map(\.threadID))
     }
 
     /// Een mail op een andere kolom laten vallen: het gesprek verhuist naar die mailbox.
@@ -362,8 +365,8 @@ private struct MailColumn: View {
     private let gmail = GmailSession.shared
 
     private var items: [GmailMailItem] { store.lists[account] ?? [] }
-    private var starred: [GmailMailItem] { items.filter(\.isStarred) }
-    private var others: [GmailMailItem] { items.filter { !$0.isStarred } }
+    private var starred: [GmailMailItem] { items.filter { store.isStarred($0) } }
+    private var others: [GmailMailItem] { items.filter { !store.isStarred($0) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -591,7 +594,7 @@ private struct ColumnsChoiceBar: View {
         let chosen = store.chosen
         let etiket = ThemeStore.shared.look == .etiket
         let anyUnread = chosen.contains(where: \.isUnread)
-        let allStarred = chosen.allSatisfy(\.isStarred)
+        let allStarred = chosen.allSatisfy { store.isStarred($0) }
         HStack(spacing: 6) {
             Text(caption("\(chosen.count) gekozen"))
                 .font(.werk(size: 12, weight: .semibold))

@@ -37,9 +37,4 @@ final class StarredMailTests: XCTestCase {
     func testOneLine() {
         XCTAssertEqual(StarredMail.oneLine("Hoi,\n\nDank voor de offerte.\r\n  Groet"), "Hoi, Dank voor de offerte. Groet")
     }
-
-    func testStarredLabel() {
-        XCTAssertTrue(GmailMailItem(id: "1", threadID: "1", subject: "", labels: ["INBOX", "STARRED"]).isStarred)
-        XCTAssertFalse(GmailMailItem(id: "1", threadID: "1", subject: "", labels: ["INBOX"]).isStarred)
-    }
 }

@@ -596,7 +596,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       zwart vinkje zonder rand, uit leeg met een zwarte rand; elders afgerond in de accentkleur).
 57. **Kolommen: ster bovenin, meer mails kiezen over de kolommen** (26/27 nov; ontwerp goedgekeurd op het canvas
     "Kolommen: ster en selectie").
-    - Mails met een ster (Gmail-label STARRED) die in de inbox staan, staan bovenin hun kolom in een band
+    - Mails met een ster die in de inbox staan, staan bovenin hun kolom in een band
       (`MailColumn.starredBand`, Etiket: 2 pt inktlijn eronder; meer dan vijf: scrollen binnen de band). Gearchiveerd
       met ster komt er niet in ("gearchiveerd is klaar"). Per mail (`StarredMailRow`): ster, datum als dag/maand
       (`StarredMail.dayMonth`), voornaam (`StarredMail.firstName`: wat na een | staat en de achternaam gaan eraf),
@@ -605,8 +605,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - De ster (`StarButton`): limoen met een schaduw aan de binnenkant (verzonken), bij aanwijzen 1,5 pt omhoog met een
       schaduw eronder (0,2 s). Geen lijn erom (op verzoek weg). Klik haalt de ster eraf. Een ster zetten: het
       sterknopje bij aanwijzen op een gewone mail (`GmailRow.onStar`, alleen in de kolommen).
-    - `GmailSession.setStarred` (één gesprek of meer, acht tegelijk) werkt de kolommen meteen bij
-      (`MailColumnsStore.noteStarred`) en draait dat terug als Gmail weigert.
+    - De ster is alleen van Werkbank, Gmail krijgt geen ster (op verzoek; eerst gebouwd met het label STARRED).
+      `MailColumnsStore.starredThreads` per gesprek, bewaard onder `mailColumns.starred` en via `PreferencesSync` naar
+      de andere Macs. Een gesprek dat uit de kolommen gaat (archiveren, prullenbak) verliest zijn ster; na verplaatsen
+      naar een andere mailbox ook (nieuw gesprek daar).
     - Kiezen: klik één mail, ⌘-klik erbij of eraf (ook in een andere kolom), ⇧-klik een reeks binnen één kolom
       (`MailColumnsStore.chosenIDs`/`click`). Bij twee of meer staat op de plek van de mailboxknoppen de balk
       `ColumnsChoiceBar`: aantal, Archiveer, Gelezen/Ongelezen, Ster/Ster eraf, Verwijder (naar de prullenbak in
