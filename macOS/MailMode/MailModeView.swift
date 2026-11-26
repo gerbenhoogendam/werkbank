@@ -196,8 +196,9 @@ private struct MailModeToolbar: View {
             .help("Mailboxen in kolommen")
             .alignmentGuide(.lastTextBaseline) { $0[.bottom] }
 
+            // Etiket: de hoofdletters van MAIL (0,7 × 43) zo hoog als de knopjes ernaast (30 pt).
             MailHeaderTitle(title: "Mail", unread: store.items.filter(\.isUnread).count, total: store.items.count,
-                            mailbox: store.title(of: store.scope))
+                            mailbox: store.title(of: store.scope), etiketSize: 43)
                 .lineLimit(1)
                 // Zo breed als de titel: de mailboxen staan er direct naast, links.
                 .fixedSize(horizontal: true, vertical: false)

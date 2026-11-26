@@ -11,6 +11,8 @@ struct MailHeaderTitle: View {
     var total = 0
     /// Naam van de getoonde mailbox (Drukproef: "in Support.").
     var mailbox = ""
+    /// Etiket: grootte van de titel (de mailmodus: 43, zodat de hoofdletters zo hoog zijn als de knopjes ernaast).
+    var etiketSize: CGFloat = 32
 
     var body: some View {
         switch ThemeStore.shared.look {
@@ -145,8 +147,7 @@ struct MailHeaderTitle: View {
             // "—— 3 ONGELEZEN" en de naam groot in smalle kapitalen.
             VStack(alignment: .leading, spacing: 5) {
                 EtiketEyebrow(text: "\(unread) ongelezen")
-                // De hoofdletters (0,7 × de grootte) zo hoog als de knopjes ernaast (30 pt).
-                Text(title.uppercased()).font(.werkPoster(size: 43)).foregroundStyle(ThingsColor.textPrimary)
+                Text(title.uppercased()).font(.werkPoster(size: etiketSize)).foregroundStyle(ThingsColor.textPrimary)
             }
             .lineLimit(1)
         case .diskette:
