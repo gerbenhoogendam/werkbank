@@ -916,5 +916,7 @@ onbekend); plan mijn dag.
   niet of als vervangend plaatje getekend. Een shader per pixel op een heel venster was bovendien te zwaar (haperde).
   Animaties die vloeiend moeten blijven terwijl de app laadt: Core Animation (`CAKeyframeAnimation`), niet SwiftUI.
 - Mail laden tijdens een animatie (WKWebView aanmaken) laat die haperen; zie `MailThreadModel.load(notBefore:)`.
+  Tijdens de vouw wordt de inhoud van de mails die open gaan wel al opgehaald en ingelezen (`prefetch`, één ophaling
+  per mail via `parsedTask`, gedeeld met `loadContent`); in beeld komt alles pas als het paneel open is.
 - Kolommen hebben vaste sleutels (`inbox`, `todo`, `doing`, `waiting`); de namen zijn aanpasbaar.
 - `GmailSession.api(_:query:method:body:account:)` regelt het token per mailbox en één nieuwe poging bij 401.

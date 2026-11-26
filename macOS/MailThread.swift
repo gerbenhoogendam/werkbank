@@ -266,6 +266,7 @@ final class MailThreadModel {
     private(set) var loadError: String?
 
     @ObservationIgnored private var loadingIDs: Set<String> = []
+    @ObservationIgnored private var fetches: [String: Task<Result<ParsedThreadMail, Error>, Never>] = [:]
     private let gmail = GmailSession.shared
 
     init(ref: MailRef) {
@@ -283,7 +284,8 @@ final class MailThreadModel {
         // gevraagd wat er nu staat. De inhoud van de open mails komt intussen ook van schijf.
         var shown: [GmailThreadMessage]?
         if mails.isEmpty, let stored = await gmail.storedThread(threadID: ref.threadID, account: ref.account) {
-            if let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
+            // Tijdens de vouw de inhoud al ophalen en inlezen, zodat alles er in één keer staat als het paneel open is.
+            if let notBefore { await prefetch(stored, until: notBefore) }
             let open = present(stored)
             OpenedUnread.noteNewest(threadID: ref.threadID, messageID: stored.last?.id)
             shown = stored
@@ -292,7 +294,7 @@ final class MailThreadModel {
         }
         do {
             let items = try await gmail.threadMessages(threadID: ref.threadID, account: ref.account)
-            if shown == nil, let notBefore { try? await Task.sleep(until: notBefore, clock: .continuous) }
+            if shown == nil, let notBefore { await prefetch(items, until: notBefore) }
             // Staat er al precies dit, dan niet opnieuw neerzetten (dat tekent het hele gesprek opnieuw).
             var open = Set(items.filter(\.isUnread).map(\.id))
             if items.map(\.id) != shown?.map(\.id) { open.formUnion(present(items)) } else { expanded.formUnion(open) }
@@ -313,6 +315,39 @@ final class MailThreadModel {
             // Staat het gesprek er al van schijf, dan blijft dat staan (lezen zonder internet).
             if shown == nil { loadError = "Gesprek ophalen uit Gmail mislukt: \(error.localizedDescription)" }
         }
+    }
+
+    /// Tijdens de vouw: haalt de inhoud op van de mails die open komen te staan en wacht tot `deadline`. Er komt nog
+    /// niets in beeld: een WKWebView aanmaken tijdens de vouw laat die haperen. Wat dan nog onderweg is, neemt
+    /// `loadContent` over (zonder het opnieuw op te halen).
+    private func prefetch(_ items: [GmailThreadMessage], until deadline: ContinuousClock.Instant) async {
+        var ids = Set(items.filter(\.isUnread).map(\.id))
+        if let newest = items.last { ids.insert(newest.id) }
+        if items.contains(where: { $0.id == ref.messageID }) { ids.insert(ref.messageID) }
+        for id in ids where ParsedMailCache.get(id) == nil { _ = parsedTask(id) }
+        try? await Task.sleep(until: deadline, clock: .continuous)
+    }
+
+    /// Eén ophaling per mail, gedeeld door `prefetch` en `loadContent`.
+    private func parsedTask(_ id: String) -> Task<Result<ParsedThreadMail, Error>, Never> {
+        if let running = fetches[id] { return running }
+        let gmail = self.gmail
+        let task = Task { () -> Result<ParsedThreadMail, Error> in
+            do {
+                let raw = try await gmail.rawMessageData(id: id)
+                let entry = await Task.detached(priority: .userInitiated) { () -> ParsedThreadMail in
+                    let content = MailContentParser.parse(raw)
+                    let split = QuoteSplitter.split(html: content.displayHTML, subject: content.subject)
+                    return ParsedThreadMail(content: content, main: split.main, history: split.history)
+                }.value
+                ParsedMailCache.put(id, entry)
+                return .success(entry)
+            } catch {
+                return .failure(error)
+            }
+        }
+        fetches[id] = task
+        return task
     }
 
     /// Zet de mails van het gesprek neer en geeft terug welke open staan: de nieuwste, de ongelezen en de gekozen.
@@ -351,16 +386,12 @@ final class MailThreadModel {
             Self.fill(&mails[index], with: cached)
             return
         }
-        do {
-            let raw = try await gmail.rawMessageData(id: id)
-            let entry = await Task.detached(priority: .userInitiated) { () -> ParsedThreadMail in
-                let content = MailContentParser.parse(raw)
-                let split = QuoteSplitter.split(html: content.displayHTML, subject: content.subject)
-                return ParsedThreadMail(content: content, main: split.main, history: split.history)
-            }.value
-            ParsedMailCache.put(id, entry)
+        let result = await parsedTask(id).value
+        fetches[id] = nil
+        switch result {
+        case .success(let entry):
             if let current = mails.firstIndex(where: { $0.id == id }) { Self.fill(&mails[current], with: entry) }
-        } catch {
+        case .failure(let error):
             if let current = mails.firstIndex(where: { $0.id == id }) {
                 mails[current].loadError = "Mail ophalen mislukt: \(error.localizedDescription)"
             }
