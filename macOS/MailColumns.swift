@@ -151,7 +151,7 @@ final class MailColumnsStore {
     }
 
     /// De gekozen mails die nog in de kolommen staan.
-    var chosen: [GmailMailItem] {
+    var chosenMails: [GmailMailItem] {
         shown.flatMap { order($0) }.filter { chosenIDs.contains($0.id) }
     }
 
@@ -182,7 +182,7 @@ final class MailColumnsStore {
     /// De gekozen gesprekken (elk één keer).
     private func chosenThreads() -> [(threadID: String, account: String?)] {
         var seen: Set<String> = []
-        return chosen.compactMap { item in
+        return chosenMails.compactMap { item in
             guard seen.insert(item.threadID).inserted else { return nil }
             return (threadID: item.threadID, account: account(of: item.threadID))
         }
@@ -208,7 +208,7 @@ final class MailColumnsStore {
 
     /// Staat er één ongelezen tussen, dan alles gelezen; anders alles ongelezen.
     func toggleUnreadChosen() {
-        let unread = !chosen.contains(where: \.isUnread)
+        let unread = !chosenMails.contains(where: \.isUnread)
         let threads = chosenThreads()
         Task {
             let done = await gmail.setUnread(unread, threads: threads)
@@ -218,7 +218,7 @@ final class MailColumnsStore {
 
     /// Hebben ze allemaal een ster, dan gaan die eraf; anders krijgen ze er allemaal een.
     func toggleStarChosen() {
-        setStarred(!chosen.allSatisfy { isStarred($0) }, threadIDs: chosenThreads().map(\.threadID))
+        setStarred(!chosenMails.allSatisfy { isStarred($0) }, threadIDs: chosenThreads().map(\.threadID))
     }
 
     /// Een mail op een andere kolom laten vallen: het gesprek verhuist naar die mailbox.
@@ -293,7 +293,7 @@ struct MailColumnsView: View {
             return true
         }
         // Esc met meer gekozen mails: eerst de keuze weg, niet de kolommen.
-        if event.keyCode == 53, store.chosen.count > 1 {
+        if event.keyCode == 53, store.chosenMails.count > 1 {
             store.clearChoice()
             return true
         }
@@ -324,7 +324,7 @@ struct MailColumnsView: View {
             MailHeaderTitle(title: "Mail", unread: store.unreadCount, total: 0, mailbox: "")
                 .lineLimit(1)
                 .fixedSize()
-            if store.chosen.count > 1 {
+            if store.chosenMails.count > 1 {
                 ColumnsChoiceBar()
             } else {
                 HStack(spacing: 4) {
@@ -397,7 +397,7 @@ private struct MailColumn: View {
                         GmailRow(message: item.summary,
                                  isBusy: gmail.busyMessageIDs.contains(item.id),
                                  isSelected: store.chosenIDs.contains(item.id),
-                                 showsActionsWhenSelected: store.chosen.count <= 1,
+                                 showsActionsWhenSelected: store.chosenMails.count <= 1,
                                  onStar: { store.toggleStar(item) },
                                  onSelect: { store.click(item, in: account) },
                                  onArchive: { store.archive(item) },
@@ -591,7 +591,7 @@ private struct ColumnsChoiceBar: View {
     private let store = MailColumnsStore.shared
 
     var body: some View {
-        let chosen = store.chosen
+        let chosen = store.chosenMails
         let etiket = ThemeStore.shared.look == .etiket
         let anyUnread = chosen.contains(where: \.isUnread)
         let allStarred = chosen.allSatisfy { store.isStarred($0) }
