@@ -384,7 +384,9 @@ struct MainView: View {
     /// Blur en "klik ernaast om te sluiten" zolang er een mail- of Claude-paneel open is (niet tijdens slepen).
     /// Een mail naast het zoeken laat het zoeken bruikbaar: dan geen vervaging.
     private var focusMode: Bool {
-        PanelStore.shared.hasFocusPanels && !PanelStore.shared.isBesideSearch && !MailDragState.shared.isDragging
+        // Eerst de stand naast het zoeken lezen (ook als er nog geen paneel is), zodat de afhankelijkheid altijd bestaat.
+        let beside = PanelStore.shared.isBesideSearch
+        return PanelStore.shared.hasFocusPanels && !beside && !MailDragState.shared.isDragging
     }
 
     private func toggleMonthAgenda() {

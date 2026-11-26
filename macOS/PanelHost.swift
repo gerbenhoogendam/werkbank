@@ -62,12 +62,13 @@ final class PanelStore {
             && panels.contains { if case .mail = $0 { true } else { false } }
     }
 
-    /// Dubbelklik op een zoekresultaat: de mail vouwt vanuit onder open naast het zoeken (een vorige gaat weg).
+    /// Dubbelklik op een zoekresultaat: de vorige mail vouwt als afbeelding weg en de nieuwe vouwt meteen vanuit onder
+    /// open naast het zoeken. De stand wordt gezet vóór de panelen veranderen, zodat de rest nooit even vervaagt.
     func openBesideSearch(_ ref: MailRef) {
-        let previous = panels.filter { if case .mail = $0 { true } else { false } }
-        remove(previous.filter { $0.id != PanelKind.mail(ref).id }, part: .mailClose, snapshot: false)
-        open(.mail(ref))
         besideSearch = true
+        let previous = panels.filter { if case .mail = $0 { true } else { false } }
+        remove(previous.filter { $0.id != PanelKind.mail(ref).id }, part: .mailClose)
+        open(.mail(ref), besideSearch: true)
     }
 
     func markEngaged(_ id: String) { engagedIDs.insert(id) }
@@ -91,8 +92,8 @@ final class PanelStore {
         remove(panels.filter { !$0.isEvent && !engagedIDs.contains($0.id) }, part: .mailClose)
     }
 
-    func open(_ panel: PanelKind) {
-        besideSearch = false
+    func open(_ panel: PanelKind, besideSearch: Bool = false) {
+        self.besideSearch = besideSearch
         ghostedIDs.remove(panel.id)
         withAnimation(panel.foldsLikeDuo ? DuoFold.opening(.mailOpen) : .easeOut(duration: 0.18)) {
             panels.removeAll { $0.id == panel.id }
