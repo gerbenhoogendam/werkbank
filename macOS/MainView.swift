@@ -312,7 +312,6 @@ struct MainView: View {
         }
     }
 
-    /// De werkbank is te gebruiken: geen mailmodus, of de mail is weg (of komt nog terug).
     /// Links in de werkbalk: wisselen tussen werkbank en mailmodus, en het Mail-paneel tonen of verbergen.
     @ToolbarContentBuilder private var navigationItems: some ToolbarContent {
             ToolbarItem(placement: .navigation) {
@@ -352,6 +351,7 @@ struct MainView: View {
             }
     }
 
+    /// De werkbank is te gebruiken: geen mailmodus of kolommen, of de mail is weg (of komt nog terug).
     private var workbenchLive: Bool {
         (!mailMode.isActive || mailMode.isReceded || mailMode.isReturning) && !columns.isActive
     }
