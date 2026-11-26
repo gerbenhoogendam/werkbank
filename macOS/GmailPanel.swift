@@ -204,6 +204,8 @@ struct GmailPanel: View {
         .buttonStyle(.plain)
         .foregroundStyle(etiket ? ThingsColor.textPrimary : ThingsColor.textSecondary)
         .help(help)
+        // Etiket: de onderrand op de grondlijn van MAIL (anders telt de onderkant van het icoon).
+        .alignmentGuide(.lastTextBaseline) { $0[.bottom] }
     }
 
     @ViewBuilder private var header: some View {
@@ -221,8 +223,9 @@ struct GmailPanel: View {
             EtiketEyebrow(text: "\(unreadCount) ongelezen")
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 panelButtons
+                // De hoofdletters (0,7 × de grootte) zo hoog als de knopjes (32 pt).
                 Text(headerTitle.uppercased())
-                    .font(.werkPoster(size: 45))
+                    .font(.werkPoster(size: 46))
                     .foregroundStyle(ThingsColor.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)

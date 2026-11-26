@@ -574,7 +574,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       in de kolommen.
     - Ook in de kop van de mailmodus: het kolommenknopje direct rechts van het mappenknopje, voor MAIL (zo bedoeld,
       26 nov). Etiket: die kop staat op de grondlijn van MAIL en MAIL is Bebas 43 (hoofdletters ≈ 30 pt, zo hoog als
-      de knopjes). Zolang de kolommen open staan toont de wisselknop in de werkbalk "‹ Werkbank" (sluit de kolommen).
+      de knopjes); de knopjes staan met hun onderrand op die grondlijn (`alignmentGuide(.lastTextBaseline)`, zonder
+      dat telde de onderkant van het icoon en stonden ze lager). In het Mail-paneel net zo, met 32 pt en Bebas 46. Zolang de kolommen open staan toont de wisselknop in de werkbalk "‹ Werkbank" (sluit de kolommen).
     - Etiket: de wisselknop Mail/Werkbank in de werkbalk zonder glas (rechthoek met dunne rand, kleine kapitalen;
       `ToolbarSwitchStyle`), en op macOS 26 zonder het gedeelde glas om de knoppen links in de werkbalk
       (`sharedBackgroundVisibility(.hidden)` op `MainView.navigationItems`).

@@ -185,6 +185,8 @@ private struct MailModeToolbar: View {
             .buttonStyle(MailModeButtonStyle(prominent: false))
             .accessibilityLabel("Mappen")
             .help("Mappen tonen of verbergen")
+            // Op de grondlijn van MAIL staat de onderrand van het knopje (anders telt de onderkant van het icoon).
+            .alignmentGuide(.lastTextBaseline) { $0[.bottom] }
             // De mailboxen in kolommen naast elkaar (over het hele venster).
             Button { MailColumnsStore.shared.open() } label: {
                 Image(systemName: "rectangle.split.3x1")
@@ -192,6 +194,7 @@ private struct MailModeToolbar: View {
             .buttonStyle(MailModeButtonStyle(prominent: false))
             .accessibilityLabel("Kolommen")
             .help("Mailboxen in kolommen")
+            .alignmentGuide(.lastTextBaseline) { $0[.bottom] }
 
             MailHeaderTitle(title: "Mail", unread: store.items.filter(\.isUnread).count, total: store.items.count,
                             mailbox: store.title(of: store.scope))
