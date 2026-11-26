@@ -132,7 +132,10 @@ struct PhTabBar: View {
         .padding(.horizontal, 12)
         .padding(.top, 7)
         .padding(.bottom, 4)
-        .background(Ph.paper.shadow(.drop(color: Ph.ink.opacity(0.05), radius: 7, y: -4)).ignoresSafeArea(edges: .bottom))
+        .background {
+            Rectangle().fill(Ph.paper.shadow(.drop(color: Ph.ink.opacity(0.05), radius: 7, y: -4)))
+                .ignoresSafeArea(edges: .bottom)
+        }
         .overlay(alignment: .top) { Rectangle().fill(Ph.ink).frame(height: 2) }
     }
 }
