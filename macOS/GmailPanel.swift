@@ -13,8 +13,6 @@ struct GmailPanel: View {
     private let selection = MailSelection.shared
     /// "Verplaatsen naar" bovenin staat open (tijdens het slepen van een mail).
     @State private var moveZoneOpen = false
-    /// Het Mail-paneel zelf (ook het knopje in de werkbalk en ⇧⌘L).
-    @AppStorage("gmail.panelVisible") private var panelVisible = false
     /// Hoogte van kop en tabs: daar klapt "Verplaatsen naar" open.
     @State private var topBarHeight: CGFloat = 74
     /// Mailbox waarvan de tabnaam wordt gewijzigd.
@@ -169,82 +167,13 @@ struct GmailPanel: View {
         case .viertakt: 74
         case .puls: 54
         case .diskette: 58
-        case .etiket: 92
+        case .etiket: 74
         default: 46
         }
     }
 
-    /// De mappen (het paneel zelf) en de kolommen: links in de kop, voor de titel.
-    private var panelButtons: some View {
+    private var header: some View {
         HStack(spacing: 8) {
-            headerIconButton("sidebar.left", strong: false, help: "Mailpaneel verbergen (⇧⌘L)") {
-                withAnimation(.easeOut(duration: 0.2)) { panelVisible.toggle() }
-            }
-            headerIconButton("rectangle.split.3x1", strong: true, help: "Mailboxen in kolommen over het hele venster") {
-                MailColumnsStore.shared.open()
-            }
-        }
-    }
-
-    /// Etiket: vierkant met een rand, zo hoog als de letters van MAIL; elders een los icoon zoals verversen.
-    private func headerIconButton(_ symbol: String, strong: Bool, help: String,
-                                  action: @escaping () -> Void) -> some View {
-        let etiket = look == .etiket
-        return Button(action: action) {
-            Image(systemName: symbol)
-                .font(.werk(size: etiket ? 14 : 13, weight: .medium))
-                .frame(width: etiket ? 32 : 22, height: etiket ? 32 : 22)
-                .overlay {
-                    if etiket {
-                        Rectangle().strokeBorder(strong ? ThingsColor.textPrimary : ThingsColor.separator, lineWidth: 1)
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(etiket ? ThingsColor.textPrimary : ThingsColor.textSecondary)
-        .help(help)
-        // Etiket: de onderrand op de grondlijn van MAIL (anders telt de onderkant van het icoon).
-        .alignmentGuide(.lastTextBaseline) { $0[.bottom] }
-    }
-
-    @ViewBuilder private var header: some View {
-        if look == .etiket {
-            etiketHeader
-        } else {
-            standardHeader
-        }
-    }
-
-    /// Etiket: "—— 15 ONGELEZEN" erboven; daaronder op één regel de knopjes, MAIL (de letters zo hoog als de knopjes)
-    /// en rechts verversen, nieuwe mail en de mailbox.
-    private var etiketHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            EtiketEyebrow(text: "\(unreadCount) ongelezen")
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                panelButtons
-                // De hoofdletters (0,7 × de grootte) zo hoog als de knopjes (32 pt).
-                Text(headerTitle.uppercased())
-                    .font(.werkPoster(size: 46))
-                    .foregroundStyle(ThingsColor.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .padding(.leading, 6)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { MailModeStore.shared.open() }
-                    .help("Dubbelklik voor de mailmodus")
-                Spacer(minLength: 0)
-                headerControls
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .frame(height: headerHeight)
-    }
-
-    private var standardHeader: some View {
-        HStack(spacing: 8) {
-            panelButtons
             // Dubbelklik op de kop: de mailmodus (het hele venster als mailclient).
             HStack(spacing: 8) {
                 if look == .standaard {

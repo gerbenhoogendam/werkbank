@@ -557,11 +557,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     gekozen mail in de lijst heeft in Etiket geen groene streep links meer; alleen de donkerdere (licht) of lichtere
     (donker) achtergrond.
 55. **Mail in kolommen** (26 nov; ontwerp goedgekeurd op het canvas "Mail in kolommen").
-    - Kop van het Mail-paneel: links twee knopjes, het paneel verbergen (`sidebar.left`, net als het knopje in de
-      werkbalk en ⇧⌘L; dat in de werkbalk blijft om het paneel terug te halen) en de kolommen
-      (`rectangle.split.3x1`). Etiket: de kop is "—— n ONGELEZEN" met daaronder op één regel de knopjes (32 pt,
-      vierkant met rand), MAIL in Bebas 45 (hoofdletters ongeveer 32 pt hoog, op de grondlijn uitgelijnd met de
-      knopjes) en rechts verversen, nieuwe mail en de mailbox (`GmailPanel.etiketHeader`, kophoogte 92).
+    - Het kolommenknopje staat alleen in de kop van de mailmodus (zie hieronder). In de kop van het Mail-paneel op de
+      werkbank stonden eerst ook twee knopjes; op verzoek weer weg (26 nov).
     - `MailColumnsStore`/`MailColumnsView` (MailColumns.swift): over het hele venster (in `MainView` naast de
       mailmodus; de werkbank erachter is niet bereikbaar) de inbox van elke gekozen mailbox als kolom (50 per
       mailbox, nieuwste boven). Bovenin alle mailboxen: klik = alleen die, ⌘-klik = erbij/eraf (bewaard in
@@ -575,7 +572,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - Ook in de kop van de mailmodus: het kolommenknopje direct rechts van het mappenknopje, voor MAIL (zo bedoeld,
       26 nov). Etiket: die kop staat op de grondlijn van MAIL en MAIL is Bebas 43 (hoofdletters ≈ 30 pt, zo hoog als
       de knopjes); de knopjes staan met hun onderrand op die grondlijn (`alignmentGuide(.lastTextBaseline)`, zonder
-      dat telde de onderkant van het icoon en stonden ze lager). In het Mail-paneel net zo, met 32 pt en Bebas 46. Zolang de kolommen open staan toont de wisselknop in de werkbalk "‹ Werkbank" (sluit de kolommen).
+      dat telde de onderkant van het icoon en stonden ze lager). Zolang de kolommen open staan toont de wisselknop in de werkbalk "‹ Werkbank" (sluit de kolommen).
     - Etiket: de wisselknop Mail/Werkbank in de werkbalk zonder glas (rechthoek met dunne rand, kleine kapitalen;
       `ToolbarSwitchStyle`), en op macOS 26 zonder het gedeelde glas om de knoppen links in de werkbalk
       (`sharedBackgroundVisibility(.hidden)` op `MainView.navigationItems`).
