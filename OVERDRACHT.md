@@ -695,7 +695,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     staat in widget C en D zolang er een timer loopt; dan zijn de knoppen alleen iconen. Na proberen (ontwerp D3, bord
     "Widget D"): spreken en typen zijn gelijke witte knoppen met een limoen rand en het zwarte balkje eronder, in D
     met SPREKEN/TYPEN (INSPREKEN brak af); STOP heeft een oranje rand; de tijd bij Volgende staat op een limoen etiket,
-    met daaronder klein de twee afspraken daarna. Alle widgets tonen alleen eigen afspraken: "GH"/"gh" in de eerste
+    met daaronder klein de twee afspraken daarna. Widget C (klein) heeft onder de uren de volgende afspraak op één
+    regel (tijd op limoen etiket, titel). Alle widgets tonen alleen eigen afspraken: "GH"/"gh" in de eerste
     vijf tekens van de titel (`Event.isMine`, bv. "GH PT", "DH GH"); de rest is van collega's. Niet op een toestel
     gezien.
 64. **Dock-icoon kiezen op de Mac** (27 nov). Voorkeuren › Weergave › Dock: Papier (het app-icoon), Limoen of

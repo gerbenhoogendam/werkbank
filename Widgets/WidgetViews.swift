@@ -204,11 +204,27 @@ struct TimeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            WHours(entry: entry, size: 48)
+            WHours(entry: entry, size: 36)
+            next.padding(.top, 9)
             Spacer(minLength: 6)
-            WTimeButtons(labels: false, running: entry.running != nil, height: 42)
+            WTimeButtons(labels: false, running: entry.running != nil, height: 40)
         }
         .widgetURL(W.timeURL)
+    }
+
+    /// De volgende eigen afspraak op één regel: de tijd op een limoen etiket (zoals in D), de titel erachter.
+    @ViewBuilder private var next: some View {
+        if let event = entry.next {
+            HStack(spacing: 6) {
+                Text(W.time(event.start)).font(W.poster(18)).foregroundStyle(W.ink)
+                    .padding(.horizontal, 4).padding(.top, 1)
+                    .background(W.lime)
+                    .background(Rectangle().fill(W.ink).offset(y: 2))
+                Text(event.title).font(W.text(11, .semibold)).foregroundStyle(W.ink).lineLimit(1)
+            }
+        } else {
+            Text("Geen afspraken meer").font(W.text(11)).foregroundStyle(W.ink3)
+        }
     }
 }
 

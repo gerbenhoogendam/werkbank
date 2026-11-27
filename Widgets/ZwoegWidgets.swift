@@ -36,7 +36,7 @@ struct TimeWidget: Widget {
             TimeView(entry: entry).containerBackground(W.paper, for: .widget)
         }
         .configurationDisplayName("Tijd")
-        .description("Uren vandaag; inspreken of typen.")
+        .description("Uren vandaag, de volgende afspraak; spreken of typen.")
         .supportedFamilies([.systemSmall])
     }
 }
