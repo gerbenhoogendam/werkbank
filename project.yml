@@ -135,10 +135,13 @@ targets:
     sources:
       - Shared
       - iOS
+      # Gedeeld met de widgets: de samenvatting in de App Group en de knoppen Tijd inspreken/typen.
+      - Widgets/Shared
     dependencies:
       - package: WerkbankCore
       - package: ArgmaxOSS
         product: WhisperKit
+      - target: Werkbank-Widgets
     settings:
       base:
         PRODUCT_NAME: Werkbank
@@ -153,12 +156,19 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Zwoeg Bank
+        # De gedeelde map met de widgets (WidgetShare).
+        AppGroup: group.$(APP_BUNDLE_ID)
         # mailto-links openen Nieuwe mail (standaard-mailapp kan pas met de toestemming van Apple, zie OVERDRACHT).
+        # zwoegbank:// komt uit de widgets (agenda, mail, tijd/inspreken, tijd/typen).
         CFBundleURLTypes:
           - CFBundleURLName: E-mailadres
             CFBundleTypeRole: Editor
             CFBundleURLSchemes:
               - mailto
+          - CFBundleURLName: Zwoeg Bank
+            CFBundleTypeRole: Viewer
+            CFBundleURLSchemes:
+              - zwoegbank
         # Uitnodigingen: Werkbank staat bij "Open met" voor een .ics, zonder de standaard te worden.
         CFBundleDocumentTypes:
           - CFBundleTypeName: Uitnodiging
@@ -216,6 +226,8 @@ targets:
     entitlements:
       path: iOS/Werkbank.entitlements
       properties:
+        com.apple.security.application-groups:
+          - group.$(APP_BUNDLE_ID)
         com.apple.developer.icloud-container-identifiers:
           - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
         # CloudDocuments: dezelfde map Werkbank in iCloud Drive als de Mac (Voorkeuren.plist).
@@ -225,3 +237,35 @@ targets:
         com.apple.developer.ubiquity-container-identifiers:
           - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
         aps-environment: development
+
+  # Widgets (ontwerp: canvas "Werkbank iOS", pagina Widgets). iOS 18 voor de knoppen in het bedieningspaneel.
+  Werkbank-Widgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - Widgets
+      - path: Shared/Fonts/BebasNeue-Regular.ttf
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: ZwoegBankWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: Widgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Widgets/Widgets.entitlements
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Zwoeg Bank
+        AppGroup: group.$(APP_BUNDLE_ID)
+        UIAppFonts:
+          - BebasNeue-Regular.ttf
+        NSCalendarsFullAccessUsageDescription: De widgets tonen je afspraken van vandaag.
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/Widgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.$(APP_BUNDLE_ID)

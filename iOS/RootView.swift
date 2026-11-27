@@ -89,6 +89,10 @@ struct RootView: View {
             AgendaEventEditor(mode: .invite(invite.event))
                 .presentationBackground(Ph.paper)
         }
+        .onReceive(NotificationCenter.default.publisher(for: WidgetShare.requestNotification)) { _ in
+            takeWidgetRequest()
+        }
+        .onChange(of: running.count) { _, _ in WidgetBridge.update(in: context) }
         .onOpenURL { url in
             if lock.isLocked { pendingLink = url } else { open(url) }
         }
@@ -107,11 +111,14 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
+                WidgetBridge.update(in: context)
                 PhoneDictation.shared.unload()
                 PhoneOutbox.shared.flush()
                 PhoneLock.shared.didEnterBackground()
                 PhoneTimeReminder.update(in: context)
             case .active:
+                takeWidgetRequest()
+                WidgetBridge.update(in: context)
                 PhoneLock.shared.didBecomeActive()
                 PhoneDictation.shared.refresh()
                 Task {
@@ -128,6 +135,22 @@ struct RootView: View {
 extension RootView {
     /// mailto: opent Nieuwe mail met alles ingevuld; een `.ics` opent de afspraak om in de agenda te zetten.
     func open(_ url: URL) {
+        // Links uit de widgets: zwoegbank://agenda, zwoegbank://mail, zwoegbank://tijd[/inspreken|/typen].
+        if url.scheme?.lowercased() == "zwoegbank" {
+            switch url.host?.lowercased() {
+            case "agenda": navigation.tab = .agenda
+            case "mail": navigation.showInbox()
+            case "tijd":
+                navigation.tab = .tijd
+                switch url.path.lowercased() {
+                case "/inspreken": appState.timeEntry = .voice
+                case "/typen": appState.timeEntry = .keyboard
+                default: break
+                }
+            default: break
+            }
+            return
+        }
         if url.scheme?.lowercased() == "mailto" {
             guard let prefill = MailtoLink.parse(url.absoluteString) else { return }
             navigation.tab = .mail
@@ -155,6 +178,17 @@ extension RootView {
         }
         navigation.tab = .agenda
         linkInvite = LinkInvite(event: event)
+    }
+}
+
+extension RootView {
+    /// Inspreken of typen gevraagd vanuit een widget of het bedieningspaneel.
+    func takeWidgetRequest() {
+        switch WidgetShare.takeRequest() {
+        case "voice": appState.timeEntry = .voice
+        case "keyboard": appState.timeEntry = .keyboard
+        default: break
+        }
     }
 }
 

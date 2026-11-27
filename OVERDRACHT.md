@@ -680,6 +680,16 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
 62. **iPhone: snelle acties op het icoon** (27 nov). Lang drukken op het icoon: Mail (naar de inbox: geen open mail,
     kiezen uit), Agenda, Tijd inspreken, Tijd typen. Het open onderdeel staat in `PhoneNavigation` (RootView), zodat
     `QuickAction` het van buitenaf kan zetten.
+63. **Widgets** (27 nov; ontwerp: canvas "Werkbank iOS", pagina Widgets; gekozen B, C, D, F, G, dagdoel 8 uur).
+    Nieuw target `Werkbank-Widgets` (app-extensie, iOS 18, `Widgets/`), ingebed in de iPhone-app. B Vandaag (middel),
+    C Tijd (klein), D Tijd en volgende (middel), F op het vergrendelscherm (inspreken, uren als ring, volgende
+    afspraak rechthoekig en op één regel), G knoppen Tijd inspreken en Tijd typen (bedieningspaneel, vergrendelscherm,
+    Actieknop). Gedeeld via App Group `group.<APP_BUNDLE_ID>` (`AppGroup` in beide Info.plists): de app schrijft
+    `Widgets.json` (`WidgetBridge`: uren vandaag, wat loopt, verborgen agenda's, afspraken vandaag en morgen) bij naar
+    de achtergrond, terug en timer aan/uit. De widget leest de agenda zelf als hij mag, anders uit dat bestand.
+    Knoppen zijn AppIntents met `openAppWhenRun` (`Widgets/Shared`, in app én extensie): ze zetten een verzoek in de
+    App Group dat `RootView.takeWidgetRequest` oppakt. Tikken op een widget gaat via `zwoegbank://`. Timer stoppen
+    vanuit het bedieningspaneel zit er bewust nog niet in. Niet op een toestel gezien.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
