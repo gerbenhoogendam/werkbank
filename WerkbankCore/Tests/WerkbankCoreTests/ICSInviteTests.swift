@@ -24,7 +24,7 @@ final class ICSInviteTests: XCTestCase {
         ORGANIZER;CN="Jansen, Piet":mailto:piet@example.com\r
         DTSTART;TZID=W. Europe Standard Time:20261203T140000\r
         DTEND;TZID=W. Europe Standard Time:20261203T153000\r
-        LOCATION:Kamer 2\; boven\r
+        LOCATION:Kamer 2\\; boven\r
         DESCRIPTION:Eerste regel\\nTweede regel die heel lang is en daarom gevou\r
          wen wordt\r
         END:VEVENT\r
