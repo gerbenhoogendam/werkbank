@@ -87,7 +87,8 @@ struct DayProvider: TimelineProvider {
         guard !calendars.isEmpty else { return [] }
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: now)
-        let end = calendar.date(byAdding: .day, value: 2, to: start) ?? now
+        // Twee weken vooruit: de volgende eigen afspraak kan ook morgen of na het weekend zijn.
+        let end = calendar.date(byAdding: .day, value: 14, to: start) ?? now
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
         return store.events(matching: predicate).map { event in
             WidgetSnapshot.Event(title: event.title ?? "", start: event.startDate, end: event.endDate,

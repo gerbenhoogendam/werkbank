@@ -28,6 +28,17 @@ enum W {
         return String(format: "%d:%02d", minutes / 60, minutes % 60)
     }
 
+    /// Leeg als het vandaag is, anders "MORGEN" of "WO 3".
+    static func day(_ date: Date, from now: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDate(date, inSameDayAs: now) { return "" }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) {
+            return "MORGEN"
+        }
+        let weekday = date.formatted(.dateTime.weekday(.abbreviated)).replacingOccurrences(of: ".", with: "")
+        return "\(weekday) \(calendar.component(.day, from: date))".uppercased()
+    }
+
     static func time(_ date: Date) -> String {
         date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
     }
@@ -220,7 +231,9 @@ struct TimeView: View {
                     .padding(.horizontal, 4).padding(.top, 1)
                     .background(W.lime)
                     .background(Rectangle().fill(W.ink).offset(y: 2))
-                Text(event.title).font(W.text(11, .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                let day = W.day(event.start, from: entry.date)
+                Text(day.isEmpty ? event.title : "\(day.lowercased()) · \(event.title)")
+                    .font(W.text(11, .semibold)).foregroundStyle(W.ink).lineLimit(1)
             }
         } else {
             Text("Geen afspraken meer").font(W.text(11)).foregroundStyle(W.ink3)
@@ -247,7 +260,9 @@ struct TimeNextView: View {
 
     private var next: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("VOLGENDE").font(W.text(8.5, .semibold)).tracking(1.4).foregroundStyle(W.ink2)
+            let day = entry.next.map { W.day($0.start, from: entry.date) } ?? ""
+            Text(day.isEmpty ? "VOLGENDE" : "VOLGENDE · \(day)")
+                .font(W.text(8.5, .semibold)).tracking(1.4).foregroundStyle(W.ink2).lineLimit(1)
             if let event = entry.next {
                 // Ontwerp D3: de tijd op een limoen etiket met een balkje eronder.
                 Text(W.time(event.start)).font(W.poster(32)).foregroundStyle(W.ink)
@@ -261,7 +276,10 @@ struct TimeNextView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(entry.afterNext, id: \.self) { later in
                         HStack(spacing: 5) {
-                            Text(W.time(later.start)).fontWeight(.semibold)
+                            let laterDay = W.day(later.start, from: entry.date)
+                            Text(laterDay.isEmpty ? W.time(later.start)
+                                                  : "\(laterDay == "MORGEN" ? "morgen" : laterDay.prefix(2).lowercased()) \(W.time(later.start))")
+                                .fontWeight(.semibold)
                             Text(later.title).lineLimit(1)
                         }
                         .font(W.text(9.5))
@@ -314,13 +332,16 @@ struct LockNextView: View {
         Group {
             if family == .accessoryInline {
                 if let event = entry.next {
-                    Label("\(W.time(event.start)) \(event.title)", systemImage: "calendar")
+                    let day = W.day(event.start, from: entry.date).lowercased()
+                    Label("\(day.isEmpty ? "" : day + " ")\(W.time(event.start)) \(event.title)", systemImage: "calendar")
                 } else {
                     Label("Geen afspraken meer", systemImage: "calendar")
                 }
             } else if let event = entry.next {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("\(W.time(event.start)) – \(W.time(event.end))").font(.caption2.weight(.semibold))
+                    let day = W.day(event.start, from: entry.date).lowercased()
+                    Text("\(day.isEmpty ? "" : day + " ")\(W.time(event.start)) – \(W.time(event.end))")
+                        .font(.caption2.weight(.semibold))
                     Text(event.title).font(.headline).lineLimit(1)
                     if !event.location.isEmpty { Text(event.location).font(.caption2).lineLimit(1) }
                 }

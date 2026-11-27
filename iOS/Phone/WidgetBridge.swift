@@ -17,7 +17,7 @@ enum WidgetBridge {
                                    runningSince: entry.status == .running ? entry.runningSince : nil)
         }
         let hidden = AppSettings.hiddenCalendarIDs
-        let end = calendar.date(byAdding: .day, value: 2, to: day) ?? now
+        let end = calendar.date(byAdding: .day, value: 14, to: day) ?? now
         let events = CalendarService.shared.events(from: day, to: end, hiddenCalendarIDs: hidden).map { event in
             WidgetSnapshot.Event(title: event.title, start: event.start, end: event.end, isAllDay: event.isAllDay,
                                  location: event.location ?? "")

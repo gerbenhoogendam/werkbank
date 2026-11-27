@@ -697,7 +697,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     met SPREKEN/TYPEN (INSPREKEN brak af); STOP heeft een oranje rand; de tijd bij Volgende staat op een limoen etiket,
     met daaronder klein de twee afspraken daarna. Widget C (klein) heeft onder de uren de volgende afspraak op één
     regel (tijd op limoen etiket, titel). Alle widgets tonen alleen eigen afspraken: "GH"/"gh" in de eerste
-    vijf tekens van de titel (`Event.isMine`, bv. "GH PT", "DH GH"); de rest is van collega's. Niet op een toestel
+    vijf tekens van de titel (`Event.isMine`, bv. "GH PT", "DH GH"); de rest is van collega's. De widgets kijken twee
+    weken vooruit (ook `WidgetBridge`), zodat Volgende ook een afspraak van morgen of na het weekend toont; dan staat
+    de dag erbij ("VOLGENDE · MORGEN", "wo 08:30", `W.day`). Niet op een toestel
     gezien.
 64. **Dock-icoon kiezen op de Mac** (27 nov). Voorkeuren › Weergave › Dock: Papier (het app-icoon), Limoen of
     Oranje (`DockIcon`, beelden in `macOS/DockIcons.xcassets`, Mac-vorm met schaduw). macOS wisselt alleen het
