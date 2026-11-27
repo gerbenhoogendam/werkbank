@@ -650,6 +650,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       Agenda als lijst (14 dagen), afspraak bewerken/dupliceren/verwijderen/navigeren, herinnering en hele dag; timer op
       het hele scherm (`TijdFocusView`), tijd typen of inspreken (`TijdAddSheet`); board in kolommen (`BoardKanban`),
       gedaan vandaag met ongedaan maken (`BoardDoneView`), nieuwe taak inspreken (`BoardNewTaskSheet`).
+59. **App-icoon ZWOEG BANK** (27 nov; canvas "Werkbank iOS", borden Icoon en IcoonKleur, keuze B4). Papier met drie
+    kolommen (limoen in het midden naar voren), ZWOEG BANK in Bebas Neue en een oranje blokje. `AppIcon` (iOS 1024 en
+    alle Mac-maten) is B4 Papier; de donkere iOS-variant is weg. Op de iPhone kies je in Voorkeuren › Icoon ook
+    Limoen (B1, `AppIconLimoen`) of Oranje (B3, `AppIconOranje`) via `setAlternateIconName`; de namen staan in
+    `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`. Die keuze gaat niet via iCloud (iOS toont zelf een melding bij
+    de wissel). De naam op het beginscherm is nog "Werkbank". Gemaakt met Playwright uit een HTML-sjabloon; niet in de
+    app gezien.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

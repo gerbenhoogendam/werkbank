@@ -26,6 +26,8 @@ struct PhonePreferencesView: View {
     @AppStorage(PhoneTimeReminder.hoursKey) private var reminderHours = 6
 
     @State private var claudeKey = ""
+    @State private var icon = UIApplication.shared.alternateIconName ?? ""
+    @State private var iconError: String?
     @State private var hasKey = PhoneClaude.apiKey != nil
 
     var body: some View {
@@ -47,6 +49,7 @@ struct PhonePreferencesView: View {
                         privacy
                         time
                         claude
+                        appIcon
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
@@ -265,6 +268,39 @@ struct PhonePreferencesView: View {
         .padding(.horizontal, 14)
         .frame(minHeight: 50)
         .overlay(alignment: .bottom) { Rectangle().fill(Ph.hair).frame(height: 1) }
+    }
+
+    /// Het app-icoon geldt alleen voor deze telefoon: iOS meldt de wissel zelf, dus het gaat niet via iCloud.
+    private var appIcon: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            section("Icoon")
+            VStack(alignment: .leading, spacing: 0) {
+                choice("App-icoon", selection: Binding(get: { icon }, set: setIcon),
+                       options: [("", "Papier"), ("AppIconLimoen", "Limoen"), ("AppIconOranje", "Oranje")])
+                if let iconError {
+                    Text(iconError)
+                        .font(Ph.text(13))
+                        .foregroundStyle(Ph.urgent)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                }
+            }
+            .phCard()
+        }
+    }
+
+    private func setIcon(_ name: String) {
+        guard UIApplication.shared.supportsAlternateIcons, name != icon else { return }
+        let previous = icon
+        icon = name
+        iconError = nil
+        UIApplication.shared.setAlternateIconName(name.isEmpty ? nil : name) { error in
+            guard let error else { return }
+            Task { @MainActor in
+                icon = previous
+                iconError = error.localizedDescription
+            }
+        }
     }
 
     private func toggle(_ title: String, isOn: Binding<Bool>) -> some View {
