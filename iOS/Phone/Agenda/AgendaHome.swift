@@ -13,6 +13,8 @@ struct AgendaHome: View {
     @State private var creating = false
     /// "Tijd schrijven" gekozen: na het sluiten van het blad de tijdinvoer openen (twee bladen tegelijk kan niet).
     @State private var writeTimeAfterClose = false
+    /// Waar de nieuwe dag of week vandaan schuift: rechts bij vooruit, links bij terug.
+    @State private var slideEdge: Edge = .trailing
 
     private var modeItems: [PhSegmented<AgendaMode>.Item] {
         [PhSegmented<AgendaMode>.Item(value: .dag, title: "Dag"),
@@ -149,7 +151,8 @@ struct AgendaHome: View {
 
     /// Dag: vorige of volgende werkdag; week: een week; maand: een maand.
     private func shift(_ step: Int) {
-        withAnimation(.easeOut(duration: 0.15)) {
+        slideEdge = step > 0 ? .trailing : .leading
+        withAnimation(.easeOut(duration: 0.22)) {
             switch mode {
             case .dag: selected = AgendaDates.workday(after: selected, by: step)
             case .week: selected = AgendaDates.adding(days: 7 * step, to: selected)
@@ -159,14 +162,42 @@ struct AgendaHome: View {
         }
     }
 
+    /// Vegen over de dag, de band of het grid: naar links vooruit, naar rechts terug (zoals de pijltjes).
     private var swipe: some Gesture {
-        DragGesture(minimumDistance: 24)
+        DragGesture(minimumDistance: 20)
             .onEnded { value in
-                let dx = value.translation.width
-                let dy = value.translation.height
-                guard abs(dx) > 70, abs(dx) > abs(dy) * 1.5 else { return }
-                shift(dx < 0 ? 1 : -1)
+                guard let step = Self.swipeStep(value) else { return }
+                shift(step)
             }
+    }
+
+    /// Vegen over de strook met dagen: een hele week verder of terug, dezelfde dag van de week.
+    private var weekSwipe: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { value in
+                guard let step = Self.swipeStep(value) else { return }
+                slideEdge = step > 0 ? .trailing : .leading
+                withAnimation(.easeOut(duration: 0.22)) {
+                    selected = AgendaDates.adding(days: 7 * step, to: selected)
+                }
+            }
+    }
+
+    /// Een veeg telt als hij vooral horizontaal is en ver genoeg gaat (of snel genoeg).
+    private static func swipeStep(_ value: DragGesture.Value) -> Int? {
+        let dx = value.translation.width
+        let dy = value.translation.height
+        let flick = value.predictedEndTranslation.width
+        guard abs(dx) > abs(dy) * 1.4, abs(dx) > 50 || abs(flick) > 140 else { return nil }
+        return dx < 0 ? 1 : -1
+    }
+
+    /// Een dag kiezen in de strook schuift ook van de goede kant.
+    private var stripSelection: Binding<Date> {
+        Binding(get: { selected }, set: { day in
+            slideEdge = day > selected ? .trailing : .leading
+            withAnimation(.easeOut(duration: 0.22)) { selected = day }
+        })
     }
 
     // MARK: Inhoud
@@ -190,12 +221,18 @@ struct AgendaHome: View {
             let monday = AgendaDates.monday(of: selected)
             let weekEvents = fetch(from: monday, to: AgendaDates.adding(days: 7, to: monday))
             let dayEvents = weekEvents.filter { $0.overlaps(day: selected) }
-            AgendaDayStrip(days: AgendaDates.workdays(of: selected), selected: $selected,
+            AgendaDayStrip(days: AgendaDates.workdays(of: selected), selected: stripSelection,
                            events: weekEvents.filter { !$0.isPersonal })
-            AgendaPersonalBand(events: dayEvents.filter { $0.isPersonal || $0.isAllDay }, onOpen: open)
-            AgendaDayGrid(day: selected, events: dayEvents.filter { !$0.isPersonal && !$0.isAllDay }, onOpen: open)
-                .id(selected)
-                .simultaneousGesture(swipe)
+                .contentShape(Rectangle())
+                .simultaneousGesture(weekSwipe)
+            VStack(alignment: .leading, spacing: 10) {
+                AgendaPersonalBand(events: dayEvents.filter { $0.isPersonal || $0.isAllDay }, onOpen: open)
+                AgendaDayGrid(day: selected, events: dayEvents.filter { !$0.isPersonal && !$0.isAllDay }, onOpen: open)
+            }
+            .id(selected)
+            .transition(.push(from: slideEdge))
+            .contentShape(Rectangle())
+            .simultaneousGesture(swipe)
         case .week:
             let days = AgendaDates.workdays(of: selected)
             let monday = AgendaDates.monday(of: selected)
@@ -210,6 +247,7 @@ struct AgendaHome: View {
                 }
             }
             .id(monday)
+            .transition(.push(from: slideEdge))
             .simultaneousGesture(swipe)
         case .maand:
             let first = AgendaDates.firstOfMonth(selected)

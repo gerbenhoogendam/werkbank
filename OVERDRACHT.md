@@ -708,6 +708,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     `macOS/SenderAvatar.swift`); `PhAvatar` krijgt `address` en toont het logo in een wit rondje, anders de
     initialen. In de inbox (ruim) en in het gesprek. Aan/uit met dezelfde sleutel als de Mac
     (`SettingsKey.mailLogos`, Voorkeuren › Inbox › Logo's bij afzenders, gaat via iCloud).
+66. **iPhone Agenda: vegen door de dagen** (27 nov). Dag: vegen over de band en het grid gaat een werkdag verder of
+    terug, vegen over de strook met dagen een hele week; de nieuwe dag schuift van de goede kant in (`slideEdge`,
+    `.push`). Week en maand vegen per week of maand, zoals de pijltjes. Een veeg telt als hij vooral horizontaal is en
+    50 pt ver gaat of snel is (`swipeStep`).
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
