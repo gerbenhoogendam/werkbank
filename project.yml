@@ -152,7 +152,7 @@ targets:
     info:
       path: iOS/Info.plist
       properties:
-        CFBundleDisplayName: Werkbank
+        CFBundleDisplayName: Zwoeg Bank
         # Gmail (OAuth met PKCE), hetzelfde client-id als op de Mac.
         GoogleClientID: $(GOOGLE_CLIENT_ID)
         NSContactsUsageDescription: Werkbank zet de afzender van een mail in je contacten.

@@ -655,7 +655,7 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     alle Mac-maten) is B4 Papier; de donkere iOS-variant is weg. Op de iPhone kies je in Voorkeuren › Icoon ook
     Limoen (B1, `AppIconLimoen`) of Oranje (B3, `AppIconOranje`) via `setAlternateIconName`; de namen staan in
     `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`. Die keuze gaat niet via iCloud (iOS toont zelf een melding bij
-    de wissel). De naam op het beginscherm is nog "Werkbank". Gemaakt met Playwright uit een HTML-sjabloon; niet in de
+    de wissel). Op het beginscherm van de iPhone heet de app "Zwoeg Bank" (`CFBundleDisplayName`); de productnaam, bundle-id en de Mac-app blijven Werkbank. Gemaakt met Playwright uit een HTML-sjabloon; niet in de
     app gezien.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
