@@ -14,7 +14,7 @@ struct RootView: View {
     private let outbox = PhoneOutbox.shared
     private let lock = PhoneLock.shared
 
-    @State private var tab: PhTab = .mail
+    @State private var navigation = PhoneNavigation.shared
     /// Verbetering: eerst het scherm vastleggen, dan het blad.
     @State private var feedback: FeedbackStart?
     /// Een mailto-link of `.ics`-bestand van buiten; met Face ID aan pas na ontgrendelen.
@@ -30,7 +30,7 @@ struct RootView: View {
             // De tabbalk onder de inhoud, niet eroverheen: dan valt niets (zoals de pen van Mail) erachter.
             VStack(spacing: 0) {
                 Group {
-                    switch tab {
+                    switch navigation.tab {
                     case .mail: MailHome()
                     case .agenda: AgendaHome()
                     case .tijd: TijdHome()
@@ -38,7 +38,7 @@ struct RootView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                PhTabBar(tab: $tab, timerRunning: !running.isEmpty)
+                PhTabBar(tab: $navigation.tab, timerRunning: !running.isEmpty)
             }
 
             // Verstuurd, met ongedaan maken: boven de tabbalk.
@@ -130,7 +130,7 @@ extension RootView {
     func open(_ url: URL) {
         if url.scheme?.lowercased() == "mailto" {
             guard let prefill = MailtoLink.parse(url.absoluteString) else { return }
-            tab = .mail
+            navigation.tab = .mail
             linkCompose = PhoneComposeRequest(mode: .new, to: prefill.to, subject: prefill.subject,
                                               body: prefill.body, cc: prefill.cc)
             if !prefill.bcc.isEmpty { appState.showToast("Bcc niet overgenomen: \(prefill.bcc)", seconds: 4) }
@@ -153,7 +153,7 @@ extension RootView {
             appState.showToast("Afzegging: \(event.title)", seconds: 4)
             return
         }
-        tab = .agenda
+        navigation.tab = .agenda
         linkInvite = LinkInvite(event: event)
     }
 }
@@ -161,6 +161,20 @@ extension RootView {
 struct LinkInvite: Identifiable {
     let id = UUID()
     let event: ICSEvent
+}
+
+/// Welk onderdeel open staat; snelle acties op het icoon zetten het van buitenaf.
+@MainActor @Observable
+final class PhoneNavigation {
+    static let shared = PhoneNavigation()
+    var tab: PhTab = .mail
+    /// Hoog na "Mail" op het icoon: Mail gaat terug naar de inbox (geen open mail, niet aan het kiezen).
+    var inboxRequest = 0
+
+    func showInbox() {
+        tab = .mail
+        inboxRequest += 1
+    }
 }
 
 enum PhTab: String, CaseIterable {

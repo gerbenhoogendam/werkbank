@@ -176,6 +176,12 @@ targets:
         NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt om naar een tijdregel, op dit toestel.
         # Snelle acties op het beginscherm (icoon lang indrukken), zie QuickAction.
         UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: mail
+            UIApplicationShortcutItemTitle: Mail
+            UIApplicationShortcutItemIconSymbolName: envelope
+          - UIApplicationShortcutItemType: agenda
+            UIApplicationShortcutItemTitle: Agenda
+            UIApplicationShortcutItemIconSymbolName: calendar
           - UIApplicationShortcutItemType: tijd-inspreken
             UIApplicationShortcutItemTitle: Tijd inspreken
             UIApplicationShortcutItemIconSymbolName: mic.fill

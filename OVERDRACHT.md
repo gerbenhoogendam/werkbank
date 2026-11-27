@@ -677,6 +677,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     andere drie nul breed. Bebas Neue wordt nu bij het opstarten aangemeld (`Ph.registerFonts` in `WerkbankApp.init`):
     alleen `ThemeStore` deed dat, en die wordt op de iPhone niet altijd geladen, waardoor de onderwerpregel van een
     mail in de systeemletter stond.
+62. **iPhone: snelle acties op het icoon** (27 nov). Lang drukken op het icoon: Mail (naar de inbox: geen open mail,
+    kiezen uit), Agenda, Tijd inspreken, Tijd typen. Het open onderdeel staat in `PhoneNavigation` (RootView), zodat
+    `QuickAction` het van buitenaf kan zetten.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

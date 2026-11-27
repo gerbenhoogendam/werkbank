@@ -123,6 +123,11 @@ struct MailHome: View {
             if gmail.accounts.isEmpty { welcomeActive = true }
             if gmail.inbox.isEmpty { await gmail.reloadAll() }
         }
+        .onChange(of: PhoneNavigation.shared.inboxRequest) { _, _ in
+            path = []
+            selecting = false
+            chosen = []
+        }
         .onChange(of: gmail.accounts.isEmpty) { _, empty in
             if empty { welcomeActive = true }
         }

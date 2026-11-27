@@ -19,15 +19,20 @@ struct WerkbankApp: App {
     }
 }
 
-/// Snelle acties op het beginscherm (het icoon lang indrukken): "Tijd inspreken" en "Tijd typen" openen de
-/// tijdinvoer, meteen in die vorm. Staan in `UIApplicationShortcutItems` (project.yml).
+/// Snelle acties op het beginscherm (het icoon lang indrukken): Mail opent de inbox, Agenda de agenda, "Tijd
+/// inspreken" en "Tijd typen" openen de tijdinvoer meteen in die vorm. Staan in `UIApplicationShortcutItems`
+/// (project.yml).
 enum QuickAction {
+    static let mail = "mail"
+    static let agenda = "agenda"
     static let voice = "tijd-inspreken"
     static let keyboard = "tijd-typen"
 
     @MainActor
     static func handle(_ item: UIApplicationShortcutItem) -> Bool {
         switch item.type {
+        case mail:     PhoneNavigation.shared.showInbox()
+        case agenda:   PhoneNavigation.shared.tab = .agenda
         case voice:    AppState.shared.timeEntry = .voice
         case keyboard: AppState.shared.timeEntry = .keyboard
         default:       return false
