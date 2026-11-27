@@ -21,9 +21,10 @@ struct DayEntry: TimelineEntry {
             .sorted { ($0.isAllDay ? 0 : 1, $0.start) < ($1.isAllDay ? 0 : 1, $1.start) }
     }
 
-    /// Widget B: vandaag, of als vandaag leeg is de eerstvolgende dag met een eigen afspraak.
+    /// Widget B: vandaag, of als vandaag leeg is of alles met een tijd voorbij is ('s avonds) de eerstvolgende dag
+    /// met een eigen afspraak. Hele dagen tellen niet als nog open.
     var shownDay: Date {
-        guard today.isEmpty else { return date }
+        guard !today.contains(where: { !$0.isAllDay && $0.end > date }) else { return date }
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date
         let later = events.filter { $0.start >= tomorrow }.min { $0.start < $1.start }
         return later?.start ?? date

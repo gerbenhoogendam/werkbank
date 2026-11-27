@@ -174,7 +174,8 @@ struct TodayView: View {
                 Text(day.formatted(.dateTime.month(.abbreviated)).replacingOccurrences(of: ".", with: "").uppercased())
                     .font(W.poster(21)).foregroundStyle(W.ink2)
                 Spacer(minLength: 0)
-                Text(isToday ? (list.count == 1 ? "1 afspraak" : "\(list.count) afspraken") : "vandaag niets")
+                Text(isToday ? (list.count == 1 ? "1 afspraak" : "\(list.count) afspraken")
+                             : (entry.today.isEmpty ? "vandaag niets" : "vandaag klaar"))
                     .font(W.text(10)).foregroundStyle(W.ink2)
             }
             .frame(width: 70, alignment: .leading)
