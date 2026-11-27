@@ -1,7 +1,8 @@
 import AppKit
 
-/// Het icoon in het Dock: Papier (het app-icoon) of Limoen/Oranje. macOS laat een app alleen het Dock-icoon
-/// wisselen terwijl hij draait; Finder, Launchpad en de app-wisselaar houden Papier.
+/// Het icoon in het Dock: Papier, Limoen of Oranje. macOS laat een app alleen het Dock-icoon wisselen terwijl hij
+/// draait; Finder, Launchpad en de app-wisselaar tonen het app-icoon (Papier). Ook Papier wordt hier gezet: het Dock
+/// houdt anders soms een oud icoon uit de cache van macOS vast.
 enum DockIcon: String, CaseIterable, Identifiable {
     case papier, limoen, oranje
 
@@ -17,9 +18,9 @@ enum DockIcon: String, CaseIterable, Identifiable {
         }
     }
 
-    private var imageName: String? {
+    private var imageName: String {
         switch self {
-        case .papier: nil
+        case .papier: "DockIconPapier"
         case .limoen: "DockIconLimoen"
         case .oranje: "DockIconOranje"
         }
@@ -31,9 +32,9 @@ enum DockIcon: String, CaseIterable, Identifiable {
         stored.apply()
     }
 
-    /// Nil zet het gewone app-icoon terug; de teller met ongelezen mail blijft staan.
+    /// De teller met ongelezen mail blijft staan.
     @MainActor
     func apply() {
-        NSApp.applicationIconImage = imageName.flatMap { NSImage(named: $0) }
+        NSApp.applicationIconImage = NSImage(named: imageName)
     }
 }

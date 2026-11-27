@@ -691,11 +691,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     App Group dat `RootView.takeWidgetRequest` oppakt. Tikken op een widget gaat via `zwoegbank://`. Timer stoppen
     vanuit het bedieningspaneel: knop "Timer stoppen" (`StopTimerControl`) toont de klant van wat loopt (uit
     `Widgets.json`, `RunningTimerProvider`) en opent via `StopTimerIntent` de app; `RootView.stopFromWidget` bevriest
-    de laatst gestarte timer op het moment van de tik en opent de stopsheet. Niet op een toestel gezien.
+    de laatst gestarte timer op het moment van de tik en opent de stopsheet. Dezelfde stopknop (oranje, vooraan)
+    staat in widget C en D zolang er een timer loopt; dan zijn de knoppen alleen iconen. Niet op een toestel gezien.
 64. **Dock-icoon kiezen op de Mac** (27 nov). Voorkeuren › Weergave › Dock: Papier (het app-icoon), Limoen of
     Oranje (`DockIcon`, beelden in `macOS/DockIcons.xcassets`, Mac-vorm met schaduw). macOS wisselt alleen het
     Dock-icoon terwijl de app draait (`NSApp.applicationIconImage`, bij opstarten en bij wisselen); Finder en Launchpad
-    houden Papier. De teller met ongelezen mail blijft.
+    houden Papier. De teller met ongelezen mail blijft. Ook Papier wordt als beeld gezet (`DockIconPapier`): het Dock
+    toonde na de nieuwe build nog het oude icoon uit de cache van macOS.
 65. **Afzenderlogo's op de iPhone** (27 nov). `SenderLogoService` staat nu in `Shared/Services` (was in
     `macOS/SenderAvatar.swift`); `PhAvatar` krijgt `address` en toont het logo in een wit rondje, anders de
     initialen. In de inbox (ruim) en in het gesprek. Aan/uit met dezelfde sleutel als de Mac

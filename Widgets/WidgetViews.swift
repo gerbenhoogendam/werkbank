@@ -62,17 +62,32 @@ struct WGoalBar: View {
     }
 }
 
-/// De twee knoppen om tijd te schrijven: limoen voor inspreken, wit voor typen.
+/// De knoppen om tijd te schrijven: limoen voor inspreken, wit voor typen; loopt er een timer, dan vooraan een
+/// oranje stopknop (opent de stopsheet). Met een stopknop erbij alleen iconen.
 struct WTimeButtons: View {
     var labels = false
+    var running = false
     var height: CGFloat = 44
+
+    private var showLabels: Bool { labels && !running }
 
     var body: some View {
         HStack(spacing: 6) {
+            if running {
+                Button(intent: StopTimerIntent()) {
+                    Image(systemName: "stop.fill").font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(W.late)
+                        .background(Rectangle().fill(W.ink).offset(y: 3))
+                        .overlay(Rectangle().strokeBorder(W.ink, lineWidth: 2))
+                }
+                .accessibilityLabel("Timer stoppen")
+            }
             Button(intent: SpeakTimeIntent()) {
                 HStack(spacing: 5) {
-                    Image(systemName: "mic").font(.system(size: labels ? 14 : 17, weight: .medium))
-                    if labels { Text("INSPREKEN").font(W.text(9.5, .semibold)).tracking(1) }
+                    Image(systemName: "mic").font(.system(size: showLabels ? 14 : 17, weight: .medium))
+                    if showLabels { Text("INSPREKEN").font(W.text(9.5, .semibold)).tracking(1) }
                 }
                 .foregroundStyle(W.ink)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,8 +98,8 @@ struct WTimeButtons: View {
             .accessibilityLabel("Tijd inspreken")
             Button(intent: TypeTimeIntent()) {
                 HStack(spacing: 5) {
-                    Image(systemName: "keyboard").font(.system(size: labels ? 13 : 16, weight: .medium))
-                    if labels { Text("TYPEN").font(W.text(9.5, .semibold)).tracking(1) }
+                    Image(systemName: "keyboard").font(.system(size: showLabels ? 13 : 16, weight: .medium))
+                    if showLabels { Text("TYPEN").font(W.text(9.5, .semibold)).tracking(1) }
                 }
                 .foregroundStyle(W.ink)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -206,7 +221,7 @@ struct TimeView: View {
         VStack(alignment: .leading, spacing: 0) {
             WHours(entry: entry, size: 48)
             Spacer(minLength: 6)
-            WTimeButtons(labels: false, height: 46)
+            WTimeButtons(labels: false, running: entry.running != nil, height: 46)
         }
         .widgetURL(W.timeURL)
     }
@@ -222,7 +237,7 @@ struct TimeNextView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Link(destination: W.timeURL) { WHours(entry: entry, size: 44) }
                 Spacer(minLength: 6)
-                WTimeButtons(labels: true, height: 44)
+                WTimeButtons(labels: true, running: entry.running != nil, height: 44)
             }
             Link(destination: W.agendaURL) { next }
                 .frame(width: 128)
