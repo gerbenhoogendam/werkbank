@@ -1,12 +1,313 @@
+import SwiftData
 import SwiftUI
+import WerkbankCore
 
+/// Het board op de iPhone: één kolom tegelijk (keuze bovenaan), snel een taak toevoegen, compacte taakkaarten.
+/// Afvinken rondt af (archief), vegen verplaatst naar de volgende kolom, start de timer, rondt af of verwijdert.
 struct BoardHome: View {
+    @Environment(\.modelContext) private var context
+    @Environment(AppState.self) private var appState
+    @Query(filter: #Predicate<TodoCard> { $0.columnRaw != "done" }, sort: \TodoCard.sortOrder)
+    private var cards: [TodoCard]
+    @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
+    /// Tijd die op kaarten is geschreven (voor de minuten per kaart).
+    @Query(filter: #Predicate<TimeEntry> { $0.todoID != nil }) private var cardEntries: [TimeEntry]
+
+    /// De gekozen kolom, per apparaat.
+    @AppStorage("phone.board.column") private var selectedID = BoardColumn.inboxID
+    @State private var draft = ""
+    @State private var editing: TodoCard?
+    /// Afgevinkt; de kaart gaat even later naar het archief.
+    @State private var completing: Set<UUID> = []
+    @FocusState private var addFocused: Bool
+
+    private var columns: [BoardColumn] { columnRecords.map(\.column) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            PhHeader(eyebrow: "TO DO", title: "Board")
-            Spacer()
+        let columns = self.columns
+        let grouped = BoardService.grouped(cards, into: columns)
+        let selected = columns.first { $0.id == selectedID } ?? columns.first ?? BoardColumn.inbox
+        let columnCards = grouped[selected.id] ?? []
+        let minutes = minutesByCard()
+        let running = Set(cardEntries.filter { $0.status == .running }.compactMap(\.todoID))
+
+        VStack(alignment: .leading, spacing: 12) {
+            PhHeader(eyebrow: "\(cards.count) OPEN", title: "Board")
+            columnPicker(columns, grouped: grouped, selected: selected)
+                .padding(.horizontal, 16)
+            quickAdd(selected)
+            list(columnCards, in: selected, columns: columns, minutes: minutes, running: running)
         }
         .padding(.top, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .phScreen()
+        .onAppear { BoardService.ensureColumns(in: context) }
+        // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen.
+        .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
+        .sheet(item: $editing) { card in
+            TaskDetailView(card: card)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Ph.paper)
+        }
+    }
+
+    // MARK: Kolommen
+
+    /// Korte naam in de keuze ("Wacht op klant" → "Wacht") als er vier of meer kolommen naast elkaar staan.
+    private func shortTitle(_ column: BoardColumn, count: Int) -> String {
+        guard count >= 4, column.title.count > 9 else { return column.title }
+        return column.title.split(separator: " ").first.map(String.init) ?? column.title
+    }
+
+    @ViewBuilder
+    private func columnPicker(_ columns: [BoardColumn], grouped: [String: [TodoCard]],
+                              selected: BoardColumn) -> some View {
+        if columns.count <= 4 {
+            let items = columns.map { column in
+                PhSegmented<String>.Item(value: column.id, title: shortTitle(column, count: columns.count),
+                                         count: grouped[column.id]?.count ?? 0)
+            }
+            PhSegmented(items: items, selection: Binding(get: { selected.id }, set: { selectedID = $0 }), height: 40)
+        } else {
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(columns) { column in
+                        PhChip(title: "\(column.title) \(grouped[column.id]?.count ?? 0)", isOn: column == selected) {
+                            withAnimation(.easeOut(duration: 0.15)) { selectedID = column.id }
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+        }
+    }
+
+    private func nextColumn(after column: BoardColumn, in columns: [BoardColumn]) -> BoardColumn? {
+        guard let index = columns.firstIndex(of: column), index + 1 < columns.count else { return nil }
+        return columns[index + 1]
+    }
+
+    // MARK: Snel toevoegen
+
+    private func quickAdd(_ column: BoardColumn) -> some View {
+        let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return HStack(spacing: 6) {
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Ph.ink2)
+                .frame(width: 30)
+                .accessibilityHidden(true)
+            TextField("Nieuwe taak", text: $draft)
+                .font(Ph.text(15))
+                .foregroundStyle(Ph.ink)
+                .focused($addFocused)
+                .submitLabel(.done)
+                .onSubmit { add(to: column) }
+                .frame(minHeight: 40)
+            Button {
+                add(to: column)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .bold))
+            }
+            .buttonStyle(PhPrimaryStyle(height: 40))
+            .frame(width: 40)
+            .disabled(empty)
+            .opacity(empty ? 0.5 : 1)
+            .accessibilityLabel("Voeg toe aan \(column.title)")
+        }
+        .padding(4)
+        .phWell()
+        .padding(.horizontal, 16)
+    }
+
+    private func add(to column: BoardColumn) {
+        guard BoardService.addQuickEntry(draft, column: column, in: context) != nil else { return }
+        draft = ""
+        appState.showToast("Toegevoegd aan \(column.title)")
+    }
+
+    // MARK: Kaarten
+
+    /// Geschreven en lopende tijd per kaart, in minuten.
+    private func minutesByCard() -> [UUID: Int] {
+        var seconds: [UUID: TimeInterval] = [:]
+        let now = Date()
+        for entry in cardEntries {
+            guard let id = entry.todoID else { continue }
+            seconds[id, default: 0] += entry.status == .finished ? entry.accumulated : entry.elapsed(at: now)
+        }
+        return seconds.mapValues { Int(($0 / 60).rounded()) }
+    }
+
+    private func list(_ columnCards: [TodoCard], in column: BoardColumn, columns: [BoardColumn],
+                      minutes: [UUID: Int], running: Set<UUID>) -> some View {
+        let next = nextColumn(after: column, in: columns)
+        return List {
+            if columnCards.isEmpty {
+                PhCaps(text: "Leeg", size: 11, color: Ph.ink3)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+            ForEach(columnCards) { card in
+                BoardTaskRow(card: card, minutes: minutes[card.id] ?? 0, isRunning: running.contains(card.id),
+                             isCompleting: completing.contains(card.id)) {
+                    complete(card)
+                } onOpen: {
+                    editing = card
+                }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    if let next {
+                        Button {
+                            withAnimation { BoardService.move(card, to: next, index: 0, undoable: true, in: context) }
+                            appState.showToast("Naar \(next.title)")
+                        } label: {
+                            Label(next.title, systemImage: "arrow.right")
+                        }
+                        .tint(Ph.ink)
+                    }
+                    Button {
+                        TimerService.startTimer(for: card, in: context)
+                        appState.showToast("Timer gestart: \(card.title)")
+                    } label: {
+                        Label("Timer", systemImage: "play.fill")
+                    }
+                    .tint(Ph.olive)
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        withAnimation { BoardService.delete(card, in: context) }
+                    } label: {
+                        Label("Verwijder", systemImage: "trash")
+                    }
+                    Button {
+                        complete(card)
+                    } label: {
+                        Label("Afronden", systemImage: "checkmark")
+                    }
+                    .tint(Ph.olive)
+                }
+                .contextMenu { menu(for: card, columns: columns) }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 1)
+        .contentMargins(.bottom, 16, for: .scrollContent)
+    }
+
+    @ViewBuilder private func menu(for card: TodoCard, columns: [BoardColumn]) -> some View {
+        Button { editing = card } label: { Label("Openen", systemImage: "square.and.pencil") }
+        Button { complete(card) } label: { Label("Afronden", systemImage: "checkmark.square") }
+        Button {
+            TimerService.startTimer(for: card, in: context)
+            appState.showToast("Timer gestart: \(card.title)")
+        } label: { Label("Timer starten", systemImage: "play.fill") }
+        Menu {
+            ForEach(columns.filter { $0.id != card.columnRaw }) { target in
+                Button(target.title) {
+                    withAnimation { BoardService.move(card, to: target, index: 0, undoable: true, in: context) }
+                }
+            }
+        } label: { Label("Verplaats naar", systemImage: "arrow.right.square") }
+        Button(role: .destructive) {
+            withAnimation { BoardService.delete(card, in: context) }
+        } label: { Label("Verwijder", systemImage: "trash") }
+    }
+
+    /// Vinkje zetten, even laten staan, dan naar het archief (zoals op het oude board).
+    private func complete(_ card: TodoCard) {
+        let id = card.id
+        guard !completing.contains(id) else { return }
+        withAnimation(.easeOut(duration: 0.15)) { _ = completing.insert(id) }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            if let card = BoardService.card(withID: id, in: context) {
+                let title = card.title
+                withAnimation { BoardService.complete(card, in: context) }
+                appState.showToast("\"\(title)\" afgerond")
+            }
+            completing.remove(id)
+        }
+    }
+}
+
+// MARK: - Taakkaart
+
+/// Een compacte taak: vinkje, titel, klant, minuten, envelop als hij uit een mail komt, "loopt" bij een timer.
+struct BoardTaskRow: View {
+    let card: TodoCard
+    let minutes: Int
+    let isRunning: Bool
+    let isCompleting: Bool
+    let onCheck: () -> Void
+    let onOpen: () -> Void
+
+    private var fromMail: Bool { card.mailThreadID != nil || card.senderLine != nil }
+
+    private var edge: Color {
+        if isRunning { return Ph.lime }
+        if card.isNew { return Ph.olive }
+        return Ph.line
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button(action: onCheck) {
+                PhCheck(isOn: isCompleting)
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, -5)
+            .padding(.leading, -6)
+            .padding(.trailing, -6)
+            .accessibilityLabel("\(card.title) klaar")
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(card.title.isEmpty ? "Nieuwe taak" : card.title)
+                    .font(Ph.text(14.5, .medium))
+                    .foregroundStyle(isCompleting ? Ph.ink3 : Ph.ink)
+                    .strikethrough(isCompleting, color: Ph.ink3)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                HStack(spacing: 8) {
+                    if let label = card.clientLabel, !label.isEmpty {
+                        PhBoxTag(text: label)
+                            .lineLimit(1)
+                    }
+                    if minutes > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10, weight: .medium))
+                            Text("\(minutes) MIN")
+                                .font(Ph.text(11))
+                                .monospacedDigit()
+                        }
+                    }
+                    if fromMail {
+                        Image(systemName: "envelope")
+                            .font(.system(size: 11, weight: .medium))
+                            .accessibilityLabel("Uit mail")
+                    }
+                    Spacer(minLength: 0)
+                    if isRunning {
+                        PhCaps(text: "Loopt", size: 10, color: Ph.late)
+                    }
+                }
+                .foregroundStyle(Ph.ink2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
+        }
+        .padding(EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .phCard()
+        .overlay(alignment: .leading) { Rectangle().fill(edge).frame(width: 3) }
     }
 }
