@@ -663,6 +663,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`. Die keuze gaat niet via iCloud (iOS toont zelf een melding bij
     de wissel). Op het beginscherm van de iPhone heet de app "Zwoeg Bank" (`CFBundleDisplayName`); de productnaam, bundle-id en de Mac-app blijven Werkbank. Gemaakt met Playwright uit een HTML-sjabloon; niet in de
     app gezien.
+60. **iPhone: mailto en uitnodigingen** (27 nov). `mailto:` staat in `CFBundleURLTypes` van de iPhone; `RootView.open`
+    opent Nieuwe mail met aan, cc, onderwerp en tekst (`MailtoLink`); bcc kan het opstelscherm niet en wordt gemeld,
+    niet stilletjes in cc gezet. `.ics` staat in `CFBundleDocumentTypes` (rang Alternate, alleen "Open met"):
+    `ICSParser` (WerkbankCore, met tests: vouwen, escapes, TZID ook in Windows-namen, UTC, hele dag, DURATION) leest
+    de eerste VEVENT en opent `AgendaEventEditor` in modus `.invite`, met organisator en beschrijving in de notities.
+    Een afzegging (METHOD:CANCEL) toont alleen een melding. Met Face ID aan wacht de link tot na ontgrendelen.
+    Standaard-mailapp: pas met `com.apple.developer.mail-client`, aan te vragen bij Apple; daarna die sleutel in de
+    iOS-entitlements in `project.yml`. Een standaard-agenda bestaat op iOS niet. Niet in de app gezien.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

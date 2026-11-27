@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
+import WerkbankCore
 
 /// De iPhone-app (nieuw ontwerp, canvas "Werkbank iOS"): vier onderdelen onder een eigen tabbalk in de stijl Etiket.
 /// Snelle acties op het beginscherm openen nog steeds de tijdinvoer.
@@ -16,6 +17,10 @@ struct RootView: View {
     @State private var tab: PhTab = .mail
     /// Verbetering: eerst het scherm vastleggen, dan het blad.
     @State private var feedback: FeedbackStart?
+    /// Een mailto-link of `.ics`-bestand van buiten; met Face ID aan pas na ontgrendelen.
+    @State private var pendingLink: URL?
+    @State private var linkCompose: PhoneComposeRequest?
+    @State private var linkInvite: LinkInvite?
 
     var body: some View {
         @Bindable var state = appState
@@ -76,6 +81,22 @@ struct RootView: View {
             PhoneComposeView(request: request)
                 .presentationBackground(Ph.paper)
         }
+        .sheet(item: $linkCompose) { request in
+            PhoneComposeView(request: request)
+                .presentationBackground(Ph.paper)
+        }
+        .sheet(item: $linkInvite) { invite in
+            AgendaEventEditor(mode: .invite(invite.event))
+                .presentationBackground(Ph.paper)
+        }
+        .onOpenURL { url in
+            if lock.isLocked { pendingLink = url } else { open(url) }
+        }
+        .onChange(of: lock.isLocked) { _, locked in
+            guard !locked, let url = pendingLink else { return }
+            pendingLink = nil
+            open(url)
+        }
         .task {
             if lock.isLocked { Task { await lock.unlock() } }
             PhoneDictation.shared.refresh()
@@ -102,6 +123,44 @@ struct RootView: View {
             }
         }
     }
+}
+
+extension RootView {
+    /// mailto: opent Nieuwe mail met alles ingevuld; een `.ics` opent de afspraak om in de agenda te zetten.
+    func open(_ url: URL) {
+        if url.scheme?.lowercased() == "mailto" {
+            guard let prefill = MailtoLink.parse(url.absoluteString) else { return }
+            tab = .mail
+            linkCompose = PhoneComposeRequest(mode: .new, to: prefill.to, subject: prefill.subject,
+                                              body: prefill.body, cc: prefill.cc)
+            if !prefill.bcc.isEmpty { appState.showToast("Bcc niet overgenomen: \(prefill.bcc)", seconds: 4) }
+            return
+        }
+        guard url.isFileURL else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url),
+              let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+            appState.showToast("Bestand niet te lezen")
+            return
+        }
+        let document = ICSParser.parse(text)
+        guard let event = document.events.first else {
+            appState.showToast("Geen afspraak in dit bestand")
+            return
+        }
+        if document.method == "CANCEL" {
+            appState.showToast("Afzegging: \(event.title)", seconds: 4)
+            return
+        }
+        tab = .agenda
+        linkInvite = LinkInvite(event: event)
+    }
+}
+
+struct LinkInvite: Identifiable {
+    let id = UUID()
+    let event: ICSEvent
 }
 
 enum PhTab: String, CaseIterable {

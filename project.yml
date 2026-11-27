@@ -153,6 +153,20 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Zwoeg Bank
+        # mailto-links openen Nieuwe mail (standaard-mailapp kan pas met de toestemming van Apple, zie OVERDRACHT).
+        CFBundleURLTypes:
+          - CFBundleURLName: E-mailadres
+            CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - mailto
+        # Uitnodigingen: Werkbank staat bij "Open met" voor een .ics, zonder de standaard te worden.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Uitnodiging
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.apple.ical.ics
+        LSSupportsOpeningDocumentsInPlace: false
         # Gmail (OAuth met PKCE), hetzelfde client-id als op de Mac.
         GoogleClientID: $(GOOGLE_CLIENT_ID)
         NSContactsUsageDescription: Werkbank zet de afzender van een mail in je contacten.

@@ -9,6 +9,8 @@ struct AgendaEventEditor: View {
         case new(Date)
         case edit(AgendaEvent)
         case duplicate(AgendaEvent)
+        /// Een uitnodiging uit een `.ics`-bestand (Open met › Zwoeg Bank).
+        case invite(ICSEvent)
     }
 
     private let service = CalendarService.shared
@@ -56,6 +58,9 @@ struct AgendaEventEditor: View {
         case .edit(let event), .duplicate(let event):
             begin = event.start
             finish = event.end
+        case .invite(let invite):
+            begin = invite.start
+            finish = invite.isAllDay ? invite.start.addingTimeInterval(3600) : invite.end
         }
         _day = State(initialValue: calendar.startOfDay(for: begin))
         _start = State(initialValue: begin)
@@ -67,6 +72,7 @@ struct AgendaEventEditor: View {
         case .new: return "NIEUWE AFSPRAAK"
         case .edit: return "AFSPRAAK WIJZIGEN"
         case .duplicate: return "KOPIE AFSPRAAK"
+        case .invite: return "UITNODIGING"
         }
     }
 
@@ -147,6 +153,11 @@ struct AgendaEventEditor: View {
         case .new:
             calendarID = defaultCalendar
             titleFocused = true
+        case .invite(let invite):
+            calendarID = defaultCalendar
+            title = invite.title
+            location = invite.location
+            isAllDay = invite.isAllDay
         case .edit(let event), .duplicate(let event):
             let edit = service.editableEvent(for: event)
             original = edit
@@ -288,13 +299,23 @@ struct AgendaEventEditor: View {
         edit.start = begin
         edit.end = finish
         edit.alert = chosenAlert
+        if case .invite(let invite) = mode {
+            var lines: [String] = []
+            if !invite.organizerEmail.isEmpty {
+                lines.append(invite.organizerName.isEmpty ? invite.organizerEmail
+                                                          : "\(invite.organizerName) <\(invite.organizerEmail)>")
+            }
+            if !invite.notes.isEmpty { lines.append(invite.notes) }
+            edit.notes = lines.joined(separator: "\n\n")
+            edit.urlText = invite.url
+        }
         do {
             switch mode {
             case .edit(let event):
                 guard let source = original else { throw CalendarService.CalendarError.eventNotFound }
                 try service.saveEvent(event, edit: edit, original: source, thisAndFuture: false)
                 appState.showToast("Afspraak gewijzigd")
-            case .new, .duplicate:
+            case .new, .duplicate, .invite:
                 try service.createEvent(edit: edit)
                 appState.showToast("Afspraak gemaakt")
             }
