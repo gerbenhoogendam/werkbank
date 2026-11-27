@@ -62,12 +62,12 @@ struct WGoalBar: View {
     }
 }
 
-/// De knoppen om tijd te schrijven: limoen voor inspreken, wit voor typen; loopt er een timer, dan vooraan een
-/// oranje stopknop (opent de stopsheet). Met een stopknop erbij alleen iconen.
+/// De knoppen om tijd te schrijven (ontwerp D3): gelijk, wit met een limoen rand en het zwarte balkje eronder;
+/// loopt er een timer, dan vooraan STOP met een oranje rand (opent de stopsheet) en spreken en typen als icoon.
 struct WTimeButtons: View {
     var labels = false
     var running = false
-    var height: CGFloat = 44
+    var height: CGFloat = 42
 
     private var showLabels: Bool { labels && !running }
 
@@ -75,41 +75,34 @@ struct WTimeButtons: View {
         HStack(spacing: 6) {
             if running {
                 Button(intent: StopTimerIntent()) {
-                    Image(systemName: "stop.fill").font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(W.late)
-                        .background(Rectangle().fill(W.ink).offset(y: 3))
-                        .overlay(Rectangle().strokeBorder(W.ink, lineWidth: 2))
+                    face(icon: "stop.fill", title: labels ? "STOP" : nil, border: W.late)
                 }
                 .accessibilityLabel("Timer stoppen")
             }
             Button(intent: SpeakTimeIntent()) {
-                HStack(spacing: 5) {
-                    Image(systemName: "mic").font(.system(size: showLabels ? 14 : 17, weight: .medium))
-                    if showLabels { Text("INSPREKEN").font(W.text(9.5, .semibold)).tracking(1) }
-                }
-                .foregroundStyle(W.ink)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(W.lime)
-                .background(Rectangle().fill(W.ink).offset(y: 3))
-                .overlay(Rectangle().strokeBorder(W.ink, lineWidth: 2))
+                face(icon: "mic", title: showLabels ? "SPREKEN" : nil, border: W.lime)
             }
             .accessibilityLabel("Tijd inspreken")
             Button(intent: TypeTimeIntent()) {
-                HStack(spacing: 5) {
-                    Image(systemName: "keyboard").font(.system(size: showLabels ? 13 : 16, weight: .medium))
-                    if showLabels { Text("TYPEN").font(W.text(9.5, .semibold)).tracking(1) }
-                }
-                .foregroundStyle(W.ink)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(W.card)
-                .overlay(Rectangle().strokeBorder(W.ink, lineWidth: 1.5))
+                face(icon: "keyboard", title: showLabels ? "TYPEN" : nil, border: W.lime)
             }
             .accessibilityLabel("Tijd typen")
         }
         .buttonStyle(.plain)
         .frame(height: height)
+        .padding(.bottom, 3)
+    }
+
+    private func face(icon: String, title: String?, border: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: title == nil ? 16 : 13, weight: .medium))
+            if let title { Text(title).font(W.text(9.5, .semibold)).tracking(1.1).lineLimit(1) }
+        }
+        .foregroundStyle(W.ink)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(W.card)
+        .overlay(Rectangle().strokeBorder(border, lineWidth: 3))
+        .background(Rectangle().fill(W.ink).offset(y: 3))
     }
 }
 
@@ -221,7 +214,7 @@ struct TimeView: View {
         VStack(alignment: .leading, spacing: 0) {
             WHours(entry: entry, size: 48)
             Spacer(minLength: 6)
-            WTimeButtons(labels: false, running: entry.running != nil, height: 46)
+            WTimeButtons(labels: false, running: entry.running != nil, height: 42)
         }
         .widgetURL(W.timeURL)
     }
@@ -237,7 +230,7 @@ struct TimeNextView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Link(destination: W.timeURL) { WHours(entry: entry, size: 44) }
                 Spacer(minLength: 6)
-                WTimeButtons(labels: true, running: entry.running != nil, height: 44)
+                WTimeButtons(labels: true, running: entry.running != nil, height: 40)
             }
             Link(destination: W.agendaURL) { next }
                 .frame(width: 128)
@@ -248,8 +241,13 @@ struct TimeNextView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("VOLGENDE").font(W.text(8.5, .semibold)).tracking(1.4).foregroundStyle(W.ink2)
             if let event = entry.next {
-                Text(W.time(event.start)).font(W.poster(30)).foregroundStyle(W.ink).padding(.top, 5)
-                Text(event.title).font(W.text(12, .semibold)).foregroundStyle(W.ink).lineLimit(2).padding(.top, 2)
+                // Ontwerp D3: de tijd op een limoen etiket met een balkje eronder.
+                Text(W.time(event.start)).font(W.poster(32)).foregroundStyle(W.ink)
+                    .padding(.horizontal, 5).padding(.top, 2)
+                    .background(W.lime)
+                    .background(Rectangle().fill(W.ink).offset(y: 2))
+                    .padding(.top, 6)
+                Text(event.title).font(W.text(12, .semibold)).foregroundStyle(W.ink).lineLimit(2).padding(.top, 6)
                 if !event.location.isEmpty {
                     Text(event.location).font(W.text(10.5)).foregroundStyle(W.ink2).lineLimit(1).padding(.top, 2)
                 }
