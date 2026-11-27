@@ -2,8 +2,9 @@ import SwiftData
 import SwiftUI
 import WerkbankCore
 
-/// Het board op de iPhone: één kolom tegelijk (keuze bovenaan), snel een taak toevoegen, compacte taakkaarten.
-/// Afvinken rondt af (archief), vegen verplaatst naar de volgende kolom, start de timer, rondt af of verwijdert.
+/// Het board op de iPhone: één kolom tegelijk (keuze bovenaan), snel een taak toevoegen, compacte taakkaarten; of alle
+/// kolommen naast elkaar. Afvinken rondt af (archief), vegen verplaatst naar de volgende kolom, start de timer, rondt
+/// af of verwijdert. Gedaan toont wat er vandaag is afgerond.
 struct BoardHome: View {
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
@@ -12,9 +13,15 @@ struct BoardHome: View {
     @Query(sort: \ColumnRecord.sortOrder) private var columnRecords: [ColumnRecord]
     /// Tijd die op kaarten is geschreven (voor de minuten per kaart).
     @Query(filter: #Predicate<TimeEntry> { $0.todoID != nil }) private var cardEntries: [TimeEntry]
+    /// Afgeronde taken (voor het aantal van vandaag op de knop Gedaan).
+    @Query(filter: #Predicate<TodoCard> { $0.columnRaw == "done" }) private var doneCards: [TodoCard]
 
     /// De gekozen kolom, per apparaat.
     @AppStorage("phone.board.column") private var selectedID = BoardColumn.inboxID
+    /// Alle kolommen naast elkaar in plaats van één kolom, per apparaat.
+    @AppStorage("phone.board.kanban") private var kanban = false
+    @State private var showsDone = false
+    @State private var newTask: BoardNewTaskStart?
     @State private var draft = ""
     @State private var editing: TodoCard?
     /// Afgevinkt; de kaart gaat even later naar het archief.
@@ -32,11 +39,21 @@ struct BoardHome: View {
         let running = Set(cardEntries.filter { $0.status == .running }.compactMap(\.todoID))
 
         VStack(alignment: .leading, spacing: 12) {
-            PhHeader(eyebrow: "\(cards.count) OPEN", title: "Board")
-            columnPicker(columns, grouped: grouped, selected: selected)
-                .padding(.horizontal, 16)
-            quickAdd(selected)
-            list(columnCards, in: selected, columns: columns, minutes: minutes, running: running)
+            PhHeader(eyebrow: "\(cards.count) OPEN", title: "Board") {
+                headerButtons
+            }
+            if kanban {
+                BoardKanban(columns: columns, grouped: grouped, minutes: minutes, running: running,
+                            onOpen: { editing = $0 },
+                            onAdd: { newTask = BoardNewTaskStart(column: $0, dictate: false) }) { card in
+                    menu(for: card, columns: columns)
+                }
+            } else {
+                columnPicker(columns, grouped: grouped, selected: selected)
+                    .padding(.horizontal, 16)
+                quickAdd(selected)
+                list(columnCards, in: selected, columns: columns, minutes: minutes, running: running)
+            }
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -49,6 +66,76 @@ struct BoardHome: View {
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Ph.paper)
         }
+        .sheet(isPresented: $showsDone) {
+            BoardDoneView()
+        }
+        .sheet(item: $newTask) { start in
+            BoardNewTaskSheet(start: start, columns: columns)
+        }
+    }
+
+    // MARK: Kop
+
+    private var doneToday: Int {
+        doneCards.filter { card in
+            guard let date = card.completedAt else { return false }
+            return Calendar.current.isDateInToday(date)
+        }.count
+    }
+
+    /// Gedaan vandaag (vinkje en aantal) en de keuze tussen één kolom en alle kolommen.
+    private var headerButtons: some View {
+        HStack(spacing: 6) {
+            Button {
+                showsDone = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("\(doneToday)")
+                        .font(Ph.poster(20))
+                }
+                .foregroundStyle(Ph.ink)
+                .padding(.horizontal, 11)
+                .frame(height: 44)
+                .background(Rectangle().fill(Ph.card)
+                    .shadow(color: Ph.ink.opacity(0.08), radius: 0, y: 1)
+                    .shadow(color: Ph.ink.opacity(0.06), radius: 3, y: 2))
+                .overlay(Rectangle().strokeBorder(Ph.ink, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Gedaan vandaag, \(doneToday)")
+            HStack(spacing: 3) {
+                layoutButton(showsColumns: false, symbol: "list.bullet", label: "Lijst")
+                layoutButton(showsColumns: true, symbol: "rectangle.split.3x1", label: "Kolommen")
+            }
+            .padding(3)
+            .phWell()
+        }
+    }
+
+    private func layoutButton(showsColumns value: Bool, symbol: String, label: String) -> some View {
+        let on = kanban == value
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) { kanban = value }
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(on ? Ph.ink : Ph.ink2)
+                .frame(width: 36, height: 32)
+                .background {
+                    if on {
+                        Rectangle().fill(Ph.lime.shadow(.inner(color: .white.opacity(0.6), radius: 0, y: 1)))
+                            .shadow(color: Ph.ink.opacity(0.18), radius: 0, y: 1)
+                            .shadow(color: Ph.ink.opacity(0.12), radius: 2, y: 2)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     // MARK: Kolommen
@@ -104,17 +191,20 @@ struct BoardHome: View {
                 .submitLabel(.done)
                 .onSubmit { add(to: column) }
                 .frame(minHeight: 40)
+            // Leeg: inspreken of uitgebreid invoeren (blad Nieuwe taak); met tekst: toevoegen.
             Button {
-                add(to: column)
+                if empty {
+                    newTask = BoardNewTaskStart(column: column, dictate: PhoneDictation.isEnabled)
+                } else {
+                    add(to: column)
+                }
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: empty ? "mic.fill" : "plus")
                     .font(.system(size: 15, weight: .bold))
             }
             .buttonStyle(PhPrimaryStyle(height: 40))
             .frame(width: 40)
-            .disabled(empty)
-            .opacity(empty ? 0.5 : 1)
-            .accessibilityLabel("Voeg toe aan \(column.title)")
+            .accessibilityLabel(empty ? "Dicteer een taak" : "Voeg toe aan \(column.title)")
         }
         .padding(4)
         .phWell()

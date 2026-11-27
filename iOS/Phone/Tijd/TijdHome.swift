@@ -15,6 +15,14 @@ struct TijdHome: View {
 
     @State private var scope: Scope = .vandaag
     @State private var editing: TimeEntry?
+    /// De timer over het hele scherm.
+    @State private var focused: TimeEntry?
+    /// Stop gekozen op het volle scherm: na het sluiten de stopsheet openen (twee bladen tegelijk kan niet).
+    @State private var stopAfterFocus: TimeEntry?
+    /// "+ TIJD": kiezen tussen inspreken en typen.
+    @State private var adding = false
+    /// Inspreken gekozen: na het sluiten van het keuzeblad de tijdinvoer openen.
+    @State private var voiceAfterAdd = false
 
     init() {
         let since = TijdDates.monday(of: .now).addingTimeInterval(-7 * 86_400)
@@ -42,7 +50,7 @@ struct TijdHome: View {
                         idleCard
                     } else {
                         ForEach(Array(activeEntries.enumerated()), id: \.element.id) { index, entry in
-                            TijdTimerCard(entry: entry, large: index == 0)
+                            TijdTimerCard(entry: entry, large: index == 0) { focused = entry }
                         }
                     }
                     PhSegmented(items: [PhSegmented<Scope>.Item(value: .vandaag, title: "Vandaag"),
@@ -61,7 +69,7 @@ struct TijdHome: View {
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Button("+ TIJD") { appState.timeEntry = .choose }
+            Button("+ TIJD") { adding = true }
                 .buttonStyle(PhPrimaryStyle())
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -74,6 +82,26 @@ struct TijdHome: View {
                 editing = nil
                 TimerService.discard(entry, in: context)
                 appState.showToast("Tijdregel verwijderd")
+            }
+        }
+        .sheet(isPresented: $adding, onDismiss: {
+            guard voiceAfterAdd else { return }
+            voiceAfterAdd = false
+            appState.timeEntry = .voice
+        }) {
+            TijdAddSheet {
+                voiceAfterAdd = true
+                adding = false
+            }
+        }
+        .fullScreenCover(item: $focused, onDismiss: {
+            guard let entry = stopAfterFocus else { return }
+            stopAfterFocus = nil
+            if entry.status != .finished { appState.requestStop(entry, in: context) }
+        }) { entry in
+            TijdFocusView(entry: entry, todayTotal: { todayTotal(at: $0) }) {
+                stopAfterFocus = entry
+                focused = nil
             }
         }
     }
@@ -175,6 +203,8 @@ enum TijdDates {
 struct TijdTimerCard: View {
     let entry: TimeEntry
     var large = true
+    /// Tik op de kaart (niet op een knop): de timer over het hele scherm.
+    var onOpen: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
@@ -230,6 +260,9 @@ struct TijdTimerCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .phRaisedCard()
+        .contentShape(Rectangle())
+        .onTapGesture { onOpen?() }
+        .accessibilityAction(named: Text("Volledig scherm")) { onOpen?() }
     }
 }
 

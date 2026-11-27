@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// De agenda op de iPhone: dag (werkweekstrook en uurgrid), werkweek in vijf kolommen of maand.
+/// De agenda op de iPhone: dag (werkweekstrook en uurgrid), werkweek in vijf kolommen, maand of de lijst van de
+/// komende twee weken.
 /// Afspraken die met "GH" beginnen staan niet in het grid maar compact bovenaan.
 struct AgendaHome: View {
     private let service = CalendarService.shared
@@ -63,6 +64,8 @@ struct AgendaHome: View {
             return AgendaDates.workweekRange(selected)
         case .maand:
             return "WEEK \(AgendaDates.week(selected)) · \(AgendaDates.calendar.component(.year, from: selected))"
+        case .lijst:
+            return "KOMEND · \(upcoming.filter { !$0.isPersonal }.count) AFSPRAKEN"
         }
     }
 
@@ -71,6 +74,7 @@ struct AgendaHome: View {
         case .dag: return AgendaDates.dayTitle(selected)
         case .week: return "WEEK \(AgendaDates.week(selected))"
         case .maand: return AgendaDates.monthName(selected)
+        case .lijst: return "Agenda"
         }
     }
 
@@ -95,22 +99,52 @@ struct AgendaHome: View {
     private var controls: some View {
         HStack(spacing: 6) {
             PhSegmented(items: modeItems, selection: $mode)
-            Button {
-                shift(-1)
-            } label: {
-                Image(systemName: "chevron.left")
+            if mode != .lijst {
+                Button {
+                    shift(-1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(PhIconButtonStyle())
+                .accessibilityLabel("Vorige")
+                Button {
+                    shift(1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(PhIconButtonStyle())
+                .accessibilityLabel("Volgende")
             }
-            .buttonStyle(PhIconButtonStyle())
-            .accessibilityLabel("Vorige")
-            Button {
-                shift(1)
-            } label: {
-                Image(systemName: "chevron.right")
-            }
-            .buttonStyle(PhIconButtonStyle())
-            .accessibilityLabel("Volgende")
+            listButton
         }
         .padding(.horizontal, 16)
+    }
+
+    /// De lijst: inkt met een limoen icoon als hij gekozen is (ingedrukt), anders wit.
+    private var listButton: some View {
+        let on = mode == .lijst
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) { mode = on ? .dag : .lijst }
+        } label: {
+            Image(systemName: "list.bullet")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(on ? Ph.lime : Ph.ink)
+                .frame(width: 44, height: 44)
+                .background {
+                    if on {
+                        Rectangle().fill(Ph.ink.shadow(.inner(color: .black.opacity(0.4), radius: 1.5, y: 2)))
+                    } else {
+                        Rectangle().fill(Ph.card)
+                            .shadow(color: Ph.ink.opacity(0.08), radius: 0, y: 1)
+                            .shadow(color: Ph.ink.opacity(0.06), radius: 3, y: 2)
+                    }
+                }
+                .overlay(Rectangle().strokeBorder(Ph.ink, lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Lijst")
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// Dag: vorige of volgende werkdag; week: een week; maand: een maand.
@@ -120,6 +154,7 @@ struct AgendaHome: View {
             case .dag: selected = AgendaDates.workday(after: selected, by: step)
             case .week: selected = AgendaDates.adding(days: 7 * step, to: selected)
             case .maand: selected = AgendaDates.firstOfMonth(AgendaDates.addingMonths(step, to: selected))
+            case .lijst: break
             }
         }
     }
@@ -140,6 +175,13 @@ struct AgendaHome: View {
 
     private func fetch(from start: Date, to end: Date) -> [AgendaEvent] {
         service.events(from: start, to: end, hiddenCalendarIDs: AppSettings.hiddenCalendarIDs, prefetchNeighbors: true)
+    }
+
+    /// Vandaag tot en met de komende veertien dagen (de lijst).
+    private var upcoming: [AgendaEvent] {
+        let today = AgendaDates.startOfDay(.now)
+        return service.events(from: today, to: AgendaDates.adding(days: AgendaListView.dayCount, to: today),
+                              hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
     }
 
     @ViewBuilder private var content: some View {
@@ -180,6 +222,8 @@ struct AgendaHome: View {
             AgendaMonthView(selected: $selected, gridDays: gridDays,
                             events: monthEvents.filter { !$0.isPersonal }, onOpen: open)
                 .simultaneousGesture(swipe)
+        case .lijst:
+            AgendaListView(events: upcoming, onOpen: open)
         }
     }
 

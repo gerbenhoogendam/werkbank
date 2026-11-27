@@ -1,20 +1,52 @@
 import SwiftUI
 import WerkbankCore
 
-/// Een afspraak bekijken: titel, tijd, plaats, notities en deelnemers; tijd schrijven of openen in Agenda.
+/// Het bewerkblad dat vanuit een afspraak opent (wijzigen of dupliceren).
+struct AgendaEditorStart: Identifiable {
+    let id = UUID()
+    let mode: AgendaEventEditor.Mode
+}
+
+/// Een afspraak bekijken: titel, tijd, plaats (navigeren), notities en deelnemers; wijzigen, dupliceren, verwijderen,
+/// tijd schrijven of openen in Agenda.
 struct AgendaEventSheet: View {
     let event: AgendaEvent
     /// Sluit het blad en opent daarna de tijdinvoer.
     let onWriteTime: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
+
+    @State private var editor: AgendaEditorStart?
+    /// Bewaard in het bewerkblad: dit blad toont dan oude gegevens en gaat ook dicht.
+    @State private var savedInEditor = false
+    @State private var confirmDelete = false
+    @State private var failure: String?
+
+    /// Staat de afspraak in een agenda die je kunt wijzigen?
+    private var canModify: Bool {
+        CalendarService.shared.writableCalendars.contains { $0.id == event.calendarID }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
-                        PhEyebrow(text: event.calendarTitle)
+                        HStack(alignment: .center) {
+                            PhEyebrow(text: event.calendarTitle)
+                            Spacer(minLength: 8)
+                            if canModify {
+                                Button {
+                                    confirmDelete = true
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(PhIconButtonStyle(size: 40))
+                                .accessibilityLabel("Verwijder")
+                            }
+                        }
                         Text(event.title.uppercased())
                             .font(Ph.poster(40))
                             .foregroundStyle(Ph.ink)
@@ -33,6 +65,11 @@ struct AgendaEventSheet: View {
                     details
                     if let notes = event.notes { notesCard(notes) }
                     if !event.attendees.isEmpty { attendeesCard }
+                    if let failure {
+                        Text(failure)
+                            .font(Ph.text(13, .medium))
+                            .foregroundStyle(Ph.danger)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 24)
@@ -44,6 +81,37 @@ struct AgendaEventSheet: View {
         .presentationDetents([.medium, .large])
         .presentationBackground(Ph.paper)
         .presentationDragIndicator(.visible)
+        .sheet(item: $editor, onDismiss: {
+            if savedInEditor { dismiss() }
+        }) { start in
+            AgendaEventEditor(mode: start.mode) { savedInEditor = true }
+        }
+        .confirmationDialog("Afspraak verwijderen?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            if event.isRecurring {
+                Button("Alleen deze", role: .destructive) { delete(thisAndFuture: false) }
+                Button("Deze en alle volgende", role: .destructive) { delete(thisAndFuture: true) }
+            } else {
+                Button("Verwijder", role: .destructive) { delete(thisAndFuture: false) }
+            }
+            Button("Annuleer", role: .cancel) {}
+        }
+    }
+
+    private func delete(thisAndFuture: Bool) {
+        do {
+            try CalendarService.shared.deleteEvent(event, thisAndFuture: thisAndFuture)
+            appState.showToast("Afspraak verwijderd")
+            dismiss()
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+
+    /// Route naar de plaats in Kaarten.
+    private func navigate(to location: String) {
+        guard let query = location.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let url = URL(string: "http://maps.apple.com/?daddr=\(query)") else { return }
+        openURL(url)
     }
 
     private var timeText: String {
@@ -73,6 +141,15 @@ struct AgendaEventSheet: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 12)
+                    Button {
+                        navigate(to: location)
+                    } label: {
+                        Label("NAVIGEER", systemImage: "location.fill")
+                            .labelStyle(.titleAndIcon)
+                            .padding(.horizontal, 10)
+                    }
+                    .buttonStyle(PhSecondaryStyle(height: 34))
+                    .fixedSize()
                 }
             }
             PhFieldRow(label: "Agenda") {
@@ -152,13 +229,32 @@ struct AgendaEventSheet: View {
 
     private var actions: some View {
         VStack(spacing: 10) {
-            Button("TIJD SCHRIJVEN", action: onWriteTime)
-                .buttonStyle(PhPrimaryStyle())
-            Button("OPEN IN AGENDA") {
-                let seconds = Int(event.start.timeIntervalSinceReferenceDate)
-                if let url = URL(string: "calshow:\(seconds)") { openURL(url) }
+            HStack(spacing: 8) {
+                Button {
+                    editor = AgendaEditorStart(mode: .duplicate(event))
+                } label: {
+                    Label("DUPLICEER", systemImage: "plus.square.on.square")
+                }
+                .buttonStyle(PhSecondaryStyle())
+                Button {
+                    let seconds = Int(event.start.timeIntervalSinceReferenceDate)
+                    if let url = URL(string: "calshow:\(seconds)") { openURL(url) }
+                } label: {
+                    Label("IN AGENDA", systemImage: "calendar")
+                }
+                .buttonStyle(PhSecondaryStyle())
             }
-            .buttonStyle(PhSecondaryStyle())
+            HStack(spacing: 8) {
+                if canModify {
+                    Button("BEWERK") { editor = AgendaEditorStart(mode: .edit(event)) }
+                        .buttonStyle(PhSecondaryStyle(height: 52))
+                        .frame(width: 130)
+                }
+                Button(action: onWriteTime) {
+                    Label("TIJD SCHRIJVEN", systemImage: "clock")
+                }
+                .buttonStyle(PhPrimaryStyle())
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)

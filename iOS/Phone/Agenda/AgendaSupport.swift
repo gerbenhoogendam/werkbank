@@ -1,9 +1,9 @@
 import SwiftUI
 import WerkbankCore
 
-/// De drie weergaven van de agenda.
+/// De weergaven van de agenda: dag, werkweek, maand en de lijst met wat er de komende twee weken staat.
 enum AgendaMode: String, Hashable {
-    case dag, week, maand
+    case dag, week, maand, lijst
 }
 
 /// Datums voor de agenda: weken beginnen op maandag (ISO), Nederlandse namen.

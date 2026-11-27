@@ -1,34 +1,73 @@
 import SwiftUI
+import WerkbankCore
 
-/// Nieuwe afspraak: titel, dag, begin en einde, plaats en agenda. Bewaart via EventKit (`CalendarService`).
+/// Nieuwe afspraak, een afspraak wijzigen of dupliceren: titel, agenda, dag, begin en einde (of hele dag), plaats en
+/// herinnering. Bewaart via EventKit (`CalendarService`); bij wijzigen blijven de overige velden (herhaling, link,
+/// notities, beschikbaarheid) zoals ze waren.
 struct AgendaEventEditor: View {
+    enum Mode {
+        case new(Date)
+        case edit(AgendaEvent)
+        case duplicate(AgendaEvent)
+    }
+
     private let service = CalendarService.shared
+    private let mode: Mode
+    /// Na bewaren (het blad sluit zichzelf).
+    private let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
 
+    /// De velden zoals ze in EventKit stonden (wijzigen, dupliceren); nil bij een nieuwe afspraak.
+    @State private var original: EventEdit?
     @State private var title = ""
     @State private var day: Date
     @State private var start: Date
     @State private var end: Date
+    @State private var isAllDay = false
     @State private var location = ""
     @State private var calendarID = ""
+    @State private var alert: EventAlert = .none
     @State private var failure: String?
+    @State private var loaded = false
     @FocusState private var titleFocused: Bool
 
     init(day: Date) {
+        self.init(mode: .new(day))
+    }
+
+    init(mode: Mode, onSaved: @escaping () -> Void = {}) {
+        self.mode = mode
+        self.onSaved = onSaved
         let calendar = Calendar.current
-        let base = calendar.startOfDay(for: day)
         let begin: Date
-        if calendar.isDateInToday(day) {
-            let nextHour = calendar.component(.hour, from: .now) + 1
-            begin = calendar.date(byAdding: .hour, value: min(nextHour, 23), to: base) ?? .now
-        } else {
-            begin = calendar.date(byAdding: .hour, value: 9, to: base) ?? base
+        let finish: Date
+        switch mode {
+        case .new(let day):
+            let base = calendar.startOfDay(for: day)
+            if calendar.isDateInToday(day) {
+                let nextHour = calendar.component(.hour, from: .now) + 1
+                begin = calendar.date(byAdding: .hour, value: min(nextHour, 23), to: base) ?? .now
+            } else {
+                begin = calendar.date(byAdding: .hour, value: 9, to: base) ?? base
+            }
+            finish = begin.addingTimeInterval(3600)
+        case .edit(let event), .duplicate(let event):
+            begin = event.start
+            finish = event.end
         }
-        _day = State(initialValue: base)
+        _day = State(initialValue: calendar.startOfDay(for: begin))
         _start = State(initialValue: begin)
-        _end = State(initialValue: begin.addingTimeInterval(3600))
+        _end = State(initialValue: finish)
+    }
+
+    private var heading: String {
+        switch mode {
+        case .new: return "NIEUWE AFSPRAAK"
+        case .edit: return "AFSPRAAK WIJZIGEN"
+        case .duplicate: return "KOPIE AFSPRAAK"
+        }
     }
 
     private var selectedCalendar: AgendaCalendar? {
@@ -39,14 +78,42 @@ struct AgendaEventEditor: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedCalendar != nil
     }
 
+    /// Duur van begin tot einde (uren en minuten van de tijdvelden).
+    private var duration: TimeInterval {
+        let calendar = Calendar.current
+        let a = calendar.dateComponents([.hour, .minute], from: start)
+        let b = calendar.dateComponents([.hour, .minute], from: end)
+        let minutes = ((b.hour ?? 0) * 60 + (b.minute ?? 0)) - ((a.hour ?? 0) * 60 + (a.minute ?? 0))
+        return TimeInterval(max(0, minutes) * 60)
+    }
+
+    private var alertItems: [PhSegmented<EventAlert>.Item] {
+        [PhSegmented<EventAlert>.Item(value: .none, title: "Geen"),
+         PhSegmented<EventAlert>.Item(value: .min5, title: "5 min"),
+         PhSegmented<EventAlert>.Item(value: .min15, title: "15 min"),
+         PhSegmented<EventAlert>.Item(value: .min30, title: "30 min"),
+         PhSegmented<EventAlert>.Item(value: .hour1, title: "1 uur")]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("NIEUWE AFSPRAAK")
-                        .font(Ph.poster(36))
-                        .foregroundStyle(Ph.ink)
+                    HStack(alignment: .lastTextBaseline) {
+                        Text(heading)
+                            .font(Ph.poster(36))
+                            .foregroundStyle(Ph.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Spacer(minLength: 8)
+                        if !isAllDay {
+                            Text(Billing.formatHM(duration))
+                                .font(Ph.poster(26))
+                                .foregroundStyle(Ph.ink2)
+                        }
+                    }
                     fields
+                    reminder
                     if let failure {
                         Text(failure)
                             .font(Ph.text(13, .medium))
@@ -64,15 +131,37 @@ struct AgendaEventEditor: View {
         .presentationBackground(Ph.paper)
         .environment(\.locale, Locale(identifier: "nl_NL"))
         .tint(Ph.ink)
-        .onAppear {
-            if calendarID.isEmpty {
-                calendarID = service.defaultTargetCalendarID(hiddenCalendarIDs: AppSettings.hiddenCalendarIDs) ?? ""
-            }
-            titleFocused = true
-        }
+        .onAppear(perform: load)
         // Begin verschuiven neemt het einde mee (zelfde duur).
         .onChange(of: start) { old, new in
             end = end.addingTimeInterval(new.timeIntervalSince(old))
+        }
+    }
+
+    /// Eén keer bij het openen: de velden uit EventKit (wijzigen, dupliceren) of de standaardagenda (nieuw).
+    private func load() {
+        guard !loaded else { return }
+        loaded = true
+        let defaultCalendar = service.defaultTargetCalendarID(hiddenCalendarIDs: AppSettings.hiddenCalendarIDs) ?? ""
+        switch mode {
+        case .new:
+            calendarID = defaultCalendar
+            titleFocused = true
+        case .edit(let event), .duplicate(let event):
+            let edit = service.editableEvent(for: event)
+            original = edit
+            title = edit?.title ?? event.title
+            location = edit?.location ?? (event.location ?? "")
+            isAllDay = edit?.isAllDay ?? event.isAllDay
+            alert = edit?.alert ?? .none
+            let writable = service.writableCalendars
+            if let id = edit?.calendarID, writable.contains(where: { $0.id == id }) {
+                calendarID = id
+            } else if writable.contains(where: { $0.id == event.calendarID }) {
+                calendarID = event.calendarID
+            } else {
+                calendarID = defaultCalendar
+            }
         }
     }
 
@@ -84,26 +173,6 @@ struct AgendaEventEditor: View {
                     .foregroundStyle(Ph.ink)
                     .focused($titleFocused)
                     .submitLabel(.done)
-            }
-            PhFieldRow(label: "Dag") {
-                DatePicker("Dag", selection: $day, displayedComponents: .date)
-                    .labelsHidden()
-                Spacer(minLength: 0)
-            }
-            PhFieldRow(label: "Begin") {
-                DatePicker("Begin", selection: $start, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                Spacer(minLength: 0)
-            }
-            PhFieldRow(label: "Einde") {
-                DatePicker("Einde", selection: $end, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                Spacer(minLength: 0)
-            }
-            PhFieldRow(label: "Waar") {
-                TextField("Plaats", text: $location)
-                    .font(Ph.text(15))
-                    .foregroundStyle(Ph.ink)
             }
             PhFieldRow(label: "Agenda") {
                 Menu {
@@ -125,8 +194,44 @@ struct AgendaEventEditor: View {
                     .contentShape(Rectangle())
                 }
             }
+            PhFieldRow(label: "Dag") {
+                DatePicker("Dag", selection: $day, displayedComponents: .date)
+                    .labelsHidden()
+                Spacer(minLength: 0)
+            }
+            Toggle(isOn: $isAllDay) {
+                PhCaps(text: "Hele dag", size: 11)
+            }
+            .toggleStyle(PhToggleStyle())
+            .padding(.horizontal, 14)
+            .frame(minHeight: 46)
+            .overlay(alignment: .bottom) { Rectangle().fill(Ph.hair).frame(height: 1) }
+            if !isAllDay {
+                PhFieldRow(label: "Begin") {
+                    DatePicker("Begin", selection: $start, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Spacer(minLength: 0)
+                }
+                PhFieldRow(label: "Einde") {
+                    DatePicker("Einde", selection: $end, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Spacer(minLength: 0)
+                }
+            }
+            PhFieldRow(label: "Waar") {
+                TextField("Plaats", text: $location)
+                    .font(Ph.text(15))
+                    .foregroundStyle(Ph.ink)
+            }
         }
         .phCard()
+    }
+
+    private var reminder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PhCaps(text: alert == .custom ? "Herinnering · aangepast" : "Herinnering")
+            PhSegmented(items: alertItems, selection: $alert)
+        }
     }
 
     private var buttons: some View {
@@ -154,19 +259,46 @@ struct AgendaEventEditor: View {
     }
 
     private func save() {
-        let begin = combine(day, start)
-        let finish = combine(day, end)
-        guard finish > begin else {
-            failure = CalendarService.CalendarError.invalidRange.errorDescription
-            return
+        let begin: Date
+        let finish: Date
+        if isAllDay {
+            // `CalendarService` maakt er het begin en het einde van de dag van.
+            begin = Calendar.current.startOfDay(for: day)
+            finish = begin
+        } else {
+            begin = combine(day, start)
+            finish = combine(day, end)
+            guard finish > begin else {
+                failure = CalendarService.CalendarError.invalidRange.errorDescription
+                return
+            }
         }
-        var edit = service.blankEdit(start: begin, end: finish, hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
+        var edit = original
+            ?? service.blankEdit(start: begin, end: finish, hiddenCalendarIDs: AppSettings.hiddenCalendarIDs)
+        var chosenAlert = alert
+        if case .duplicate = mode {
+            // Een kopie is een nieuwe afspraak: een aangepaste herhaling of herinnering gaat niet mee.
+            if edit.repeatOption == .custom { edit.repeatOption = .none }
+            if chosenAlert == .custom { chosenAlert = .none }
+        }
         edit.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         edit.location = location.trimmingCharacters(in: .whitespacesAndNewlines)
         edit.calendarID = calendarID
+        edit.isAllDay = isAllDay
+        edit.start = begin
+        edit.end = finish
+        edit.alert = chosenAlert
         do {
-            try service.createEvent(edit: edit)
-            appState.showToast("Afspraak gemaakt")
+            switch mode {
+            case .edit(let event):
+                guard let source = original else { throw CalendarService.CalendarError.eventNotFound }
+                try service.saveEvent(event, edit: edit, original: source, thisAndFuture: false)
+                appState.showToast("Afspraak gewijzigd")
+            case .new, .duplicate:
+                try service.createEvent(edit: edit)
+                appState.showToast("Afspraak gemaakt")
+            }
+            onSaved()
             dismiss()
         } catch {
             failure = error.localizedDescription
