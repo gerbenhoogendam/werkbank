@@ -53,6 +53,7 @@ struct RootView: View {
         .task {
             PhoneDictation.shared.refresh()
             await PhonePreferencesSync.shared.pull()
+            PhoneStars.shared.reload()
         }
         // Het spraakmodel uit het geheugen als de app weg is; terug in beeld gaat een onderbroken download verder.
         .onChange(of: scenePhase) { _, phase in
@@ -60,7 +61,11 @@ struct RootView: View {
             case .background: PhoneDictation.shared.unload()
             case .active:
                 PhoneDictation.shared.refresh()
-                Task { await PhonePreferencesSync.shared.pull() }
+                Task {
+                    await PhonePreferencesSync.shared.pull()
+                    PhoneStars.shared.reload()
+                    await PhoneGmail.shared.reloadAll()
+                }
             default: break
             }
         }
