@@ -614,6 +614,33 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       `ColumnsChoiceBar`: aantal, Archiveer, Gelezen/Ongelezen, Ster/Ster eraf, Verwijder (naar de prullenbak in
       Gmail, `trashBulk`, ⌘Z zet terug), ✕. Esc haalt eerst de keuze weg.
 
+58. **iPhone: helemaal nieuw, in de stijl Etiket** (27 nov; ontwerp: canvas "Werkbank iOS", 56 schermen, alleen licht;
+    nog niet goedgekeurd: op verzoek alvast gebouwd om morgen verder te kijken). Wat er op iOS was is vervangen; de
+    snelle acties (tijd inspreken/typen), Verbetering en StopSheet werken nog. In de app niets getest.
+    - Schil: `iOS/RootView.swift` (eigen tabbalk `PhTabBar`: Mail, Agenda, Tijd, Board; oranje stip als er tijd loopt),
+      onderdelen in `iOS/Phone/PhoneStyle.swift` (`Ph`-kleuren, `PhHeader`, `PhSegmented` (spoor met verzonken
+      schaduw, gekozen limoen erbovenop), knoppen, `.phCard()`, `.phRaisedCard()`, `.phWell()`, `PhStar` met schaduw
+      aan de binnenkant). Altijd licht (`preferredColorScheme(.light)`).
+    - Voorkeuren via iCloud (`PhonePreferencesSync`): hetzelfde bestand `Voorkeuren.plist` in iCloud Drive als de Mac;
+      de iPhone neemt alles over behalve agenda-id's, en schrijft wat hij zelf wijzigt terug samen met wat er stond.
+      iOS heeft daarvoor CloudDocuments en de ubiquity-container gekregen (project.yml), plus GoogleClientID.
+    - Mail (`iOS/Phone/Mail/`): `PhoneGmail` (eigen Gmail-koppeling: mailboxen met OAuth/PKCE, refresh-token per adres
+      in de sleutelhanger, inbox, zoeken in meer mailboxen, gesprekken, archiveren, prullenbak, gelezen, verplaatsen via
+      `messages.import`, versturen), `PhoneStars` (zelfde sterren als de kolommen op de Mac, `mailColumns.starred`).
+      `MailHome`: mailboxen bovenaan (`PhSegmented`, Alle + elk), band met sterren (aantal regels instelbaar; meer
+      scrolt, de inktbalk toont "+3 · 2 URGENT"), lijst met vegen (archiveer/taak/ster, gelezen/tijd), kiezen met balk.
+      `PhoneThreadView`: oudere mails ingeklapt, nieuwste als kaart die naar voren komt, knoppen Claude/Taak/Plan/Tijd/
+      Contact in de mail, onderaan Antwoord/Allen/Door/Archief. `PhoneCompose`: van, aan, cc, onderwerp (icoon),
+      handtekening en afzendernaam van de Mac. `PhoneSearchView`: criteria (mailboxen, van, aan, onderwerp, niet,
+      periode, ongelezen/bijlage/ster), resultaat klapt open; Openen schuift de mail als blad omhoog.
+      `PhoneMailActions`: taak (kolom, mail archiveren), tijd (start of achteraf), inplannen (agenda), verplaatsen,
+      afzender en contact (iOS-contactscherm). `PhoneClaude`: analyse met concept en doorvragen (sleutel in de
+      sleutelhanger van de iPhone, model van de Mac).
+    - Agenda, Tijd, Board (`iOS/Phone/Agenda|Tijd|Board/`): dag met werkdagstrook, werkweek in vijf kolommen met kleine
+      tekst, maand; afspraken die met "GH" beginnen compact bovenin; tijd met lopende timer en vandaag/week per klant;
+      board per kolom met snelle invoer en vegen.
+    - Later versturen kan op de iPhone nog niet: de Gmail-API kent geen ingepland versturen en de wachtrij van de Mac
+      (`Gepland.json`) staat lokaal, niet in iCloud.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
