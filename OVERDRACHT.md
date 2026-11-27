@@ -730,7 +730,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     ging, dan wordt hij niet nog een keer neergezet maar alleen in de inbox gezet; (2) mislukt het neerzetten of het
     weggooien in de bron, dan gaat wat al in de doelmailbox stond weer naar de prullenbak (Mac `transfer`/`discard`,
     iPhone `PhoneGmail.move`); op de iPhone werd een mislukte prullenbak eerder genegeerd. (3) De kolommen nemen een
-    sleep aan als verplaatsen (`ColumnMoveDrop`, cursor zonder plusje). Welke van deze de kopie gaf, is niet vastgesteld.
+    sleep aan als verplaatsen (`ColumnMoveDrop`, cursor zonder plusje). Welke van deze de kopie gaf, is niet vastgesteld;
+    op de Mac bevestigd: geen kopie meer (27 nov).
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
