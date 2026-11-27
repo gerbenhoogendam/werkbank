@@ -1,9 +1,9 @@
 import SwiftUI
 import WerkbankCore
 
-/// De weergaven van de agenda: dag, werkweek, maand en de lijst met wat er de komende twee weken staat.
+/// De weergaven van de agenda: dag, drie werkdagen, werkweek en de lijst met wat er de komende twee weken staat.
 enum AgendaMode: String, Hashable {
-    case dag, week, maand, lijst
+    case dag, drie, week, lijst
 }
 
 /// Datums voor de agenda: weken beginnen op maandag (ISO), Nederlandse namen.
@@ -89,8 +89,19 @@ enum AgendaDates {
     }
 
     /// "23 – 27 NOVEMBER", of "30 NOVEMBER – 4 DECEMBER".
-    static func workweekRange(_ date: Date) -> String {
-        let days = workdays(of: date)
+    /// `count` werkdagen vanaf `date` (of de eerstvolgende werkdag), weekenden overgeslagen.
+    static func workdays(from date: Date, count: Int) -> [Date] {
+        var day = startOfDay(date)
+        while isWeekend(day) { day = adding(days: 1, to: day) }
+        var days = [day]
+        while days.count < count { days.append(workday(after: days[days.count - 1], by: 1)) }
+        return days
+    }
+
+    static func workweekRange(_ date: Date) -> String { range(workdays(of: date)) }
+
+    /// "1 – 3 DECEMBER", of "28 NOVEMBER – 2 DECEMBER" over een maandgrens.
+    static func range(_ days: [Date]) -> String {
         guard let first = days.first, let last = days.last else { return "" }
         let firstDay = calendar.component(.day, from: first)
         if calendar.component(.month, from: first) == calendar.component(.month, from: last) {

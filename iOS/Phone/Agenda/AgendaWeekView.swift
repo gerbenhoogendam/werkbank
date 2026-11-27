@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// De werkweek: maandag tot en met vrijdag in vijf even brede kolommen naast elkaar, heel kleine tekst.
+/// Kolommen naast elkaar: de werkweek (vijf, heel kleine tekst) of drie werkdagen (gewone tekst).
 struct AgendaWeekGrid: View {
     let days: [Date]
-    /// Afspraken van de week met een tijd (zonder GH en zonder hele dagen).
+    /// Afspraken met een tijd (zonder hele dagen; GH staat hier gewoon tussen).
     let events: [AgendaEvent]
     let onOpen: (AgendaEvent) -> Void
     /// Tik op een dag: die dag openen in de dagweergave.
@@ -121,7 +121,7 @@ struct AgendaWeekGrid: View {
                 Button {
                     onOpen(event)
                 } label: {
-                    AgendaBlock(event: event, height: height, small: true)
+                    AgendaBlock(event: event, height: height, small: days.count > 3)
                 }
                 .buttonStyle(.plain)
                 .frame(width: max(0, laneWidth - 2), height: height)

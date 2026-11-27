@@ -712,6 +712,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     terug, vegen over de strook met dagen een hele week; de nieuwe dag schuift van de goede kant in (`slideEdge`,
     `.push`). Week en maand vegen per week of maand, zoals de pijltjes. Een veeg telt als hij vooral horizontaal is en
     50 pt ver gaat of snel is (`swipeStep`).
+67. **iPhone Agenda: Dag, 3 dagen, Week** (27 nov). Maand is weg (`AgendaMonthView` verwijderd). 3 dagen = drie
+    werkdagen vanaf de gekozen dag (`AgendaDates.workdays(from:count:)`), in kolommen met gewone tekst (`AgendaWeekGrid`
+    met `small` alleen bij meer dan drie kolommen); pijltjes en vegen gaan drie werkdagen verder. Bij 3 dagen en Week
+    staan GH-afspraken gewoon in het grid; alleen hele dagen staan bovenaan. Bij Dag blijft de GH-lijst bovenaan.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

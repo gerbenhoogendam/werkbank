@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// De agenda op de iPhone: dag (werkweekstrook en uurgrid), werkweek in vijf kolommen, maand of de lijst van de
-/// komende twee weken.
-/// Afspraken die met "GH" beginnen staan niet in het grid maar compact bovenaan.
+/// De agenda op de iPhone: dag (werkweekstrook en uurgrid), drie werkdagen, werkweek in vijf kolommen of de lijst van
+/// de komende twee weken.
+/// Bij Dag staan afspraken die met "GH" beginnen compact bovenaan; bij 3 dagen en Week staan ze gewoon in het grid.
 struct AgendaHome: View {
     private let service = CalendarService.shared
 
@@ -18,8 +18,8 @@ struct AgendaHome: View {
 
     private var modeItems: [PhSegmented<AgendaMode>.Item] {
         [PhSegmented<AgendaMode>.Item(value: .dag, title: "Dag"),
-         PhSegmented<AgendaMode>.Item(value: .week, title: "Week"),
-         PhSegmented<AgendaMode>.Item(value: .maand, title: "Maand")]
+         PhSegmented<AgendaMode>.Item(value: .drie, title: "3 dagen"),
+         PhSegmented<AgendaMode>.Item(value: .week, title: "Week")]
     }
 
     var body: some View {
@@ -62,10 +62,10 @@ struct AgendaHome: View {
         switch mode {
         case .dag:
             return "WEEK \(AgendaDates.week(selected)) · \(AgendaDates.monthName(selected))"
+        case .drie:
+            return AgendaDates.range(threeDays)
         case .week:
             return AgendaDates.workweekRange(selected)
-        case .maand:
-            return "WEEK \(AgendaDates.week(selected)) · \(AgendaDates.calendar.component(.year, from: selected))"
         case .lijst:
             return "KOMEND · \(upcoming.filter { !$0.isPersonal }.count) AFSPRAKEN"
         }
@@ -74,8 +74,8 @@ struct AgendaHome: View {
     private var title: String {
         switch mode {
         case .dag: return AgendaDates.dayTitle(selected)
+        case .drie: return AgendaDates.dayTitle(threeDays.first ?? selected)
         case .week: return "WEEK \(AgendaDates.week(selected))"
-        case .maand: return AgendaDates.monthName(selected)
         case .lijst: return "Agenda"
         }
     }
@@ -149,14 +149,20 @@ struct AgendaHome: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// Dag: vorige of volgende werkdag; week: een week; maand: een maand.
+    /// De drie werkdagen vanaf de gekozen dag.
+    private var threeDays: [Date] { AgendaDates.workdays(from: selected, count: 3) }
+
+    /// Dag: vorige of volgende werkdag; 3 dagen: drie werkdagen; week: een week.
     private func shift(_ step: Int) {
         slideEdge = step > 0 ? .trailing : .leading
         withAnimation(.easeOut(duration: 0.22)) {
             switch mode {
             case .dag: selected = AgendaDates.workday(after: selected, by: step)
+            case .drie:
+                var day = threeDays.first ?? selected
+                for _ in 0..<3 { day = AgendaDates.workday(after: day, by: step) }
+                selected = day
             case .week: selected = AgendaDates.adding(days: 7 * step, to: selected)
-            case .maand: selected = AgendaDates.firstOfMonth(AgendaDates.addingMonths(step, to: selected))
             case .lijst: break
             }
         }
@@ -233,46 +239,29 @@ struct AgendaHome: View {
             .transition(.push(from: slideEdge))
             .contentShape(Rectangle())
             .simultaneousGesture(swipe)
+        case .drie:
+            columns(threeDays)
         case .week:
-            let days = AgendaDates.workdays(of: selected)
-            let monday = AgendaDates.monday(of: selected)
-            let weekEvents = fetch(from: monday, to: AgendaDates.adding(days: 7, to: monday))
-                .filter { event in days.contains { event.overlaps(day: $0) } }
-            AgendaPersonalBand(events: weekEvents.filter { $0.isPersonal || $0.isAllDay }, onOpen: open)
-            AgendaWeekGrid(days: days, events: weekEvents.filter { !$0.isPersonal && !$0.isAllDay },
-                           onOpen: open) { day in
-                withAnimation(.easeOut(duration: 0.15)) {
-                    selected = day
-                    mode = .dag
-                }
-            }
-            .id(monday)
-            .transition(.push(from: slideEdge))
-            .simultaneousGesture(swipe)
-        case .maand:
-            let first = AgendaDates.firstOfMonth(selected)
-            let gridDays = monthGrid(first)
-            let start = gridDays.first ?? first
-            let end = AgendaDates.adding(days: 1, to: gridDays.last ?? first)
-            let monthEvents = fetch(from: start, to: end)
-            AgendaPersonalBand(events: monthEvents.filter { $0.isPersonal && $0.overlaps(day: selected) },
-                               onOpen: open)
-            AgendaMonthView(selected: $selected, gridDays: gridDays,
-                            events: monthEvents.filter { !$0.isPersonal }, onOpen: open)
-                .simultaneousGesture(swipe)
+            columns(AgendaDates.workdays(of: selected))
         case .lijst:
             AgendaListView(events: upcoming, onOpen: open)
         }
     }
 
-    /// Hele weken van maandag tot en met zondag rond de maand.
-    private func monthGrid(_ first: Date) -> [Date] {
-        let calendar = AgendaDates.calendar
-        let count = calendar.range(of: .day, in: .month, for: first)?.count ?? 30
-        let last = AgendaDates.adding(days: count - 1, to: first)
-        let gridStart = AgendaDates.monday(of: first)
-        let gridEnd = AgendaDates.adding(days: 7, to: AgendaDates.monday(of: last))
-        let days = calendar.dateComponents([.day], from: gridStart, to: gridEnd).day ?? 35
-        return (0..<max(7, days)).map { AgendaDates.adding(days: $0, to: gridStart) }
+    /// 3 dagen en Week: dagen als kolommen; GH-afspraken gewoon in het grid, alleen hele dagen bovenaan.
+    @ViewBuilder private func columns(_ days: [Date]) -> some View {
+        let first = days.first ?? selected
+        let end = AgendaDates.adding(days: 1, to: days.last ?? selected)
+        let events = fetch(from: first, to: end).filter { event in days.contains { event.overlaps(day: $0) } }
+        AgendaPersonalBand(events: events.filter(\.isAllDay), onOpen: open)
+        AgendaWeekGrid(days: days, events: events.filter { !$0.isAllDay }, onOpen: open) { day in
+            withAnimation(.easeOut(duration: 0.15)) {
+                selected = day
+                mode = .dag
+            }
+        }
+        .id(first)
+        .transition(.push(from: slideEdge))
+        .simultaneousGesture(swipe)
     }
 }
