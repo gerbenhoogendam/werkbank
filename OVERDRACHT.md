@@ -689,7 +689,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     de achtergrond, terug en timer aan/uit. De widget leest de agenda zelf als hij mag, anders uit dat bestand.
     Knoppen zijn AppIntents met `openAppWhenRun` (`Widgets/Shared`, in app én extensie): ze zetten een verzoek in de
     App Group dat `RootView.takeWidgetRequest` oppakt. Tikken op een widget gaat via `zwoegbank://`. Timer stoppen
-    vanuit het bedieningspaneel zit er bewust nog niet in. Niet op een toestel gezien.
+    vanuit het bedieningspaneel: knop "Timer stoppen" (`StopTimerControl`) toont de klant van wat loopt (uit
+    `Widgets.json`, `RunningTimerProvider`) en opent via `StopTimerIntent` de app; `RootView.stopFromWidget` bevriest
+    de laatst gestarte timer op het moment van de tik en opent de stopsheet. Niet op een toestel gezien.
 64. **Dock-icoon kiezen op de Mac** (27 nov). Voorkeuren › Weergave › Dock: Papier (het app-icoon), Limoen of
     Oranje (`DockIcon`, beelden in `macOS/DockIcons.xcassets`, Mac-vorm met schaduw). macOS wisselt alleen het
     Dock-icoon terwijl de app draait (`NSApp.applicationIconImage`, bij opstarten en bij wisselen); Finder en Launchpad

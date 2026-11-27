@@ -25,5 +25,6 @@ enum WidgetBridge {
         WidgetShare.write(WidgetSnapshot(writtenAt: now, day: day, finishedSeconds: finished, running: running,
                                          hiddenCalendarIDs: Array(hidden), events: events))
         WidgetCenter.shared.reloadAllTimelines()
+        if #available(iOS 18.0, *) { ControlCenter.shared.reloadAllControls() }
     }
 }

@@ -184,11 +184,28 @@ extension RootView {
 extension RootView {
     /// Inspreken of typen gevraagd vanuit een widget of het bedieningspaneel.
     func takeWidgetRequest() {
-        switch WidgetShare.takeRequest() {
+        guard let request = WidgetShare.takeRequest() else { return }
+        switch request.mode {
         case "voice": appState.timeEntry = .voice
         case "keyboard": appState.timeEntry = .keyboard
+        case "stop": stopFromWidget(at: request.at)
         default: break
         }
+    }
+
+    /// Stop uit het bedieningspaneel: de timer die het laatst liep bevriezen op het moment van de tik en de
+    /// stopsheet openen, net als STOP in Tijd.
+    private func stopFromWidget(at moment: Date) {
+        let descriptor = FetchDescriptor<TimeEntry>(predicate: #Predicate<TimeEntry> { $0.statusRaw == "running" || $0.statusRaw == "paused" })
+        let active = (try? context.fetch(descriptor)) ?? []
+        guard let entry = active.max(by: { ($0.lastStart ?? .distantPast) < ($1.lastStart ?? .distantPast) }) else {
+            appState.showToast("Geen lopende timer")
+            return
+        }
+        navigation.tab = .tijd
+        let end = TimerService.freezeForStop(entry, in: context, now: min(moment, Date()))
+        appState.stopContext = StopContext(entryID: entry.id, defaultEnd: end)
+        WidgetBridge.update(in: context)
     }
 }
 

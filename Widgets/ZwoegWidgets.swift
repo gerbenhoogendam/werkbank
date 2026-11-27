@@ -15,6 +15,7 @@ struct ZwoegWidgets: WidgetBundle {
         LockNextWidget()
         SpeakTimeControl()
         TypeTimeControl()
+        StopTimerControl()
     }
 }
 
@@ -105,5 +106,28 @@ struct TypeTimeControl: ControlWidget {
             }
         }
         .displayName("Tijd typen")
+    }
+}
+
+/// Stoppen: toont de klant van de lopende timer (of "Geen timer") en opent de stopsheet.
+struct StopTimerControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "ZwoegBank.control-stop", provider: RunningTimerProvider()) { client in
+            ControlWidgetButton(action: StopTimerIntent()) {
+                Label(client ?? "Geen timer", systemImage: client == nil ? "stop" : "stop.fill")
+            }
+        }
+        .displayName("Timer stoppen")
+    }
+}
+
+/// De klant van de timer die loopt (of gepauzeerd staat), uit wat de app klaarzette; nil als er niets loopt.
+struct RunningTimerProvider: ControlValueProvider {
+    var previewValue: String? { "Hoveniers BV" }
+
+    func currentValue() async throws -> String? {
+        guard let snapshot = WidgetShare.read(), Calendar.current.isDateInToday(snapshot.day),
+              let running = snapshot.running.first else { return nil }
+        return running.client.isEmpty ? "Timer loopt" : running.client
     }
 }

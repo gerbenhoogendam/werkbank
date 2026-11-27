@@ -74,19 +74,23 @@ enum WidgetShare {
     // MARK: Tijd schrijven vanuit een widget of het bedieningspaneel
 
     static let requestKey = "widget.timeEntryRequest"
+    static let requestAtKey = "widget.timeEntryRequestAt"
     static let requestNotification = Notification.Name("ZwoegBank.timeEntryRequest")
 
-    /// "voice" of "keyboard". De app pakt het op als hij actief wordt, of meteen via de melding als het verzoek in de
-    /// app zelf wordt uitgevoerd.
+    /// "voice", "keyboard" of "stop", met het moment van de tik (stoppen rekent tot dan). De app pakt het op als hij
+    /// actief wordt, of meteen via de melding als het verzoek in de app zelf wordt uitgevoerd.
     static func request(_ mode: String) {
         defaults?.set(mode, forKey: requestKey)
+        defaults?.set(Date().timeIntervalSince1970, forKey: requestAtKey)
         NotificationCenter.default.post(name: requestNotification, object: nil)
     }
 
-    static func takeRequest() -> String? {
+    static func takeRequest() -> (mode: String, at: Date)? {
         guard let defaults, let mode = defaults.string(forKey: requestKey) else { return nil }
+        let stamp = defaults.double(forKey: requestAtKey)
         defaults.removeObject(forKey: requestKey)
-        return mode
+        defaults.removeObject(forKey: requestAtKey)
+        return (mode, stamp > 0 ? Date(timeIntervalSince1970: stamp) : Date())
     }
 }
 
@@ -108,6 +112,17 @@ struct TypeTimeIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         WidgetShare.request("keyboard")
+        return .result()
+    }
+}
+
+/// Stopt de lopende timer: opent Zwoeg Bank met de stopsheet, gerekend tot het moment van de tik.
+struct StopTimerIntent: AppIntent {
+    static let title: LocalizedStringResource = "Timer stoppen"
+    static let openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult {
+        WidgetShare.request("stop")
         return .result()
     }
 }
