@@ -229,10 +229,12 @@ final class PhoneGmail {
     }
 
     /// Mails volgens een zoekopdracht, één per gesprek.
-    func list(query text: String, labels: [String] = [], account: String, max: Int = 50) async throws -> [GmailMailItem] {
+    func list(query text: String, labels: [String] = [], account: String, max: Int = 50,
+              includeSpamTrash: Bool = false) async throws -> [GmailMailItem] {
         var query = [URLQueryItem(name: "maxResults", value: String(max))]
         if !text.isEmpty { query.append(URLQueryItem(name: "q", value: text)) }
         query += labels.map { URLQueryItem(name: "labelIds", value: $0) }
+        if includeSpamTrash { query.append(URLQueryItem(name: "includeSpamTrash", value: "true")) }
         let list = try await api("messages", query: query, account: account)
         var seen = Set<String>()
         let refs = GmailAPI.messageRefs(fromListJSON: list).refs.filter { seen.insert($0.threadID).inserted }
@@ -259,12 +261,12 @@ final class PhoneGmail {
     }
 
     /// Zoeken in meer mailboxen tegelijk; nieuwste eerst.
-    func search(_ text: String, accounts chosen: [String]) async -> [(account: String, item: GmailMailItem)] {
+    func search(_ text: String, accounts chosen: [String], max: Int = 40) async -> [(account: String, item: GmailMailItem)] {
         var results: [(account: String, item: GmailMailItem)] = []
         await withTaskGroup(of: [(account: String, item: GmailMailItem)].self) { group in
             for account in chosen {
                 group.addTask {
-                    let items = (try? await self.list(query: text, account: account, max: 40)) ?? []
+                    let items = (try? await self.list(query: text, account: account, max: max)) ?? []
                     return items.map { (account: account, item: $0) }
                 }
             }
@@ -293,6 +295,78 @@ final class PhoneGmail {
             raw = decoded
         }
         return await Task.detached(priority: .userInitiated) { MailContentParser.parse(raw) }.value
+    }
+
+    // MARK: Mappen en concepten
+
+    /// Aantallen van een label (`users.labels.get`): mails in totaal en gesprekken ongelezen.
+    func labelCounts(_ labelID: String, account: String) async -> PhoneLabelCounts? {
+        guard let data = try? await api("labels/\(labelID)", account: account),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        let total = (json["messagesTotal"] as? NSNumber)?.intValue ?? 0
+        let unread = (json["threadsUnread"] as? NSNumber)?.intValue ?? 0
+        return PhoneLabelCounts(total: total, unread: unread)
+    }
+
+    /// De eigen labels van een mailbox (type "user"), op naam, met het aantal mails.
+    func userLabels(account: String) async throws -> [PhoneLabel] {
+        let data = try await api("labels", account: account)
+        let labels = MailFolders.userTree(GmailAPI.labels(fromJSON: data))
+        var counts: [String: PhoneLabelCounts] = [:]
+        await withTaskGroup(of: (String, PhoneLabelCounts?).self) { group in
+            for id in labels.map(\.id) {
+                group.addTask { (id, await self.labelCounts(id, account: account)) }
+            }
+            for await (id, count) in group {
+                if let count { counts[id] = count }
+            }
+        }
+        return labels.map { PhoneLabel(label: $0, total: counts[$0.id]?.total, unread: counts[$0.id]?.unread) }
+    }
+
+    /// Een gesprek als regel voor een lijst (voor sterren buiten de inbox): de nieuwste mail die geen concept is.
+    func threadItem(_ threadID: String, account: String) async -> GmailMailItem? {
+        guard let messages = try? await thread(threadID, account: account),
+              let last = messages.last(where: { !$0.labels.contains("DRAFT") }) ?? messages.last else { return nil }
+        let sender = MailAddress.parse(last.from).valid.first
+        let recipients = (MailAddress.parse(last.to).valid + MailAddress.parse(last.cc).valid).map { $0.address.lowercased() }
+        let labels = Array(Set(messages.flatMap(\.labels)))
+        return GmailMailItem(id: last.id, threadID: threadID, fromName: sender?.name, fromAddress: sender?.address,
+                             recipients: recipients, subject: last.subject, snippet: last.snippet, date: last.date,
+                             labels: labels)
+    }
+
+    /// Met ster (de sterren van Werkbank) in deze mailbox: wat in de inbox staat, en gesprekken buiten de inbox die
+    /// in deze mailbox gevonden worden (hooguit dertig).
+    func starredItems(account: String) async -> [GmailMailItem] {
+        let threads = PhoneStars.shared.threads
+        var items = inbox[account]?.filter { threads.contains($0.threadID) } ?? []
+        let known = Set(inbox.values.flatMap { $0 }.map(\.threadID))
+        for threadID in threads.subtracting(known).sorted().prefix(30) {
+            if let item = await threadItem(threadID, account: account) { items.append(item) }
+        }
+        return items.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+    }
+
+    /// Een concept weggooien na het versturen: het concept-id zoeken bij het bericht en dat verwijderen. Mislukt dit,
+    /// dan blijft het concept staan.
+    func deleteDraft(messageID: String, account: String) async {
+        var pageToken: String?
+        for _ in 0..<5 {
+            var query = [URLQueryItem(name: "maxResults", value: "100")]
+            if let pageToken { query.append(URLQueryItem(name: "pageToken", value: pageToken)) }
+            guard let data = try? await api("drafts", query: query, account: account),
+                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+            let drafts = json["drafts"] as? [[String: Any]] ?? []
+            for draft in drafts {
+                guard let id = draft["id"] as? String, let message = draft["message"] as? [String: Any],
+                      (message["id"] as? String) == messageID else { continue }
+                _ = try? await api("drafts/\(id)", method: "DELETE", account: account)
+                return
+            }
+            pageToken = json["nextPageToken"] as? String
+            if pageToken == nil { return }
+        }
     }
 
     // MARK: Handelingen
@@ -380,6 +454,20 @@ final class PhoneGmail {
         allowed.insert(charactersIn: "-._~")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
+}
+
+/// Aantallen van een label.
+struct PhoneLabelCounts: Equatable {
+    var total: Int
+    var unread: Int
+}
+
+/// Een eigen label van een mailbox met het aantal mails.
+struct PhoneLabel: Identifiable, Hashable {
+    let label: GmailLabel
+    var total: Int?
+    var unread: Int?
+    var id: String { label.id }
 }
 
 enum PhoneGmailError: Error, LocalizedError {

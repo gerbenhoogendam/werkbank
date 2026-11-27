@@ -1,4 +1,5 @@
 import QuickLook
+import SwiftData
 import SwiftUI
 import WebKit
 import WerkbankCore
@@ -7,8 +8,14 @@ import WerkbankCore
 /// voor wat je met de mail doet (Claude, taak, inplannen, tijd, contact); onderaan beantwoorden en archiveren.
 struct PhoneThreadView: View {
     let mail: PhoneMail
+    /// Na archiveren de volgende mail openen (voorkeur "Na archiveren": volgende); zonder dit terug naar de lijst.
+    var onArchived: ((PhoneMail) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @Environment(AppState.self) private var appState
+    @AppStorage(PhoneMailSettings.afterArchiveKey) private var afterArchive = "lijst"
+    @AppStorage(PhoneMailSettings.imagesKey) private var images = "altijd"
+    @AppStorage(PhoneMailSettings.clientTimerKey) private var clientTimer = false
     private let gmail = PhoneGmail.shared
     private let stars = PhoneStars.shared
 
@@ -180,7 +187,7 @@ struct PhoneThreadView: View {
             .buttonStyle(.plain)
             Rectangle().fill(Ph.hair).frame(height: 1)
             if let content {
-                PhoneMailWebView(html: content.displayHTML)
+                PhoneMailWebView(html: content.displayHTML, remoteImages: allowsImages(from: message.from))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                 if !content.files.isEmpty {
@@ -244,6 +251,7 @@ struct PhoneThreadView: View {
     // MARK: Laden en handelingen
 
     private func load() async {
+        if images == "bekend" && ClientDirectory.shared.domainMap.isEmpty { await ClientDirectory.shared.refresh() }
         do {
             let list = try await gmail.thread(mail.item.threadID, account: mail.account)
             messages = list
@@ -256,6 +264,36 @@ struct PhoneThreadView: View {
             }
         } catch {
             loadError = "Gesprek ophalen mislukt"
+        }
+        if clientTimer { await startClientTimer() }
+    }
+
+    /// Voorkeur "Timer bij openen klantmail": mail van een bekende klant start een timer voor die klant, tenzij er
+    /// al een voor die klant loopt.
+    private func startClientTimer() async {
+        if ClientDirectory.shared.domainMap.isEmpty { await ClientDirectory.shared.refresh() }
+        guard let address = mail.item.fromAddress,
+              !gmail.accounts.contains(where: { $0.caseInsensitiveCompare(address) == .orderedSame }),
+              let client = PhoneClients.knownClient(forAddress: address) else { return }
+        let running = TimerService.runningEntries(in: context)
+        guard !running.contains(where: { $0.client.caseInsensitiveCompare(client) == .orderedSame }) else { return }
+        let entry = TimerService.startSupport(client: client, caseTitle: mail.item.subject, in: context)
+        entry.mailThreadID = mail.item.threadID
+        TimerService.save(context)
+        appState.showToast("Tijd loopt · \(client)")
+    }
+
+    /// Voorkeur "Afbeeldingen laden": altijd, alleen van bekende afzenders (een klant of een eigen mailbox) of nooit.
+    private func allowsImages(from header: String) -> Bool {
+        switch images {
+        case "nooit":
+            return false
+        case "bekend":
+            guard let address = MailAddress.parse(header).valid.first?.address else { return false }
+            if gmail.accounts.contains(where: { $0.caseInsensitiveCompare(address) == .orderedSame }) { return true }
+            return PhoneClients.knownClient(forAddress: address) != nil
+        default:
+            return true
         }
     }
 
@@ -272,7 +310,11 @@ struct PhoneThreadView: View {
 
     private func archive() {
         let thread = (threadID: mail.item.threadID, account: mail.account)
-        dismiss()
+        if afterArchive == "volgende", let onArchived {
+            onArchived(mail)
+        } else {
+            dismiss()
+        }
         Task {
             _ = await gmail.archive([thread])
             appState.showToast("Mail gearchiveerd")
@@ -321,16 +363,19 @@ private struct PhExpandedCard: ViewModifier {
 /// De mail zelf in een webweergave die zo hoog wordt als de inhoud (de pagina scrollt, niet de mail).
 struct PhoneMailWebView: View {
     let html: String
+    /// Afbeeldingen van internet laden; zonder alleen ingesloten afbeeldingen (`data:` en `cid:`).
+    var remoteImages = true
     @State private var height: CGFloat = 120
 
     var body: some View {
-        PhoneMailWebRepresentable(html: html, height: $height)
+        PhoneMailWebRepresentable(html: html, remoteImages: remoteImages, height: $height)
             .frame(height: height)
     }
 }
 
 private struct PhoneMailWebRepresentable: UIViewRepresentable {
     let html: String
+    let remoteImages: Bool
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
@@ -347,16 +392,17 @@ private struct PhoneMailWebRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
-        guard context.coordinator.loaded != html else { return }
-        context.coordinator.loaded = html
+        let images = remoteImages ? "data: https: cid:" : "data: cid:"
         let page = """
         <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: cid:; style-src 'unsafe-inline'; font-src data: https:">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src \(images); style-src 'unsafe-inline'; font-src data: https:">
         <style>body{margin:6px;font:15px/1.5 Helvetica,Arial,sans-serif;color:#0B0B0B;word-wrap:break-word}
         img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}
         blockquote{margin:0 0 0 8px;padding-left:8px;border-left:2px solid #DADAD2;color:#55554F}</style></head>
         <body>\(html)</body></html>
         """
+        guard context.coordinator.loaded != page else { return }
+        context.coordinator.loaded = page
         view.loadHTMLString(page, baseURL: nil)
     }
 

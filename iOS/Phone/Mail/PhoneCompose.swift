@@ -5,7 +5,7 @@ import WerkbankCore
 struct PhoneComposeRequest: Identifiable {
     enum Mode { case new, reply, replyAll, forward }
 
-    let id = UUID()
+    var id = UUID()
     var mode: Mode
     var account: String?
     var threadID: String?
@@ -15,6 +15,14 @@ struct PhoneComposeRequest: Identifiable {
     var subject: String = ""
     /// Tekst om mee te beginnen (het concept van Claude).
     var body: String = ""
+    var cc: String = ""
+    /// Een concept uit Gmail: het bericht-id en de mailbox, om het na het versturen weg te gooien.
+    var draftID: String?
+    var draftAccount: String?
+    /// De References van het concept (een concept-antwoord blijft in het gesprek).
+    var draftReferences: String = ""
+    /// Terug na ongedaan maken: alle velden zoals ze waren, niets opnieuw invullen.
+    var restored = false
 }
 
 /// Opstellen: van welke mailbox, aan, cc, onderwerp (icoon), tekst; bij beantwoorden het origineel ingeklapt eronder.
@@ -32,7 +40,6 @@ struct PhoneComposeView: View {
     @State private var subject = ""
     @State private var bodyText = ""
     @State private var showQuote = false
-    @State private var sending = false
     @State private var error: String?
     @FocusState private var focus: Field?
 
@@ -79,14 +86,10 @@ struct PhoneComposeView: View {
             Spacer()
             Text(title.uppercased()).font(Ph.poster(28)).foregroundStyle(Ph.ink)
             Spacer()
-            Button {
-                Task { await send() }
-            } label: {
-                if sending { ProgressView().tint(Ph.ink) } else { Text("VERSTUUR") }
-            }
-            .buttonStyle(PhPrimaryStyle(height: 40))
-            .frame(width: 110)
-            .disabled(sending || MailAddress.parse(to).valid.isEmpty)
+            Button("VERSTUUR") { send() }
+                .buttonStyle(PhPrimaryStyle(height: 40))
+                .frame(width: 110)
+                .disabled(MailAddress.parse(to).valid.isEmpty)
         }
         .padding(.horizontal, 12)
         .padding(.top, 14)
@@ -229,8 +232,19 @@ struct PhoneComposeView: View {
         from = request.account ?? UserDefaults.standard.string(forKey: "phone.mail.newFrom") ?? gmail.accounts.first ?? ""
         if !gmail.accounts.contains(from) { from = gmail.accounts.first ?? "" }
         to = request.to
+        cc = request.cc
+        showCc = !cc.isEmpty
         subject = request.subject
         bodyText = request.body
+        if request.restored {
+            focus = .body
+            return
+        }
+        if request.draftID != nil {
+            bodyText = withoutSignature(bodyText)
+            focus = .body
+            return
+        }
         guard let content = request.content else {
             focus = .to
             return
@@ -253,12 +267,21 @@ struct PhoneComposeView: View {
         }
     }
 
+    /// Een concept van de Mac heeft de handtekening al onder de tekst; die komt er bij het versturen weer onder.
+    private func withoutSignature(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let signature = signatureText, !signature.isEmpty, trimmed.hasSuffix(signature) else { return text }
+        return String(trimmed.dropLast(signature.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func display(_ address: MailAddress) -> String {
         if let name = address.name, !name.isEmpty { return "\(name) <\(address.address)>" }
         return address.address
     }
 
-    private func send() async {
+    /// Versturen gaat via de uitbak: het blad gaat meteen dicht, de mail gaat na een paar seconden weg (ongedaan maken
+    /// kan tot dan).
+    private func send() {
         let recipients = MailAddress.parse(to)
         let copies = MailAddress.parse(cc)
         guard !recipients.valid.isEmpty, recipients.invalid.allSatisfy({ $0.trimmingCharacters(in: .whitespaces).isEmpty }),
@@ -266,14 +289,18 @@ struct PhoneComposeView: View {
             error = "Controleer de adressen"
             return
         }
-        sending = true
-        defer { sending = false }
         var mail = ComposedMail(from: MailAddress(name: senderName, address: from), subject: subject, bodyText: bodyText)
         mail.to = recipients.valid
         mail.cc = copies.valid
         mail.signatureHTML = signatureHTML
         if let logo = signatureLogo { mail.signatureImage = logo }
         var threadID: String?
+        if request.mode == .new, request.draftID != nil, !request.draftReferences.isEmpty {
+            let references = request.draftReferences
+            mail.references = references
+            mail.inReplyTo = references.split(separator: " ").last.map(String.init)
+            threadID = request.threadID
+        }
         if let content = request.content, request.mode != .new {
             let forward = request.mode == .forward
             mail.quote = content.quotableText
@@ -290,13 +317,20 @@ struct PhoneComposeView: View {
             }
         }
         let raw = MailComposer.build(mail)
-        do {
-            try await gmail.send(raw, threadID: threadID, account: from)
-            appState.showToast("Verstuurd")
-            dismiss()
-        } catch {
-            self.error = "Versturen mislukt: \(error.localizedDescription)"
-        }
+        var snapshot = request
+        snapshot.id = UUID()
+        snapshot.account = from
+        snapshot.to = to
+        snapshot.cc = cc
+        snapshot.subject = subject
+        snapshot.body = bodyText
+        snapshot.restored = true
+        let label = recipients.valid.first.map { (address: MailAddress) -> String in
+            if let name = address.name, !name.isEmpty { return name }
+            return address.address
+        } ?? ""
+        PhoneOutbox.shared.enqueue(raw: raw, threadID: threadID, account: from, request: snapshot, label: label)
+        dismiss()
     }
 
     private var signatureLogo: MailAttachment? {

@@ -326,6 +326,7 @@ private struct PhoneSenderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var addingContact = false
     @State private var compose: PhoneComposeRequest?
+    @State private var showClient = false
 
     private var card: ContactCard { ContactCard.fromHeader(from) }
 
@@ -355,7 +356,18 @@ private struct PhoneSenderSheet: View {
                     .buttonStyle(PhPrimaryStyle(height: 48))
             }
             .padding(.horizontal, 16)
+            if address != nil {
+                Button("ALLE MAIL") { showClient = true }
+                    .buttonStyle(PhInkStyle(height: 48))
+                    .padding(.horizontal, 16)
+            }
             Spacer()
+        }
+        .sheet(isPresented: $showClient) {
+            if let address {
+                PhoneClientView(address: address.address, displayName: address.name)
+                    .presentationBackground(Ph.paper)
+            }
         }
         .sheet(isPresented: $addingContact) {
             PhoneNewContact(card: card)

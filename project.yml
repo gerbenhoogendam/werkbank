@@ -155,6 +155,7 @@ targets:
         # Gmail (OAuth met PKCE), hetzelfde client-id als op de Mac.
         GoogleClientID: $(GOOGLE_CLIENT_ID)
         NSContactsUsageDescription: Werkbank zet de afzender van een mail in je contacten.
+        NSFaceIDUsageDescription: Werkbank ontgrendelt met Face ID als je dat in Voorkeuren aanzet.
         NSCalendarsFullAccessUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSCalendarsUsageDescription: Werkbank toont je agenda en plant to-do's in als afspraak.
         NSMicrophoneUsageDescription: Werkbank zet wat je inspreekt om naar een tijdregel, op dit toestel.

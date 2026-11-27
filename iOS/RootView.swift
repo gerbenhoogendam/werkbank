@@ -10,12 +10,16 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query(filter: #Predicate<TimeEntry> { $0.statusRaw == "running" }) private var running: [TimeEntry]
 
+    private let outbox = PhoneOutbox.shared
+    private let lock = PhoneLock.shared
+
     @State private var tab: PhTab = .mail
     /// Verbetering: eerst het scherm vastleggen, dan het blad.
     @State private var feedback: FeedbackStart?
 
     var body: some View {
         @Bindable var state = appState
+        @Bindable var mailOutbox = outbox
 
         ZStack {
             Group {
@@ -31,7 +35,23 @@ struct RootView: View {
                 PhTabBar(tab: $tab, timerRunning: !running.isEmpty)
             }
 
+            // Verstuurd, met ongedaan maken: boven de tabbalk.
+            if let pending = outbox.pending {
+                VStack {
+                    Spacer()
+                    PhoneOutboxBar(pending: pending)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 72)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             ToastOverlay(message: appState.toast)
+
+            if lock.isLocked {
+                PhoneLockScreen()
+                    .transition(.opacity)
+            }
         }
         .phScreen()
         .preferredColorScheme(.light)
@@ -50,7 +70,13 @@ struct RootView: View {
                     .presentationDetents([.large])
             }
         }
+        // Ongedaan maken (of versturen mislukt): het opstelscherm weer open met dezelfde inhoud.
+        .sheet(item: $mailOutbox.reopen) { request in
+            PhoneComposeView(request: request)
+                .presentationBackground(Ph.paper)
+        }
         .task {
+            if lock.isLocked { Task { await lock.unlock() } }
             PhoneDictation.shared.refresh()
             await PhonePreferencesSync.shared.pull()
             PhoneStars.shared.reload()
@@ -58,8 +84,13 @@ struct RootView: View {
         // Het spraakmodel uit het geheugen als de app weg is; terug in beeld gaat een onderbroken download verder.
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .background: PhoneDictation.shared.unload()
+            case .background:
+                PhoneDictation.shared.unload()
+                PhoneOutbox.shared.flush()
+                PhoneLock.shared.didEnterBackground()
+                PhoneTimeReminder.update(in: context)
             case .active:
+                PhoneLock.shared.didBecomeActive()
                 PhoneDictation.shared.refresh()
                 Task {
                     await PhonePreferencesSync.shared.pull()
