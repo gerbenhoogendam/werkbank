@@ -445,22 +445,36 @@ private struct MailColumn: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: ThingsMetrics.cardRadius, style: .continuous))
-        .onDrop(of: [.gmailMessage], isTargeted: Binding(
-            get: { store.dropTarget == account },
-            set: { targeted in
-                if targeted { store.dropTarget = account } else if store.dropTarget == account { store.dropTarget = nil }
-            })) { providers in
-            guard let provider = providers.first(where: {
-                $0.hasItemConformingToTypeIdentifier(UTType.gmailMessage.identifier)
-            }) else { return false }
-            provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
-                guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
-                Task { @MainActor in
-                    MailColumnsStore.shared.move(threadID: payload.threadID, messageID: payload.messageID, to: account)
-                }
+        // Verplaatsen, geen kopie: de cursor toont ook verplaatsen (geen groen plusje).
+        .onDrop(of: [.gmailMessage], delegate: ColumnMoveDrop(account: account))
+    }
+}
+
+/// Een mail op een kolom laten vallen: het gesprek verhuist naar die mailbox (verplaatsen, nooit kopiëren).
+struct ColumnMoveDrop: DropDelegate {
+    let account: String
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.gmailMessage]) }
+
+    func dropEntered(info: DropInfo) { MailColumnsStore.shared.dropTarget = account }
+
+    func dropExited(info: DropInfo) {
+        if MailColumnsStore.shared.dropTarget == account { MailColumnsStore.shared.dropTarget = nil }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        MailColumnsStore.shared.dropTarget = nil
+        guard let provider = info.itemProviders(for: [.gmailMessage]).first else { return false }
+        let target = account
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.gmailMessage.identifier) { data, _ in
+            guard let data, let payload = try? JSONDecoder().decode(GmailDragPayload.self, from: data) else { return }
+            Task { @MainActor in
+                MailColumnsStore.shared.move(threadID: payload.threadID, messageID: payload.messageID, to: target)
             }
-            return true
         }
+        return true
     }
 }
 

@@ -415,21 +415,71 @@ final class PhoneGmail {
     }
 
     /// Een gesprek naar een andere mailbox: de mails worden in de doelmailbox gezet (`messages.import`) en het gesprek
-    /// gaat in de bron naar de prullenbak.
+    /// gaat in de bron naar de prullenbak. Verplaatsen mag nooit een kopie achterlaten: staat een mail al in de
+    /// doelmailbox (zelfde Message-ID), dan niet nog een keer; mislukt iets, dan gaat wat al is neergezet weer weg.
     func move(threadID: String, from source: String, to target: String) async -> Bool {
         guard let messages = try? await thread(threadID, account: source) else { return false }
+        var imported: [String] = []
+        func undoImports(_ ids: [String]) async {
+            for id in ids { _ = try? await api("messages/\(id)/trash", method: "POST", account: target) }
+        }
         for message in messages where !message.labels.contains("DRAFT") {
             guard let data = try? await api("messages/\(message.id)", query: [URLQueryItem(name: "format", value: "raw")],
                                             account: source),
-                  let raw = GmailAPI.rawMessage(fromJSON: data) else { return false }
+                  let raw = GmailAPI.rawMessage(fromJSON: data) else {
+                await undoImports(imported)
+                return false
+            }
             let labels = message.labels.filter { ["UNREAD", "STARRED", "IMPORTANT"].contains($0) } + ["INBOX"]
+            if let rfcID = Self.messageIDHeader(raw), let existing = await existingMessage(rfc822ID: rfcID, account: target) {
+                let change = try? JSONSerialization.data(withJSONObject: ["addLabelIds": labels])
+                _ = try? await api("messages/\(existing)/modify", method: "POST", body: change, account: target)
+                continue
+            }
             let body = try? JSONSerialization.data(withJSONObject: ["raw": Base64URL.encode(raw), "labelIds": labels])
-            guard (try? await api("messages/import", method: "POST", body: body, account: target)) != nil else { return false }
+            guard let result = try? await api("messages/import", method: "POST", body: body, account: target),
+                  let json = try? JSONSerialization.jsonObject(with: result) as? [String: Any],
+                  let id = json["id"] as? String else {
+                await undoImports(imported)
+                return false
+            }
+            imported.append(id)
         }
-        _ = try? await api("threads/\(threadID)/trash", method: "POST", account: source)
+        guard (try? await api("threads/\(threadID)/trash", method: "POST", account: source)) != nil else {
+            await undoImports(imported)
+            return false
+        }
         dropFromInbox(threadID)
         await reload(target)
         return true
+    }
+
+    /// De Message-ID uit de kop van een ruwe mail, zonder < >.
+    nonisolated static func messageIDHeader(_ raw: Data) -> String? {
+        let text = String(decoding: raw.prefix(96_000), as: UTF8.self).replacingOccurrences(of: "\r\n", with: "\n")
+        let head = text.components(separatedBy: "\n\n").first ?? text
+        var lines: [String] = []
+        for line in head.components(separatedBy: "\n") {
+            if let first = line.first, first == " " || first == "\t", !lines.isEmpty {
+                lines[lines.count - 1] += " " + line.trimmingCharacters(in: .whitespaces)
+            } else {
+                lines.append(line)
+            }
+        }
+        guard let line = lines.first(where: { $0.lowercased().hasPrefix("message-id:") }) else { return nil }
+        let value = line.dropFirst("message-id:".count).trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "<>"))
+        return value.isEmpty ? nil : value
+    }
+
+    /// Het id van dezelfde mail (zelfde Message-ID) in een mailbox, buiten prullenbak en spam.
+    private func existingMessage(rfc822ID: String, account: String) async -> String? {
+        guard let data = try? await api("messages", query: [URLQueryItem(name: "q", value: "rfc822msgid:\(rfc822ID)"),
+                                                           URLQueryItem(name: "maxResults", value: "1")],
+                                        account: account),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let first = (json["messages"] as? [[String: Any]])?.first else { return nil }
+        return first["id"] as? String
     }
 
     @discardableResult

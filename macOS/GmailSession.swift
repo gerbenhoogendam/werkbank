@@ -924,11 +924,33 @@ final class GmailSession {
                 // Een gearchiveerd gesprek komt in de andere mailbox gewoon in de inbox terecht.
                 labels.append("INBOX")
             }
-            let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
-            inserted.append(result.id)
-            targetThread = targetThread ?? result.threadID
+            // Staat dezelfde mail al in de andere mailbox (bv. aan info én support gestuurd), dan niet nog een keer
+            // neerzetten: dat gaf een kopie. Alleen de labels (inbox) erop.
+            if let rfcID = Self.messageIDHeader(raw),
+               let existing = try? await existingMessage(rfc822ID: rfcID, account: target) {
+                if !labels.isEmpty, let body = try? JSONSerialization.data(withJSONObject: ["addLabelIds": labels]) {
+                    _ = try? await api("messages/\(existing.id)/modify", method: "POST", body: body, account: target)
+                }
+                targetThread = targetThread ?? existing.threadID
+                continue
+            }
+            do {
+                let result = try await insert(raw: raw, labels: labels, threadID: targetThread, account: target)
+                inserted.append(result.id)
+                targetThread = targetThread ?? result.threadID
+            } catch {
+                await discard(inserted, in: target)
+                throw error
+            }
         }
-        try await trash(threadID: threadID, account: source)
+        // Verplaatsen mag nooit een kopie achterlaten: lukt weggooien in de bron niet, dan gaat wat er in de andere
+        // mailbox is neergezet ook weer weg en blijft alles zoals het was.
+        do {
+            try await trash(threadID: threadID, account: source)
+        } catch {
+            await discard(inserted, in: target)
+            throw error
+        }
         removeThreadFromLists(threadID)
         if let targetThread { WaitingWatcher.shared.relink(threadID: threadID, to: targetThread, account: target) }
         for id in inserted { note(account: target, forMessageID: id) }
@@ -954,6 +976,42 @@ final class GmailSession {
         await reload()
         if MailModeStore.shared.isActive { await MailModeStore.shared.reload() }
         if failed > 0 { AppState.shared.announce(moves.count == 1 ? "Terugzetten mislukt" : "Terugzetten mislukt bij \(failed) mails") }
+    }
+
+    /// Wat bij een mislukte verplaatsing al in de andere mailbox stond: weer weg (prullenbak).
+    private func discard(_ messageIDs: [String], in account: String) async {
+        for id in messageIDs {
+            _ = try? await api("messages/\(id)/trash", method: "POST", account: account)
+        }
+    }
+
+    /// De Message-ID uit de kop van een ruwe mail, zonder < >.
+    nonisolated static func messageIDHeader(_ raw: Data) -> String? {
+        let text = String(decoding: raw.prefix(96_000), as: UTF8.self).replacingOccurrences(of: "\r\n", with: "\n")
+        let head = text.components(separatedBy: "\n\n").first ?? text
+        var lines: [String] = []
+        for line in head.components(separatedBy: "\n") {
+            if let first = line.first, first == " " || first == "\t", !lines.isEmpty {
+                lines[lines.count - 1] += " " + line.trimmingCharacters(in: .whitespaces)
+            } else {
+                lines.append(line)
+            }
+        }
+        guard let line = lines.first(where: { $0.lowercased().hasPrefix("message-id:") }) else { return nil }
+        let value = line.dropFirst("message-id:".count).trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "<>"))
+        return value.isEmpty ? nil : value
+    }
+
+    /// Dezelfde mail (zelfde Message-ID) in een mailbox, buiten prullenbak en spam.
+    private func existingMessage(rfc822ID: String, account: String) async throws -> (id: String, threadID: String)? {
+        let data = try await api("messages", query: [URLQueryItem(name: "q", value: "rfc822msgid:\(rfc822ID)"),
+                                                     URLQueryItem(name: "maxResults", value: "1")],
+                                 account: account)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let first = (json["messages"] as? [[String: Any]])?.first,
+              let id = first["id"] as? String, let thread = first["threadId"] as? String else { return nil }
+        return (id, thread)
     }
 
     private func trash(threadID: String, account: String?) async throws {

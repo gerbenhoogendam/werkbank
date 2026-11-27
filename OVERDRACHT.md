@@ -724,6 +724,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Support, Info en Notify in die volgorde (`MailColumnsStore.showDefaultColumns`, op korte naam of het deel voor de
     @; een naam die niet bestaat valt weg). `shown` volgt nu de volgorde van `chosen`; klikken in de balk zet ze weer
     in de volgorde van de mailboxen.
+69. **Verplaatsen tussen mailboxen maakt nooit een kopie** (27 nov, Mac en iPhone; melding: slepen tussen kolommen
+    gaf een kopie). Verplaatsen = mails in de doelmailbox zetten en het gesprek in de bron weggooien. Nu: (1) staat
+    dezelfde mail (Message-ID, zoekopdracht `rfc822msgid:`) al in de doelmailbox, bv. omdat hij aan info én support
+    ging, dan wordt hij niet nog een keer neergezet maar alleen in de inbox gezet; (2) mislukt het neerzetten of het
+    weggooien in de bron, dan gaat wat al in de doelmailbox stond weer naar de prullenbak (Mac `transfer`/`discard`,
+    iPhone `PhoneGmail.move`); op de iPhone werd een mislukte prullenbak eerder genegeerd. (3) De kolommen nemen een
+    sleep aan als verplaatsen (`ColumnMoveDrop`, cursor zonder plusje). Welke van deze de kopie gaf, is niet vastgesteld.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
