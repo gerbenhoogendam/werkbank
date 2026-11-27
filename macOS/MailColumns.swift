@@ -41,11 +41,34 @@ final class MailColumnsStore {
 
     private let gmail = GmailSession.shared
 
-    /// De kolommen, in de volgorde van de mailboxen.
+    /// De kolommen in de gekozen volgorde (⌘3 zet GH, Support, Info, Notify); klikken in de balk sorteert ze weer zoals
+    /// de mailboxen.
     var shown: [String] {
         let all = gmail.accounts
-        let picked = all.filter { chosen.contains($0) }
+        let picked = chosen.filter { all.contains($0) }
         return picked.isEmpty ? Array(all.prefix(3)) : picked
+    }
+
+    /// De vaste vier van ⌘3, op de korte naam van de mailbox (of het deel voor de @).
+    static let defaultColumns = ["gh", "support", "info", "notify"]
+
+    /// ⌘3: de kolommen GH, Support, Info en Notify openen; een naam die niet bestaat valt weg. Vindt hij er geen, dan
+    /// blijven de kolommen zoals ze waren.
+    func showDefaultColumns() {
+        let all = gmail.accounts
+        let matched = Self.defaultColumns.compactMap { name in
+            all.first { gmail.displayName($0).lowercased() == name }
+                ?? all.first { GmailSession.shortName($0).lowercased() == name }
+        }
+        if !matched.isEmpty {
+            chosen = matched
+            UserDefaults.standard.set(chosen, forKey: Self.accountsKey)
+        }
+        if isActive {
+            Task { await reloadAll() }
+        } else {
+            open()
+        }
     }
 
     var unreadCount: Int { shown.reduce(0) { $0 + (lists[$1]?.filter(\.isUnread).count ?? 0) } }

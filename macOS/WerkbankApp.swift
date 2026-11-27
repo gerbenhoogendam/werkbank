@@ -129,6 +129,8 @@ struct WerkbankApp: App {
                     .keyboardShortcut("1", modifiers: .command)
                 Button("Mail") { WindowRouter.show(mail: true) }
                     .keyboardShortcut("2", modifiers: .command)
+                Button("Mail in kolommen") { WindowRouter.showColumns() }
+                    .keyboardShortcut("3", modifiers: .command)
                 Divider()
             }
         }

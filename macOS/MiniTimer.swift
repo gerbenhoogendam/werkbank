@@ -41,6 +41,12 @@ enum WindowRouter {
         }
         if DuoWindowFold.shared.mainWindow?.isKeyWindow != true { focusMain() }
     }
+
+    /// ⌘3: altijd Mail in kolommen met GH, Support, Info en Notify, in die volgorde.
+    static func showColumns() {
+        MailColumnsStore.shared.showDefaultColumns()
+        if DuoWindowFold.shared.mainWindow?.isKeyWindow != true { focusMain() }
+    }
 }
 
 // MARK: - Paneel

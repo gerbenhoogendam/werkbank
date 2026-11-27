@@ -720,6 +720,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     werkdagen vanaf de gekozen dag (`AgendaDates.workdays(from:count:)`), in kolommen met gewone tekst (`AgendaWeekGrid`
     met `small` alleen bij meer dan drie kolommen); pijltjes en vegen gaan drie werkdagen verder. Bij 3 dagen en Week
     staan GH-afspraken gewoon in het grid; alleen hele dagen staan bovenaan. Bij Dag blijft de GH-lijst bovenaan.
+68. **Mac: ⌘3 = Mail in kolommen** (27 nov). Menu Weergave › Mail in kolommen (⌘3) opent altijd de kolommen met GH,
+    Support, Info en Notify in die volgorde (`MailColumnsStore.showDefaultColumns`, op korte naam of het deel voor de
+    @; een naam die niet bestaat valt weg). `shown` volgt nu de volgorde van `chosen`; klikken in de balk zet ze weer
+    in de volgorde van de mailboxen.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
