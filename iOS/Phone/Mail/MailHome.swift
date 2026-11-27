@@ -578,7 +578,7 @@ struct PhoneMailRow: View {
             if selecting {
                 PhCheck(isOn: isChosen, size: 22).padding(.top, 6)
             } else {
-                PhAvatar(name: mail.item.senderDisplay)
+                PhAvatar(name: mail.item.senderDisplay, address: mail.item.fromAddress ?? "")
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

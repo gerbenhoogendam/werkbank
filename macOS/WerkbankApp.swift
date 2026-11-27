@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppearanceSetting.applyStored()
+        DockIcon.applyStored()
         ScrollBarHider.start()
         BoardService.ensureColumns(in: Persistence.container.mainContext)
         MiniTimerController.shared.start()

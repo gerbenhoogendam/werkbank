@@ -690,6 +690,14 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Knoppen zijn AppIntents met `openAppWhenRun` (`Widgets/Shared`, in app én extensie): ze zetten een verzoek in de
     App Group dat `RootView.takeWidgetRequest` oppakt. Tikken op een widget gaat via `zwoegbank://`. Timer stoppen
     vanuit het bedieningspaneel zit er bewust nog niet in. Niet op een toestel gezien.
+64. **Dock-icoon kiezen op de Mac** (27 nov). Voorkeuren › Weergave › Dock: Papier (het app-icoon), Limoen of
+    Oranje (`DockIcon`, beelden in `macOS/DockIcons.xcassets`, Mac-vorm met schaduw). macOS wisselt alleen het
+    Dock-icoon terwijl de app draait (`NSApp.applicationIconImage`, bij opstarten en bij wisselen); Finder en Launchpad
+    houden Papier. De teller met ongelezen mail blijft.
+65. **Afzenderlogo's op de iPhone** (27 nov). `SenderLogoService` staat nu in `Shared/Services` (was in
+    `macOS/SenderAvatar.swift`); `PhAvatar` krijgt `address` en toont het logo in een wit rondje, anders de
+    initialen. In de inbox (ruim) en in het gesprek. Aan/uit met dezelfde sleutel als de Mac
+    (`SettingsKey.mailLogos`, Voorkeuren › Inbox › Logo's bij afzenders, gaat via iCloud).
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

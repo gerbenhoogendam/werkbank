@@ -143,6 +143,9 @@ private struct DisplayPreferences: View {
     @AppStorage(SettingsKey.startHour) private var startHour = 8
     @AppStorage(SettingsKey.endHour) private var endHour = 18
     @AppStorage(SettingsKey.mailLogos) private var mailLogos = true
+    #if os(macOS)
+    @AppStorage(DockIcon.key) private var dockIcon = DockIcon.papier.rawValue
+    #endif
 
     private static let dayNames = ["ma", "di", "wo", "do", "vr", "za", "zo"]
 
@@ -158,6 +161,18 @@ private struct DisplayPreferences: View {
             }
 
             #if os(macOS)
+            Section("Dock") {
+                Picker("Icoon", selection: $dockIcon) {
+                    ForEach(DockIcon.allCases) { icon in
+                        Text(icon.title).tag(icon.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: dockIcon) { _, value in
+                    (DockIcon(rawValue: value) ?? .papier).apply()
+                }
+            }
+
             Section {
                 Picker("Grootte", selection: $miniTimerSize) {
                     ForEach(MiniTimerSize.allCases) { option in

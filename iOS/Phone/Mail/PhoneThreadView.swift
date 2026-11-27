@@ -156,7 +156,8 @@ struct PhoneThreadView: View {
             Task { await loadContent(message.id) }
         } label: {
             HStack(spacing: 10) {
-                PhAvatar(name: senderName(message.from), size: 28, isMe: message.labels.contains("SENT"))
+                PhAvatar(name: senderName(message.from), size: 28, isMe: message.labels.contains("SENT"),
+                         address: message.from)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack {
                         Text(senderName(message.from)).font(Ph.text(13.5, .semibold))
@@ -182,7 +183,8 @@ struct PhoneThreadView: View {
                 action = PhoneMailAction(kind: .sender(message.from), mail: mail)
             } label: {
                 HStack(alignment: .top, spacing: 10) {
-                    PhAvatar(name: senderName(message.from), size: 36, isMe: message.labels.contains("SENT"))
+                    PhAvatar(name: senderName(message.from), size: 36, isMe: message.labels.contains("SENT"),
+                             address: message.from)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(senderName(message.from)).font(Ph.text(15, .semibold))

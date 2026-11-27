@@ -15,6 +15,7 @@ struct PhonePreferencesView: View {
     @AppStorage("phone.mail.newFrom") private var newFrom = ""
     @AppStorage(PhoneClaude.modelKey) private var model = "claude-sonnet-5-5"
     @AppStorage(PhoneMailSettings.densityKey) private var density = "ruim"
+    @AppStorage(SettingsKey.mailLogos) private var mailLogos = true
     @AppStorage(PhoneMailSettings.swipeLeftKey) private var swipeLeft = "archief"
     @AppStorage(PhoneMailSettings.swipeRightKey) private var swipeRight = "gelezen"
     @AppStorage(PhoneMailSettings.afterArchiveKey) private var afterArchive = "lijst"
@@ -139,6 +140,10 @@ struct PhonePreferencesView: View {
             section("Inbox")
             VStack(spacing: 0) {
                 choice("Weergave", selection: $density, options: [("ruim", "Ruim"), ("compact", "Compact")])
+                toggle("Logo's bij afzenders", isOn: Binding(get: { mailLogos }, set: { value in
+                    mailLogos = value
+                    sync.set(value, forKey: SettingsKey.mailLogos)
+                }))
                 choice("Vegen naar links", selection: $swipeLeft,
                        options: [("archief", "Archief"), ("taak", "Taak"), ("ster", "Ster")])
                 choice("Vegen naar rechts", selection: $swipeRight,

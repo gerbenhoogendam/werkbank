@@ -361,11 +361,43 @@ struct PhChip: View {
 
 // MARK: - Kleine onderdelen
 
-/// Initialen in een rondje dat in het papier ligt.
+/// Het logo van de afzender in een wit rondje (zoals op de Mac), anders de initialen in een rondje dat in het
+/// papier ligt. Freemail en sites zonder bruikbaar icoon houden de initialen.
 struct PhAvatar: View {
     let name: String
     var size: CGFloat = 34
     var isMe = false
+    /// Het mailadres (mag met naam ervoor); leeg = alleen initialen.
+    var address: String = ""
+
+    @AppStorage(SettingsKey.mailLogos) private var showLogos = true
+    @State private var logo: UIImage?
+
+    private var key: String { "sender:" + address.lowercased() }
+
+    var body: some View {
+        Group {
+            if showLogos, !isMe, !address.isEmpty, let image = logo ?? DecodedLogos.image(for: key) {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .padding(size * 0.14)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(Ph.card))
+                    .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(Ph.line, lineWidth: 1))
+                    .accessibilityHidden(true)
+            } else {
+                initialsView
+            }
+        }
+        .task(id: address) {
+            guard showLogos, !isMe, !address.isEmpty, DecodedLogos.image(for: key) == nil else { return }
+            guard let data = await SenderLogoService.shared.logo(forAddress: address) else { return }
+            logo = DecodedLogos.image(from: data, for: key)
+        }
+    }
 
     private var initials: String {
         let words = name.split(whereSeparator: { $0 == " " || $0 == "|" }).prefix(2)
@@ -373,7 +405,7 @@ struct PhAvatar: View {
         return letters.isEmpty ? "?" : letters.uppercased()
     }
 
-    var body: some View {
+    private var initialsView: some View {
         Text(initials)
             .font(Ph.text(size * 0.32, .semibold))
             .foregroundStyle(isMe ? Ph.lime : Ph.ink)
