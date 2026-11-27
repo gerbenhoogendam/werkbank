@@ -641,6 +641,15 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       board per kolom met snelle invoer en vegen.
     - Later versturen kan op de iPhone nog niet: de Gmail-API kent geen ingepland versturen en de wachtrij van de Mac
       (`Gepland.json`) staat lokaal, niet in iCloud.
+    - Daarna (27 nov) de ontbrekende schermen: mappen en labels (`PhoneFolders`), concepten openen en versturen (het
+      concept wordt daarna verwijderd), compacte weergave en filters (ongelezen, bijlage, vandaag), welkom
+      (`PhoneWelcome`), klant (`PhoneClient`: alle mail van het domein, open taken, uren deze maand), versturen met
+      6 s ongedaan maken (`PhoneOutbox`, balk boven de tabbalk), Face ID (`PhoneLock`, `NSFaceIDUsageDescription`),
+      herinnering om 17:00 onder N uur, timer bij openen van een klantmail, vegen instelbaar, na archiveren
+      volgende/lijst, afbeeldingen laden (altijd/bekend/nooit via de CSP), per mailbox naam/afzendernaam/in Alle.
+      Agenda als lijst (14 dagen), afspraak bewerken/dupliceren/verwijderen/navigeren, herinnering en hele dag; timer op
+      het hele scherm (`TijdFocusView`), tijd typen of inspreken (`TijdAddSheet`); board in kolommen (`BoardKanban`),
+      gedaan vandaag met ongedaan maken (`BoardDoneView`), nieuwe taak inspreken (`BoardNewTaskSheet`).
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
