@@ -21,10 +21,10 @@ struct DayEntry: TimelineEntry {
         events.filter { !$0.isAllDay && $0.end > date }.min { $0.start < $1.start }
     }
 
-    /// De afspraak na `next`.
-    var afterNext: WidgetSnapshot.Event? {
-        guard let next else { return nil }
-        return events.filter { !$0.isAllDay && $0.start > next.start }.min { $0.start < $1.start }
+    /// De twee afspraken na `next`.
+    var afterNext: [WidgetSnapshot.Event] {
+        guard let next else { return [] }
+        return Array(events.filter { !$0.isAllDay && $0.start > next.start }.sorted { $0.start < $1.start }.prefix(2))
     }
 
     static let sample: DayEntry = {
@@ -35,9 +35,10 @@ struct DayEntry: TimelineEntry {
         }
         let events = [
             WidgetSnapshot.Event(title: "GH Stand-up", start: at(9), end: at(9, 15), isAllDay: false, location: ""),
-            WidgetSnapshot.Event(title: "Belronde leveranciers", start: at(11), end: at(12), isAllDay: false, location: ""),
-            WidgetSnapshot.Event(title: "Overleg Hoveniers", start: at(14), end: at(15), isAllDay: false, location: "Kamer 2"),
-            WidgetSnapshot.Event(title: "Plaatsing Bakker & Zn", start: at(15, 30), end: at(16, 30), isAllDay: false,
+            WidgetSnapshot.Event(title: "GH Belronde", start: at(11), end: at(12), isAllDay: false, location: ""),
+            WidgetSnapshot.Event(title: "GH Overleg Hoveniers", start: at(14), end: at(15), isAllDay: false,
+                                 location: "Kamer 2"),
+            WidgetSnapshot.Event(title: "DH GH Plaatsing", start: at(15, 30), end: at(16, 30), isAllDay: false,
                                  location: ""),
         ]
         return DayEntry(date: at(13, 12), events: events, seconds: 5.75 * 3600, running: nil)
@@ -59,7 +60,8 @@ struct DayProvider: TimelineProvider {
     /// Een moment nu, elk kwartier de komende twee uur en bij elk begin en einde van een afspraak tot middernacht.
     static func entries(from now: Date) -> [DayEntry] {
         let snapshot = WidgetShare.read()
-        let events = loadEvents(now: now, snapshot: snapshot)
+        // Alleen eigen afspraken (GH in de eerste vijf tekens); de rest is van collega's.
+        let events = loadEvents(now: now, snapshot: snapshot).filter(\.isMine)
         let calendar = Calendar.current
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
         var moments: Set<Date> = [now]

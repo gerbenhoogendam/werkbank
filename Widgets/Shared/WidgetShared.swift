@@ -12,8 +12,9 @@ struct WidgetSnapshot: Codable {
         var isAllDay: Bool
         var location: String
 
-        /// Afspraken die met "GH" beginnen zijn persoonlijk (net als in Agenda).
-        var isPersonal: Bool { title.hasPrefix("GH") }
+        /// Eigen afspraken: "GH" (of "gh") in de eerste vijf tekens, zoals "GH PT" of "DH GH". De rest is van collega's
+        /// en staat niet in de widgets.
+        var isMine: Bool { title.prefix(5).lowercased().contains("gh") }
     }
 
     struct Running: Codable, Hashable {

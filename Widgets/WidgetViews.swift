@@ -171,15 +171,7 @@ struct TodayView: View {
         let past = !event.isAllDay && event.end <= entry.date
         let now = !event.isAllDay && event.start <= entry.date && event.end > entry.date
         let time = event.isAllDay ? "dag" : W.time(event.start)
-        if event.isPersonal {
-            HStack(spacing: 8) {
-                Text(time).frame(width: 32, alignment: .leading)
-                Text(event.title).fontWeight(.semibold).lineLimit(1)
-            }
-            .font(W.text(10))
-            .foregroundStyle(past ? W.faint : W.olive)
-            .frame(height: 16)
-        } else if now {
+        if now {
             HStack(spacing: 8) {
                 Text(time).fontWeight(.semibold).frame(width: 32, alignment: .leading)
                 Text(event.title).fontWeight(.semibold).lineLimit(1)
@@ -247,13 +239,18 @@ struct TimeNextView: View {
                     .background(W.lime)
                     .background(Rectangle().fill(W.ink).offset(y: 2))
                     .padding(.top, 6)
-                Text(event.title).font(W.text(12, .semibold)).foregroundStyle(W.ink).lineLimit(2).padding(.top, 6)
-                if !event.location.isEmpty {
-                    Text(event.location).font(W.text(10.5)).foregroundStyle(W.ink2).lineLimit(1).padding(.top, 2)
-                }
-                Spacer(minLength: 0)
-                if let after = entry.afterNext {
-                    Text("daarna \(W.time(after.start))").font(W.text(10)).foregroundStyle(W.ink2)
+                Text(event.title).font(W.text(12, .semibold)).foregroundStyle(W.ink).lineLimit(1).padding(.top, 6)
+                Spacer(minLength: 4)
+                // Daarna nog twee, klein.
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(entry.afterNext, id: \.self) { later in
+                        HStack(spacing: 5) {
+                            Text(W.time(later.start)).fontWeight(.semibold)
+                            Text(later.title).lineLimit(1)
+                        }
+                        .font(W.text(9.5))
+                        .foregroundStyle(W.ink2)
+                    }
                 }
             } else {
                 Text("Niets meer").font(W.text(12)).foregroundStyle(W.ink3).padding(.top, 6)
