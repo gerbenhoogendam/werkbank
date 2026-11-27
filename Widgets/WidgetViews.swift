@@ -148,22 +148,33 @@ struct WHours: View {
 struct TodayView: View {
     let entry: DayEntry
 
+    private var day: Date { entry.shownDay }
+    private var isToday: Bool { Calendar.current.isDate(day, inSameDayAs: entry.date) }
+    private var list: [WidgetSnapshot.Event] { entry.events(on: day) }
+
     private var rows: [WidgetSnapshot.Event] {
-        let list = entry.today
+        let list = self.list
         let firstOpen = list.firstIndex { $0.isAllDay || $0.end > entry.date } ?? list.count
         let start = max(0, min(firstOpen - 1, list.count - 5))
         return Array(list.dropFirst(start).prefix(5))
     }
 
+    /// Vandaag of een latere dag: de weekdag, of "Morgen".
+    private var eyebrow: String {
+        if isToday { return day.formatted(.dateTime.weekday(.abbreviated)).replacingOccurrences(of: ".", with: "") }
+        let label = W.day(day, from: entry.date)
+        return label == "MORGEN" ? "Morgen" : day.formatted(.dateTime.weekday(.abbreviated)).replacingOccurrences(of: ".", with: "")
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
-                WEyebrow(text: entry.date.formatted(.dateTime.weekday(.abbreviated)).replacingOccurrences(of: ".", with: ""))
-                Text(entry.date.formatted(.dateTime.day())).font(W.poster(66)).foregroundStyle(W.ink).padding(.top, 4)
-                Text(entry.date.formatted(.dateTime.month(.abbreviated)).replacingOccurrences(of: ".", with: "").uppercased())
+                WEyebrow(text: eyebrow)
+                Text(day.formatted(.dateTime.day())).font(W.poster(66)).foregroundStyle(W.ink).padding(.top, 4)
+                Text(day.formatted(.dateTime.month(.abbreviated)).replacingOccurrences(of: ".", with: "").uppercased())
                     .font(W.poster(21)).foregroundStyle(W.ink2)
                 Spacer(minLength: 0)
-                Text(entry.today.count == 1 ? "1 afspraak" : "\(entry.today.count) afspraken")
+                Text(isToday ? (list.count == 1 ? "1 afspraak" : "\(list.count) afspraken") : "vandaag niets")
                     .font(W.text(10)).foregroundStyle(W.ink2)
             }
             .frame(width: 70, alignment: .leading)

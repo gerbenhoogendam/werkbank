@@ -11,9 +11,22 @@ struct DayEntry: TimelineEntry {
     var calendar: Calendar { .current }
 
     /// De afspraken van vandaag, hele dagen eerst.
-    var today: [WidgetSnapshot.Event] {
-        events.filter { calendar.isDate($0.start, inSameDayAs: date) || ($0.isAllDay && $0.start <= date && $0.end > date) }
+    var today: [WidgetSnapshot.Event] { events(on: date) }
+
+    /// De afspraken van één dag, hele dagen eerst.
+    func events(on day: Date) -> [WidgetSnapshot.Event] {
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? day
+        return events.filter { $0.start < end && $0.end > start || calendar.isDate($0.start, inSameDayAs: day) }
             .sorted { ($0.isAllDay ? 0 : 1, $0.start) < ($1.isAllDay ? 0 : 1, $1.start) }
+    }
+
+    /// Widget B: vandaag, of als vandaag leeg is de eerstvolgende dag met een eigen afspraak.
+    var shownDay: Date {
+        guard today.isEmpty else { return date }
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date
+        let later = events.filter { $0.start >= tomorrow }.min { $0.start < $1.start }
+        return later?.start ?? date
     }
 
     /// De afspraak die nu loopt of als eerste komt (geen hele dagen).
