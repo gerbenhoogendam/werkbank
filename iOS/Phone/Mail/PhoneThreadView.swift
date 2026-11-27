@@ -117,16 +117,29 @@ struct PhoneThreadView: View {
         .padding(.trailing, 8)
     }
 
+    /// Archiveren links (een vijfde van de breedte), Antwoord rechts; lang drukken op Antwoord voor allen of doorsturen.
     private var bottomBar: some View {
-        HStack(spacing: 6) {
-            Button { reply(.reply) } label: { Label("ANTWOORD", systemImage: "arrowshape.turn.up.left") }
-                .buttonStyle(PhPrimaryStyle(height: 50))
-                .layoutPriority(1)
-            Button("ALLEN") { reply(.replyAll) }.buttonStyle(PhSecondaryStyle(height: 50))
-            Button("DOOR") { reply(.forward) }.buttonStyle(PhSecondaryStyle(height: 50))
-            Button("ARCHIEF") { archive() }.buttonStyle(PhInkStyle(height: 50))
+        GeometryReader { proxy in
+            let spacing: CGFloat = 6
+            let archiveWidth = ((proxy.size.width - spacing) * 0.2).rounded()
+            HStack(spacing: spacing) {
+                Button { archive() } label: {
+                    Image(systemName: "archivebox").font(.system(size: 19, weight: .medium))
+                }
+                .buttonStyle(PhInkStyle(height: 50))
+                .frame(width: archiveWidth)
+                .accessibilityLabel("Archiveer")
+                Button { reply(.reply) } label: { Text("ANTWOORD") }
+                    .buttonStyle(PhPrimaryStyle(height: 50))
+                    .contextMenu {
+                        Button { reply(.replyAll) } label: { Label("Allen beantwoorden", systemImage: "arrowshape.turn.up.left.2") }
+                        Button { reply(.forward) } label: { Label("Doorsturen", systemImage: "arrowshape.turn.up.right") }
+                    }
+                    .accessibilityAction(named: "Allen beantwoorden") { reply(.replyAll) }
+                    .accessibilityAction(named: "Doorsturen") { reply(.forward) }
+            }
         }
-        .labelStyle(.titleOnly)
+        .frame(height: 53)
         .disabled(newest == nil)
         .padding(.horizontal, 14)
         .padding(.top, 10)

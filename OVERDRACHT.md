@@ -671,6 +671,12 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Een afzegging (METHOD:CANCEL) toont alleen een melding. Met Face ID aan wacht de link tot na ontgrendelen.
     Standaard-mailapp: pas met `com.apple.developer.mail-client`, aan te vragen bij Apple; daarna die sleutel in de
     iOS-entitlements in `project.yml`. Een standaard-agenda bestaat op iOS niet. Niet in de app gezien.
+61. **iPhone: onderbalk van een mail en de kopletter** (27 nov, na proberen op de telefoon). Onderaan een mail staat
+    links Archiveer (archiefdoos, een vijfde van de breedte) en rechts ANTWOORD; lang drukken op Antwoord geeft Allen
+    beantwoorden en Doorsturen. Daarvoor stonden er vier knoppen, maar door `layoutPriority` op Antwoord werden de
+    andere drie nul breed. Bebas Neue wordt nu bij het opstarten aangemeld (`Ph.registerFonts` in `WerkbankApp.init`):
+    alleen `ThemeStore` deed dat, en die wordt op de iPhone niet altijd geladen, waardoor de onderwerpregel van een
+    mail in de systeemletter stond.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

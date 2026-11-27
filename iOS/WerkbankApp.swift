@@ -6,6 +6,10 @@ struct WerkbankApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState.shared
 
+    init() {
+        Ph.registerFonts()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

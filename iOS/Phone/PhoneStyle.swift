@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 
 // De iPhone-app in de stijl Etiket (licht): gebroken wit papier, witte kaarten met een haarlijn, inkt, één limoen.
@@ -25,6 +26,13 @@ enum Ph {
 
     /// Koppen en grote cijfers (Bebas Neue, meegeleverd).
     static func poster(_ size: CGFloat) -> Font { .custom("BebasNeue-Regular", size: size) }
+
+    /// Bebas Neue zit in de app (Shared/Fonts) maar staat niet in Info.plist: één keer aanmelden bij het opstarten,
+    /// anders valt elke kop terug op de systeemletter.
+    static func registerFonts() {
+        guard let url = Bundle.main.url(forResource: "BebasNeue-Regular", withExtension: "ttf") else { return }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    }
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
     /// De letter van mailtekst.
     static func mail(_ size: CGFloat) -> Font { .custom("Helvetica", size: size) }
