@@ -108,7 +108,7 @@ struct PhoneSearchView: View {
     private var criteria: some View {
         VStack(alignment: .leading, spacing: 12) {
             PhCaps(text: "Mailboxen")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 6)], spacing: 6) {
+            PhFlow(spacing: 6) {
                 ForEach(gmail.accounts, id: \.self) { account in
                     PhChip(title: gmail.displayName(account), isOn: boxes.contains(account)) {
                         if boxes.contains(account) { boxes.remove(account) } else { boxes.insert(account) }

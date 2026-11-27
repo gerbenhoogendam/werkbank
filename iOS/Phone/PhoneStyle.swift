@@ -205,7 +205,8 @@ struct PhIconButtonStyle: ButtonStyle {
 
 // MARK: - Keuzes
 
-/// Een spoor met knoppen; de gekozen ligt er limoen bovenop.
+/// Een spoor met knoppen; de gekozen ligt er limoen bovenop. Met `isOn` en `onLongPress` kunnen er meer tegelijk aan
+/// staan: tikken kiest, lang drukken voegt toe of haalt weg.
 struct PhSegmented<Value: Hashable>: View {
     struct Item {
         let value: Value
@@ -216,43 +217,63 @@ struct PhSegmented<Value: Hashable>: View {
     let items: [Item]
     @Binding var selection: Value
     var height: CGFloat = 38
+    var isOn: ((Value) -> Bool)? = nil
+    var onLongPress: ((Value) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 3) {
             ForEach(items, id: \.value) { item in
-                let on = item.value == selection
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { selection = item.value }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(item.title.uppercased())
-                            .font(Ph.text(11.5, .semibold))
-                            .tracking(1.3)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        if let count = item.count, count > 0 {
-                            Text("\(count)")
-                                .font(Ph.text(10.5, .semibold))
-                                .foregroundStyle(on ? Ph.ink : Ph.olive)
+                let on = isOn?(item.value) ?? (item.value == selection)
+                if let onLongPress {
+                    cell(item, on: on)
+                        .onTapGesture { choose(item.value) }
+                        .onLongPressGesture(minimumDuration: 0.35) {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            withAnimation(.easeOut(duration: 0.15)) { onLongPress(item.value) }
                         }
-                    }
-                    .foregroundStyle(on ? Ph.ink : Ph.ink2)
-                    .frame(maxWidth: .infinity, minHeight: height)
-                    .background {
-                        if on {
-                            Rectangle().fill(Ph.lime.shadow(.inner(color: .white.opacity(0.6), radius: 0, y: 1)))
-                                .shadow(color: Ph.ink.opacity(0.18), radius: 0, y: 1)
-                                .shadow(color: Ph.ink.opacity(0.12), radius: 2, y: 2)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                        .accessibilityAction(named: on ? "Uit de combinatie" : "Toevoegen aan combinatie") {
+                            onLongPress(item.value)
                         }
-                    }
-                    .contentShape(Rectangle())
+                } else {
+                    Button { choose(item.value) } label: { cell(item, on: on) }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .padding(3)
         .phWell()
+    }
+
+    private func choose(_ value: Value) {
+        withAnimation(.easeOut(duration: 0.15)) { selection = value }
+    }
+
+    private func cell(_ item: Item, on: Bool) -> some View {
+        HStack(spacing: 5) {
+            Text(item.title.uppercased())
+                .font(Ph.text(11.5, .semibold))
+                .tracking(1.3)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let count = item.count, count > 0 {
+                Text("\(count)")
+                    .font(Ph.text(10.5, .semibold))
+                    .foregroundStyle(on ? Ph.ink : Ph.olive)
+            }
+        }
+        .foregroundStyle(on ? Ph.ink : Ph.ink2)
+        .frame(maxWidth: .infinity, minHeight: height)
+        .background {
+            if on {
+                Rectangle().fill(Ph.lime.shadow(.inner(color: .white.opacity(0.6), radius: 0, y: 1)))
+                    .shadow(color: Ph.ink.opacity(0.18), radius: 0, y: 1)
+                    .shadow(color: Ph.ink.opacity(0.12), radius: 2, y: 2)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -312,14 +333,15 @@ struct PhChip: View {
             Text(title.uppercased())
                 .font(Ph.text(11, .semibold))
                 .tracking(1.2)
-                .foregroundStyle(isOn ? Ph.paper : Ph.ink)
+                .foregroundStyle(isOn ? Ph.ink : Ph.ink3)
                 .padding(.horizontal, 12)
                 .frame(minHeight: 40)
                 .background {
                     if isOn {
-                        Rectangle().fill(Ph.ink.shadow(.inner(color: .black.opacity(0.4), radius: 1.5, y: 2)))
+                        Rectangle().fill(Ph.lime.shadow(.inner(color: .white.opacity(0.6), radius: 0, y: 1)))
+                            .shadow(color: Ph.ink.opacity(0.18), radius: 0, y: 1)
                     } else {
-                        Rectangle().fill(Ph.card).shadow(color: Ph.ink.opacity(0.06), radius: 0, y: 1)
+                        Rectangle().fill(Ph.well.shadow(.inner(color: Ph.ink.opacity(0.12), radius: 1.5, y: 1.5)))
                     }
                 }
                 .overlay(Rectangle().strokeBorder(isOn ? Ph.ink : Ph.line, lineWidth: 1))
@@ -399,11 +421,62 @@ struct PhFieldRow<Content: View>: View {
     var body: some View {
         HStack(spacing: 10) {
             PhCaps(text: label, size: 11)
-                .frame(width: 74, alignment: .leading)
+                .fixedSize()
+                .frame(minWidth: 96, alignment: .leading)
             content()
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 46)
         .overlay(alignment: .bottom) { Rectangle().fill(Ph.hair).frame(height: 1) }
+    }
+}
+
+/// Knoppen naast elkaar die doorlopen op de volgende regel, links uitgelijnd met vaste tussenruimte.
+struct PhFlow: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let height = rows.last.map { $0.y + $0.height } ?? 0
+        let width = rows.map(\.width).max() ?? 0
+        let proposed = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        return CGSize(width: proposed ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var y: CGFloat = 0
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = [Row()]
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            var row = rows[rows.count - 1]
+            let needed = row.indices.isEmpty ? size.width : row.width + spacing + size.width
+            if needed > width && !row.indices.isEmpty {
+                let y = row.y + row.height + spacing
+                rows.append(Row(indices: [index], y: y, width: size.width, height: size.height))
+                continue
+            }
+            row.indices.append(index)
+            row.width = needed
+            row.height = max(row.height, size.height)
+            rows[rows.count - 1] = row
+        }
+        return rows.filter { !$0.indices.isEmpty }
     }
 }

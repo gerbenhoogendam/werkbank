@@ -22,16 +22,17 @@ struct RootView: View {
         @Bindable var mailOutbox = outbox
 
         ZStack {
-            Group {
-                switch tab {
-                case .mail: MailHome()
-                case .agenda: AgendaHome()
-                case .tijd: TijdHome()
-                case .board: BoardHome()
+            // De tabbalk onder de inhoud, niet eroverheen: dan valt niets (zoals de pen van Mail) erachter.
+            VStack(spacing: 0) {
+                Group {
+                    switch tab {
+                    case .mail: MailHome()
+                    case .agenda: AgendaHome()
+                    case .tijd: TijdHome()
+                    case .board: BoardHome()
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 PhTabBar(tab: $tab, timerRunning: !running.isEmpty)
             }
 

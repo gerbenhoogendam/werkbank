@@ -11,6 +11,7 @@ struct MailHome: View {
     private let gmail = PhoneGmail.shared
     private let stars = PhoneStars.shared
 
+    /// De gekozen mailboxen, met komma's; leeg is Alle. Tikken kiest er één, lang drukken voegt er een toe.
     @AppStorage("phone.mail.box") private var box = ""
     @AppStorage(PhoneMailSettings.starRowsKey) private var starRows = 3
     @AppStorage(PhoneMailSettings.lateDaysKey) private var lateDays = 4
@@ -38,9 +39,22 @@ struct MailHome: View {
 
     /// Eén mailbox, of bij Alle de mailboxen die in Alle getoond worden.
     private var shownAccounts: [String] {
-        if !box.isEmpty, gmail.accounts.contains(box) { return [box] }
+        let picked = gmail.accounts.filter(chosenBoxes.contains)
+        if !picked.isEmpty { return picked }
         let visible = gmail.accounts.filter { !hiddenBoxes.contains($0) }
         return visible.isEmpty ? gmail.accounts : visible
+    }
+
+    private var chosenBoxes: Set<String> {
+        Set(box.split(separator: ",").map(String.init))
+    }
+
+    /// Lang drukken: de mailbox erbij of eraf. Vanuit Alle begint de combinatie met alleen die mailbox.
+    private func toggleBox(_ account: String) {
+        guard !account.isEmpty else { box = ""; return }
+        var set = chosenBoxes.intersection(gmail.accounts)
+        if set.contains(account) { set.remove(account) } else { set.insert(account) }
+        box = gmail.accounts.filter(set.contains).joined(separator: ",")
     }
 
     private var filtersOn: Bool { filterUnread || filterAttachment || filterToday }
@@ -162,7 +176,12 @@ struct MailHome: View {
                 }
             }
             if gmail.accounts.count > 1 {
-                PhSegmented(items: boxItems, selection: $box)
+                PhSegmented(items: boxItems, selection: $box,
+                            isOn: { value in
+                                let set = chosenBoxes.intersection(gmail.accounts)
+                                return value.isEmpty ? set.isEmpty : set.contains(value)
+                            },
+                            onLongPress: toggleBox)
                     .padding(.horizontal, 16)
             }
             HStack(spacing: 5) {
@@ -179,14 +198,14 @@ struct MailHome: View {
 
     private var eyebrow: String {
         var parts = ["\(unreadCount) ongelezen"]
-        if shownAccounts.count > 1 && filterUnread { parts.append("\(shownAccounts.count) mailboxen") }
+        if shownAccounts.count > 1 && (filterUnread || !chosenBoxes.isEmpty) { parts.append("\(shownAccounts.count) mailboxen") }
         if density == "compact" { parts.append("compact") }
         return parts.joined(separator: " · ")
     }
 
     /// De mailbox voor Mappen: de gekozen, bij Alle de eerste.
     private var folderAccount: String {
-        if !box.isEmpty, gmail.accounts.contains(box) { return box }
+        if let first = gmail.accounts.first(where: chosenBoxes.contains) { return first }
         return gmail.accounts.first ?? ""
     }
 

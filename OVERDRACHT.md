@@ -650,6 +650,12 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       Agenda als lijst (14 dagen), afspraak bewerken/dupliceren/verwijderen/navigeren, herinnering en hele dag; timer op
       het hele scherm (`TijdFocusView`), tijd typen of inspreken (`TijdAddSheet`); board in kolommen (`BoardKanban`),
       gedaan vandaag met ongedaan maken (`BoardDoneView`), nieuwe taak inspreken (`BoardNewTaskSheet`).
+    - Na de eerste keer op de telefoon (27 nov): keuzeknoppen (`PhChip`) zijn limoen als ze aan staan en een grijs
+      putje als ze uit staan (was zwart/wit, onduidelijk); mailboxen bij Zoeken lopen door met vaste tussenruimte
+      (`PhFlow`); "Onderwerp" past in de veldnaam. De tabbalk staat nu onder de inhoud in plaats van als inset
+      eroverheen: de pen voor een nieuwe mail viel erachter. Mail: lang drukken op een mailbox voegt hem toe aan of
+      haalt hem uit de combinatie (meer tegelijk limoen); tikken kiest er weer één. Opgeslagen in `phone.mail.box` met
+      komma's.
 59. **App-icoon ZWOEG BANK** (27 nov; canvas "Werkbank iOS", borden Icoon en IcoonKleur, keuze B4). Papier met drie
     kolommen (limoen in het midden naar voren), ZWOEG BANK in Bebas Neue en een oranje blokje. `AppIcon` (iOS 1024 en
     alle Mac-maten) is B4 Papier; de donkere iOS-variant is weg. Op de iPhone kies je in Voorkeuren › Icoon ook
