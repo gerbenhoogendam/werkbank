@@ -730,8 +730,8 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     ging, dan wordt hij niet nog een keer neergezet maar alleen in de inbox gezet; (2) mislukt het neerzetten of het
     weggooien in de bron, dan gaat wat al in de doelmailbox stond weer naar de prullenbak (Mac `transfer`/`discard`,
     iPhone `PhoneGmail.move`); op de iPhone werd een mislukte prullenbak eerder genegeerd. (3) De kolommen nemen een
-    sleep aan als verplaatsen (`ColumnMoveDrop`, cursor zonder plusje). Welke van deze de kopie gaf, is niet vastgesteld;
-    op de Mac bevestigd: geen kopie meer (27 nov).
+    sleep aan als verplaatsen (`ColumnMoveDrop`, cursor zonder plusje). Welke van deze de kopie gaf, is niet vastgesteld.
+    "Geen kopie meer" (27 nov) was getest op c03d08d, dus zonder deze wijziging: nog opnieuw proberen.
 70. **iPhone, na gebruik** (28 nov).
     - Agenda: GH-afspraken worden nergens meer apart gezet (`isPersonal` en de GH-regels in de lijst zijn weg); ze
       staan in het grid zoals de rest. De band bovenaan toont alleen afspraken van een hele dag.
