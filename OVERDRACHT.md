@@ -738,7 +738,9 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     - Agenda: afspraken openen met een tik (`onTapGesture`), niet meer als knop; een veeg die op een afspraak begint
       gaat alleen een dag verder en opent de kaart niet.
     - Mail: de mailboxbalk begint met GH, dan de rest; Alle (gecombineerd) staat rechts als icoon (`tray.2`,
-      `PhSegmented.Item.icon`). Bij het starten van de app opent Mail in GH (`startInGH`).
+      `PhSegmented.Item.icon`). Bij het starten van de app opent Mail in GH (`startInGH`). Daarna: `PhSegmented` verdeelt
+      de breedte met `PhSegmentLayout` (elk vak zo breed als zijn tekst plus een gelijk deel van de rest; het icoon blijft
+      smal), zodat SUPPORT en NOTIFY niet meer tegen elkaar aan staan.
     - Mail: de knoppen achter een geveegde mail zijn beelden in Etiket-stijl (`PhSwipeIcon`: wit of limoen voor de
       eerste, inktrand, zwart balkje, icoon en woord in inkt) op papier, in plaats van wit op een gekleurd vlak.
       Werkt alleen als iOS `.alwaysOriginal` in vegen-knoppen respecteert; niet op een toestel gezien.

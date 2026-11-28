@@ -231,26 +231,30 @@ struct PhSegmented<Value: Hashable>: View {
     var onLongPress: ((Value) -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 3) {
+        // Elk vak zo breed als zijn tekst, de rest van de ruimte eerlijk verdeeld; een icoon (Alle) blijft smal.
+        PhSegmentLayout(spacing: 3) {
             ForEach(items, id: \.value) { item in
                 let on = isOn?(item.value) ?? (item.value == selection)
-                if let onLongPress {
-                    cell(item, on: on)
-                        .onTapGesture { choose(item.value) }
-                        .onLongPressGesture(minimumDuration: 0.35) {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            withAnimation(.easeOut(duration: 0.15)) { onLongPress(item.value) }
-                        }
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAddTraits(on ? .isSelected : [])
-                        .accessibilityAction(named: on ? "Uit de combinatie" : "Toevoegen aan combinatie") {
-                            onLongPress(item.value)
-                        }
-                } else {
-                    Button { choose(item.value) } label: { cell(item, on: on) }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(on ? .isSelected : [])
+                Group {
+                    if let onLongPress {
+                        cell(item, on: on)
+                            .onTapGesture { choose(item.value) }
+                            .onLongPressGesture(minimumDuration: 0.35) {
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                withAnimation(.easeOut(duration: 0.15)) { onLongPress(item.value) }
+                            }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                            .accessibilityAction(named: on ? "Uit de combinatie" : "Toevoegen aan combinatie") {
+                                onLongPress(item.value)
+                            }
+                    } else {
+                        Button { choose(item.value) } label: { cell(item, on: on) }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                    }
                 }
+                .layoutValue(key: PhSegmentFixed.self, value: item.icon != nil)
             }
         }
         .padding(3)
@@ -266,6 +270,7 @@ struct PhSegmented<Value: Hashable>: View {
             if let icon = item.icon {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .medium))
+                    .frame(width: 30)
                     .accessibilityLabel(item.title)
             } else {
                 Text(item.title.uppercased())
@@ -553,5 +558,51 @@ enum PhSwipeIcon {
         let image = (renderer.uiImage ?? UIImage()).withRenderingMode(.alwaysOriginal)
         cache[key] = image
         return image
+    }
+}
+
+/// Een vak in `PhSegmented` dat niet meegroeit (het icoon voor Alle).
+struct PhSegmentFixed: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// De vakken van `PhSegmented` naast elkaar: elk zo breed als zijn inhoud plus een gelijk deel van wat er overblijft
+/// (vaste vakken krijgen niets extra). Past het niet, dan krimpt alles naar verhouding (de tekst verkleint dan).
+struct PhSegmentLayout: Layout {
+    var spacing: CGFloat = 3
+    /// Lucht links en rechts in elk vak dat meegroeit.
+    var inset: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified) }
+        let height = ideal.map(\.height).max() ?? 0
+        let width = proposal.width ?? widths(available: .infinity, subviews: subviews).reduce(0, +)
+            + spacing * CGFloat(max(0, subviews.count - 1))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let available = bounds.width - spacing * CGFloat(max(0, subviews.count - 1))
+        var x = bounds.minX
+        for (index, width) in widths(available: available, subviews: subviews).enumerated() {
+            subviews[index].place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
+                                  proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + spacing
+        }
+    }
+
+    private func widths(available: CGFloat, subviews: Subviews) -> [CGFloat] {
+        let fixed = subviews.map { $0[PhSegmentFixed.self] }
+        let ideal = subviews.enumerated().map { index, view in
+            view.sizeThatFits(.unspecified).width + (fixed[index] ? 0 : inset * 2)
+        }
+        let total = ideal.reduce(0, +)
+        guard available.isFinite else { return ideal }
+        if total > available, total > 0 {
+            return ideal.map { $0 * available / total }
+        }
+        let growing = fixed.filter { !$0 }.count
+        let extra = growing > 0 ? (available - total) / CGFloat(growing) : 0
+        return ideal.enumerated().map { index, width in width + (fixed[index] ? 0 : extra) }
     }
 }
