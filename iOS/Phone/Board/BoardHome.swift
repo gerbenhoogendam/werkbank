@@ -318,8 +318,14 @@ struct BoardHome: View {
             try? await Task.sleep(for: .milliseconds(350))
             if let card = BoardService.card(withID: id, in: context) {
                 let title = card.title
+                let before = CardPlace(card)
                 withAnimation { BoardService.complete(card, in: context) }
-                appState.showToast("\"\(title)\" afgerond")
+                // Zes seconden om het terug te draaien: de kaart gaat terug naar dezelfde plek in dezelfde kolom.
+                PhoneUndo.shared.show("Afgerond", detail: title, icon: "checkmark") {
+                    guard let card = BoardService.card(withID: id, in: context) else { return }
+                    withAnimation { before.restore(card) }
+                    try? context.save()
+                }
             }
             completing.remove(id)
         }

@@ -1,7 +1,8 @@
 import Observation
 import SwiftUI
 
-/// Ongedaan maken na archiveren: een balk boven de tabbalk, zes seconden, met een lijn die krimpt (zoals Verstuurd).
+/// Ongedaan maken na archiveren of afronden: een balk boven de tabbalk, zes seconden, met een lijn die krimpt (zoals
+/// Verstuurd).
 @MainActor
 @Observable
 final class PhoneUndo {
@@ -12,6 +13,7 @@ final class PhoneUndo {
         let id = UUID()
         let title: String
         let detail: String
+        let icon: String
         let deadline: Date
         let undo: @MainActor () async -> Void
     }
@@ -19,8 +21,10 @@ final class PhoneUndo {
     private(set) var pending: Item?
     @ObservationIgnored private var timer: Task<Void, Never>?
 
-    func show(_ title: String, detail: String = "", undo: @escaping @MainActor () async -> Void) {
-        let item = Item(title: title, detail: detail, deadline: Date().addingTimeInterval(Self.delay), undo: undo)
+    func show(_ title: String, detail: String = "", icon: String = "archivebox",
+              undo: @escaping @MainActor () async -> Void) {
+        let item = Item(title: title, detail: detail, icon: icon, deadline: Date().addingTimeInterval(Self.delay),
+                        undo: undo)
         withAnimation(.easeOut(duration: 0.2)) { pending = item }
         timer?.cancel()
         timer = Task { [weak self] in
@@ -47,7 +51,7 @@ struct PhoneUndoBar: View {
             let left = max(0, item.deadline.timeIntervalSince(timeline.date))
             VStack(spacing: 0) {
                 HStack(spacing: 11) {
-                    Image(systemName: "archivebox")
+                    Image(systemName: item.icon)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Ph.ink)
                         .frame(width: 30, height: 30)
