@@ -762,6 +762,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     kies je Waze, Kaarten of Google (`PhoneNavigationApp`, sleutel `phone.agenda.navigationApp`, via iCloud). De
     links zijn universele links (waze.com/ul, maps.apple.com, google.com/maps/dir): de app als hij er is, anders de
     website; daarom geen `LSApplicationQueriesSchemes`.
+74. **iPhone: thema Blauw** (28 nov; canvas pagina Widgets, bord "Thema Etiket blauw", keuze B2). Voorkeuren ›
+    Weergave › Kleur: Limoen of Blauw (`#2EC5FF`, bijschrift `#004E73`, gekozen rij `#E4F5FC`). `Ph.lime`, `Ph.olive`
+    en `Ph.chosen` lezen `PhThemeStore` (Observation: alles tekent vanzelf opnieuw). Gaat via iCloud (sleutel
+    `phone.theme`) en naar de widgets via de App Group (`W.lime`/`W.olive`). Het app-icoon blijft apart te kiezen.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

@@ -128,6 +128,7 @@ struct RootView: View {
                 PhoneDictation.shared.refresh()
                 Task {
                     await PhonePreferencesSync.shared.pull()
+                    PhThemeStore.shared.reload()
                     PhoneStars.shared.reload()
                     await PhoneGmail.shared.reloadAll()
                 }

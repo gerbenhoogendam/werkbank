@@ -12,8 +12,16 @@ enum W {
     static let faint = Color(red: 0xA8 / 255, green: 0xA8 / 255, blue: 0x9E / 255)
     static let line = Color(red: 0xDA / 255, green: 0xDA / 255, blue: 0xD2 / 255)
     static let well = Color(red: 0xEC / 255, green: 0xEC / 255, blue: 0xE5 / 255)
-    static let lime = Color(red: 0xD4 / 255, green: 0xFF / 255, blue: 0x1E / 255)
-    static let olive = Color(red: 0x4F / 255, green: 0x5E / 255, blue: 0x00 / 255)
+    /// Accent en bijschriftkleur volgen het thema van de app (Limoen of Blauw, via de gedeelde map).
+    static var isBlue: Bool { WidgetShare.defaults?.string(forKey: "phone.theme") == "blauw" }
+    static var lime: Color {
+        isBlue ? Color(red: 0x2E / 255, green: 0xC5 / 255, blue: 0xFF / 255)
+               : Color(red: 0xD4 / 255, green: 0xFF / 255, blue: 0x1E / 255)
+    }
+    static var olive: Color {
+        isBlue ? Color(red: 0x00 / 255, green: 0x4E / 255, blue: 0x73 / 255)
+               : Color(red: 0x4F / 255, green: 0x5E / 255, blue: 0x00 / 255)
+    }
     static let late = Color(red: 0xFF / 255, green: 0x6A / 255, blue: 0x00 / 255)
 
     static func poster(_ size: CGFloat) -> Font { .custom("BebasNeue-Regular", size: size) }

@@ -1,5 +1,6 @@
 import CoreText
 import SwiftUI
+import WidgetKit
 
 // De iPhone-app in de stijl Etiket (licht): gebroken wit papier, witte kaarten met een haarlijn, inkt, één limoen.
 // Diepte is subtiel: kaarten liggen iets boven het papier (zachte slagschaduw), putjes en sporen liggen erin (schaduw
@@ -13,11 +14,13 @@ enum Ph {
     static let ink = Color(hex: 0x0B0B0B)
     static let ink2 = Color(hex: 0x55554F)
     static let ink3 = Color(hex: 0x7A7A72)
-    static let lime = Color(hex: 0xD4FF1E)
-    static let olive = Color(hex: 0x4F5E00)
+    /// De accentkleur van het thema (Limoen of Blauw, Voorkeuren › Weergave); de naam blijft `lime`.
+    static var lime: Color { PhThemeStore.shared.accent.accent }
+    /// De donkere bijschriftkleur die bij het accent hoort (olijf of donkerblauw).
+    static var olive: Color { PhThemeStore.shared.accent.dark }
     static let well = Color(hex: 0xECECE5)
     static let band = Color(hex: 0xF0F0E9)
-    static let chosen = Color(hex: 0xF3F6E4)
+    static var chosen: Color { PhThemeStore.shared.accent.chosen }
     /// Datum van een mail met ster die blijft liggen: na meer dan 4 dagen, na meer dan 6 dagen.
     static let late = Color(hex: 0xFF6A00)
     static let urgent = Color(hex: 0xFF0055)
@@ -577,5 +580,71 @@ struct PhSegmentLayout: Layout {
         let growing = fixed.filter { !$0 }.count
         let extra = growing > 0 ? (available - total) / CGFloat(growing) : 0
         return ideal.enumerated().map { index, width in width + (fixed[index] ? 0 : extra) }
+    }
+}
+
+// MARK: - Thema
+
+/// Het kleurthema: alles blijft Etiket, alleen limoen, het olijf van de bijschriften en de tint van een gekozen rij
+/// wisselen. Blauw is B2 van het canvas (bord "Thema Etiket blauw").
+enum PhAccent: String, CaseIterable {
+    case limoen, blauw
+
+    var title: String {
+        switch self {
+        case .limoen: "Limoen"
+        case .blauw: "Blauw"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .limoen: Color(hex: 0xD4FF1E)
+        case .blauw: Color(hex: 0x2EC5FF)
+        }
+    }
+
+    var dark: Color {
+        switch self {
+        case .limoen: Color(hex: 0x4F5E00)
+        case .blauw: Color(hex: 0x004E73)
+        }
+    }
+
+    var chosen: Color {
+        switch self {
+        case .limoen: Color(hex: 0xF3F6E4)
+        case .blauw: Color(hex: 0xE4F5FC)
+        }
+    }
+}
+
+/// Het gekozen thema. Views die `Ph.lime` lezen tekenen vanzelf opnieuw als het wisselt (Observation).
+@Observable
+final class PhThemeStore {
+    static let shared = PhThemeStore()
+    static let key = "phone.theme"
+
+    private(set) var accent: PhAccent = PhAccent(rawValue: UserDefaults.standard.string(forKey: PhThemeStore.key) ?? "")
+        ?? .limoen
+
+    func set(_ accent: PhAccent) {
+        self.accent = accent
+        UserDefaults.standard.set(accent.rawValue, forKey: Self.key)
+        shareWithWidgets()
+    }
+
+    /// Na het ophalen van de voorkeuren via iCloud.
+    func reload() {
+        let stored = PhAccent(rawValue: UserDefaults.standard.string(forKey: Self.key) ?? "") ?? .limoen
+        if stored != accent { accent = stored }
+        shareWithWidgets()
+    }
+
+    /// De widgets lezen het thema uit de gedeelde map.
+    func shareWithWidgets() {
+        guard WidgetShare.defaults?.string(forKey: Self.key) != accent.rawValue else { return }
+        WidgetShare.defaults?.set(accent.rawValue, forKey: Self.key)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

@@ -290,11 +290,15 @@ struct PhonePreferencesView: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Ph.hair).frame(height: 1) }
     }
 
-    /// Het app-icoon geldt alleen voor deze telefoon: iOS meldt de wissel zelf, dus het gaat niet via iCloud.
+    /// Kleur (via iCloud) en het app-icoon (alleen deze telefoon: iOS meldt de wissel zelf).
     private var appIcon: some View {
         VStack(alignment: .leading, spacing: 8) {
-            section("Icoon")
+            section("Weergave")
             VStack(alignment: .leading, spacing: 0) {
+                choice("Kleur", selection: Binding(get: { PhThemeStore.shared.accent.rawValue }, set: { value in
+                    PhThemeStore.shared.set(PhAccent(rawValue: value) ?? .limoen)
+                    sync.set(value, forKey: PhThemeStore.key)
+                }), options: PhAccent.allCases.map { ($0.rawValue, $0.title) })
                 choice("App-icoon", selection: Binding(get: { icon }, set: setIcon),
                        options: [("", "Papier"), ("AppIconLimoen", "Limoen"), ("AppIconOranje", "Oranje")])
                 if let iconError {
