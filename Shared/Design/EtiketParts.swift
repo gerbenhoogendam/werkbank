@@ -7,9 +7,15 @@ import SwiftUI
 enum Etiket {
     static let limeHex: UInt32 = 0xD4FF1E
     static let oliveHex: UInt32 = 0x4F5E00
+    /// Etiket blauw: blauw in plaats van limoen, donkerblauw in plaats van olijf.
+    static let blueHex: UInt32 = 0x2EC5FF
+    static let navyHex: UInt32 = 0x004E73
     static let inkHex: UInt32 = 0x0B0B0B
-    /// Het limoen als vlak; wat erop staat is altijd `ink`.
-    static var lime: Color { Color(hex: limeHex) }
+    static var isBlue: Bool { ThemeStore.shared.theme.id == WerkbankTheme.etiketBlauw.id }
+    /// Het limoen (of blauw) als vlak; wat erop staat is altijd `ink`.
+    static var lime: Color { Color(hex: isBlue ? blueHex : limeHex) }
+    /// Olijf (of donkerblauw): het accent als tekst of lijn op licht.
+    static var olive: Color { Color(hex: isBlue ? navyHex : oliveHex) }
     static var ink: Color { Color(hex: inkHex) }
     /// De rand van een knopje of veld: iets sterker dan de haarlijn.
     static var edge: Color { ThingsColor.textPrimary.opacity(0.18) }
@@ -82,7 +88,7 @@ struct EtiketCorners: View {
 
     private var mark: some View {
         Rectangle().fill(Etiket.lime)
-            .overlay(Rectangle().strokeBorder(Color(hex: Etiket.oliveHex), lineWidth: scheme == .dark ? 0 : 1))
+            .overlay(Rectangle().strokeBorder(Etiket.olive, lineWidth: scheme == .dark ? 0 : 1))
             .frame(width: size, height: size)
     }
 }

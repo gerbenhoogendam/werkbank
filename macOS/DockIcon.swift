@@ -4,7 +4,7 @@ import AppKit
 /// draait; Finder, Launchpad en de app-wisselaar tonen het app-icoon (Papier). Ook Papier wordt hier gezet: het Dock
 /// houdt anders soms een oud icoon uit de cache van macOS vast.
 enum DockIcon: String, CaseIterable, Identifiable {
-    case papier, limoen, oranje
+    case papier, limoen, oranje, blauw
 
     static let key = "dockIcon"
 
@@ -15,6 +15,7 @@ enum DockIcon: String, CaseIterable, Identifiable {
         case .papier: "Papier"
         case .limoen: "Limoen"
         case .oranje: "Oranje"
+        case .blauw: "Blauw"
         }
     }
 
@@ -23,6 +24,7 @@ enum DockIcon: String, CaseIterable, Identifiable {
         case .papier: "DockIconPapier"
         case .limoen: "DockIconLimoen"
         case .oranje: "DockIconOranje"
+        case .blauw: "DockIconBlauw"
         }
     }
 

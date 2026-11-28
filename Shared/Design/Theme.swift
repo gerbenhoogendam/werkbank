@@ -145,10 +145,11 @@ struct WerkbankTheme: Identifiable, Equatable {
 
     func color(_ role: ThemeRole) -> ThemeColor { colors[role] ?? Self.standaard.colors[role] ?? ThemeColor(0, 0) }
 
-    var look: ThemeLook { ThemeLook(rawValue: id) ?? .standaard }
+    /// Etiket blauw heeft dezelfde vorm als Etiket.
+    var look: ThemeLook { id == "etiketblauw" ? .etiket : (ThemeLook(rawValue: id) ?? .standaard) }
 
     static let all: [WerkbankTheme] = [standaard, wandklok, tischsuper, principes, sneeuwwitje, rekenmachine, drukproef, spark,
-                                       karmijn, telemetrie, viertakt, puls, diskette, etiket]
+                                       karmijn, telemetrie, viertakt, puls, diskette, etiket, etiketBlauw]
 
     static func named(_ id: String) -> WerkbankTheme { all.first { $0.id == id } ?? standaard }
 }
@@ -381,20 +382,32 @@ extension WerkbankTheme {
     /// rechthoekig, koppen en cijfers in smalle kapitalen (Bebas Neue) en bijschriften met een streepje ervoor (zie
     /// `EtiketParts`). Licht: gebroken wit met dezelfde vorm; limoen alleen als vlak, kleine accenten olijfgroen.
     /// Naar het ontwerp in Claude Design ("Werkbank thema Etiket").
-    static let etiket = WerkbankTheme(id: "etiket", name: "Etiket", colors: [
+    static let etiket = WerkbankTheme(id: "etiket", name: "Etiket",
+                                      colors: etiketColors(light: Etiket.oliveHex, dark: Etiket.limeHex),
+                                      numberFamily: "Bebas Neue", cardRadius: 0)
+
+    /// Etiket met blauw in plaats van limoen (en donkerblauw in plaats van olijf), zoals het thema Blauw op de iPhone.
+    static let etiketBlauw = WerkbankTheme(id: "etiketblauw", name: "Etiket blauw",
+                                           colors: etiketColors(light: Etiket.navyHex, dark: Etiket.blueHex),
+                                           numberFamily: "Bebas Neue", cardRadius: 0)
+
+    /// De kleuren van Etiket; `light` is het accent als tekst op licht (olijf), `dark` het felle accent (limoen).
+    private static func etiketColors(light: UInt32, dark: UInt32) -> [ThemeRole: ThemeColor] {
+        [
         .window: ThemeColor(0xECECE6, 0x0A0A0A), .mail: ThemeColor(0xFAFAF7, 0x111111),
         .mailHeader: ThemeColor(0xFAFAF7, 0x111111), .board: ThemeColor(0xFAFAF7, 0x111111),
         .column: ThemeColor(0xF2F2EC, 0x161616), .card: ThemeColor(0xFFFFFF, 0x1B1B1B),
         .agenda: ThemeColor(0xFAFAF7, 0x111111), .timeList: ThemeColor(0xFAFAF7, 0x111111),
         .surface: ThemeColor(0xFAFAF7, 0x111111), .surfaceAlt: ThemeColor(0xF2F2EC, 0x161616),
         .text: ThemeColor(0x0B0B0B, 0xF2F2F2), .textSecondary: ThemeColor(0x55554F, 0xA8A8A8),
-        .textTertiary: ThemeColor(0x66665F, 0x8C8C8C), .fieldLabel: ThemeColor(Etiket.oliveHex, Etiket.limeHex),
+        .textTertiary: ThemeColor(0x66665F, 0x8C8C8C), .fieldLabel: ThemeColor(light, dark),
         .separator: ThemeColor(0xDCDCD4, 0x262626), .checkbox: ThemeColor(0x8A8A82, 0x6E6E6E),
-        .accent: ThemeColor(Etiket.oliveHex, Etiket.limeHex), .selection: ThemeColor(0xE9E9E1, 0x1E1E1E),
-        .running: ThemeColor(Etiket.oliveHex, Etiket.limeHex), .today: ThemeColor(Etiket.oliveHex, Etiket.limeHex),
+        .accent: ThemeColor(light, dark), .selection: ThemeColor(0xE9E9E1, 0x1E1E1E),
+        .running: ThemeColor(light, dark), .today: ThemeColor(light, dark),
         .deadline: ThemeColor(0xB3300C, 0xFF6A3D), .tag: ThemeColor(0xECECE6, 0x222222),
         .tagText: ThemeColor(0x55554F, 0xBDBDBD), .shadow: ThemeColor(0x000000, 0x000000, lightOpacity: 0, darkOpacity: 0),
-    ], numberFamily: "Bebas Neue", cardRadius: 0)
+        ]
+    }
 }
 
 // MARK: - Opslag en de kleuren die de app gebruikt

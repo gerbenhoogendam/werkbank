@@ -300,7 +300,8 @@ struct PhonePreferencesView: View {
                     sync.set(value, forKey: PhThemeStore.key)
                 }), options: PhAccent.allCases.map { ($0.rawValue, $0.title) })
                 choice("App-icoon", selection: Binding(get: { icon }, set: setIcon),
-                       options: [("", "Papier"), ("AppIconLimoen", "Limoen"), ("AppIconOranje", "Oranje")])
+                       options: [("", "Papier"), ("AppIconLimoen", "Limoen"), ("AppIconOranje", "Oranje"),
+                                ("AppIconBlauw", "Blauw")])
                 if let iconError {
                     Text(iconError)
                         .font(Ph.text(13))

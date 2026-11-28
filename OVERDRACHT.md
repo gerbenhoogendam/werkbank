@@ -766,6 +766,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     Weergave › Kleur: Limoen of Blauw (`#2EC5FF`, bijschrift `#004E73`, gekozen rij `#E4F5FC`). `Ph.lime`, `Ph.olive`
     en `Ph.chosen` lezen `PhThemeStore` (Observation: alles tekent vanzelf opnieuw). Gaat via iCloud (sleutel
     `phone.theme`) en naar de widgets via de App Group (`W.lime`/`W.olive`). Het app-icoon blijft apart te kiezen.
+75. **Blauw ook op de Mac en als icoon** (28 nov). Mac: thema "Etiket blauw" (`WerkbankTheme.etiketBlauw`, zelfde vorm
+    als Etiket via `look`; kleuren uit `etiketColors(light:dark:)` met donkerblauw `#004E73` en blauw `#2EC5FF`);
+    `Etiket.lime`/`Etiket.olive` volgen het gekozen thema. Icoon Blauw (blauw vlak, papieren kolommen, oranje
+    blokje): iPhone `AppIconBlauw` (Voorkeuren › Weergave › App-icoon), Mac Dock `DockIconBlauw`.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
