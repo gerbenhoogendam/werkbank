@@ -534,33 +534,6 @@ struct PhFlow: Layout {
     }
 }
 
-/// Een knop achter een geveegde mail in de stijl van de app: wit (of limoen voor de eerste) met een inktrand, het
-/// zwarte balkje eronder, icoon en woord in inkt. Als beeld, want iOS tekent vegen-knoppen anders zelf (wit op kleur).
-@MainActor
-enum PhSwipeIcon {
-    private static var cache: [String: UIImage] = [:]
-
-    static func image(_ symbol: String, _ title: String, primary: Bool) -> UIImage {
-        let key = "\(symbol)|\(title)|\(primary)"
-        if let hit = cache[key] { return hit }
-        let face = VStack(spacing: 3) {
-            Image(systemName: symbol).font(.system(size: 17, weight: .medium))
-            Text(title.uppercased()).font(Ph.text(8.5, .semibold)).tracking(0.8).lineLimit(1)
-        }
-        .foregroundStyle(Ph.ink)
-        .frame(width: 66, height: 50)
-        .background(primary ? Ph.lime : Ph.card)
-        .overlay(Rectangle().strokeBorder(Ph.ink, lineWidth: 2))
-        .background(Rectangle().fill(Ph.ink).offset(y: 3))
-        .padding(.bottom, 3)
-        let renderer = ImageRenderer(content: face)
-        renderer.scale = 3
-        let image = (renderer.uiImage ?? UIImage()).withRenderingMode(.alwaysOriginal)
-        cache[key] = image
-        return image
-    }
-}
-
 /// Een vak in `PhSegmented` dat niet meegroeit (het icoon voor Alle).
 struct PhSegmentFixed: LayoutValueKey {
     static let defaultValue = false

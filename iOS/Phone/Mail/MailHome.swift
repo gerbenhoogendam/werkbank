@@ -34,6 +34,8 @@ struct MailHome: View {
     @State private var showSettings = false
     @State private var starsOpen = false
     @State private var action: PhoneMailAction?
+    /// De rij die openstaat na vegen (er staat er één tegelijk open).
+    @State private var swipedOpen: String?
 
     private var hiddenBoxes: Set<String> { PhoneMailSettings.hiddenInAll(hiddenRaw) }
 
@@ -365,22 +367,16 @@ struct MailHome: View {
         let left = PhoneMailSettings.order(swipeLeft, in: PhoneMailSettings.swipeLeftOptions)
         let right = PhoneMailSettings.order(swipeRight, in: PhoneMailSettings.swipeRightOptions)
         return ForEach(mails) { mail in
-            row(mail)
-                .contentShape(Rectangle())
-                .onTapGesture { open(mail) }
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-                .listRowBackground(chosen.contains(mail.id) ? Ph.chosen : Ph.card)
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    swipeButton(left[0], mail, primary: true)
-                    swipeButton(left[1], mail)
-                    swipeButton(left[2], mail)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    swipeButton(right[0], mail, primary: true)
-                    swipeButton(right[1], mail)
-                    swipeButton(right[2], mail)
-                }
+            let background = chosen.contains(mail.id) ? Ph.chosen : Ph.card
+            PhSwipeRow(id: mail.id, openID: $swipedOpen, background: background,
+                       leading: right.prefix(3).enumerated().map { swipeAction($1, mail, primary: $0 == 0) },
+                       trailing: left.prefix(3).enumerated().map { swipeAction($1, mail, primary: $0 == 0) },
+                       onTap: { open(mail) }) {
+                row(mail)
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(background)
         }
     }
 
@@ -396,45 +392,29 @@ struct MailHome: View {
     }
 
     /// Een handeling onder het vegen (Voorkeuren: vegen naar links en naar rechts; de gekozen staat vooraan, limoen,
-    /// en gebeurt bij helemaal doorvegen). De knoppen zijn beelden in de stijl van de app op papier.
-    @ViewBuilder
-    private func swipeButton(_ kind: String, _ mail: PhoneMail, primary: Bool = false) -> some View {
+    /// en gebeurt bij helemaal doorvegen).
+    private func swipeAction(_ kind: String, _ mail: PhoneMail, primary: Bool) -> PhSwipeAction {
         switch kind {
         case "archief":
-            Button { archive([mail]) } label: {
-                Image(uiImage: PhSwipeIcon.image("archivebox", "Archief", primary: primary))
-            }
-            .tint(Ph.paper)
-            .accessibilityLabel("Archiveer")
+            return PhSwipeAction(id: kind, symbol: "archivebox", label: "Archiveer", primary: primary) { archive([mail]) }
         case "taak":
-            Button { action = PhoneMailAction(kind: .task, mail: mail) } label: {
-                Image(uiImage: PhSwipeIcon.image("checkmark.square", "Taak", primary: primary))
+            return PhSwipeAction(id: kind, symbol: "checkmark.square", label: "Taak", primary: primary) {
+                action = PhoneMailAction(kind: .task, mail: mail)
             }
-            .tint(Ph.paper)
-            .accessibilityLabel("Taak")
         case "ster":
             let starred = stars.contains(mail.item.threadID)
-            Button { stars.toggle([mail.item.threadID]) } label: {
-                Image(uiImage: PhSwipeIcon.image(starred ? "star.slash" : "star", starred ? "Eraf" : "Ster",
-                                                 primary: primary))
-            }
-            .tint(Ph.paper)
-            .accessibilityLabel(starred ? "Ster eraf" : "Ster")
+            return PhSwipeAction(id: kind, symbol: starred ? "star.slash" : "star", label: starred ? "Ster eraf" : "Ster",
+                                 primary: primary) { stars.toggle([mail.item.threadID]) }
         case "tijd":
-            Button { action = PhoneMailAction(kind: .time, mail: mail) } label: {
-                Image(uiImage: PhSwipeIcon.image("clock", "Tijd", primary: primary))
+            return PhSwipeAction(id: kind, symbol: "clock", label: "Tijd", primary: primary) {
+                action = PhoneMailAction(kind: .time, mail: mail)
             }
-            .tint(Ph.paper)
-            .accessibilityLabel("Tijd")
         default:
-            Button {
-                Task { await gmail.setUnread(!mail.item.isUnread, [(threadID: mail.item.threadID, account: mail.account)]) }
-            } label: {
-                Image(uiImage: PhSwipeIcon.image(mail.item.isUnread ? "envelope.open" : "envelope.badge",
-                                                 mail.item.isUnread ? "Gelezen" : "Ongelezen", primary: primary))
+            let unread = mail.item.isUnread
+            return PhSwipeAction(id: kind, symbol: unread ? "envelope.open" : "envelope.badge",
+                                 label: unread ? "Gelezen" : "Ongelezen", primary: primary) {
+                Task { await gmail.setUnread(!unread, [(threadID: mail.item.threadID, account: mail.account)]) }
             }
-            .tint(Ph.paper)
-            .accessibilityLabel(mail.item.isUnread ? "Gelezen" : "Ongelezen")
         }
     }
 

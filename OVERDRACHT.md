@@ -743,7 +743,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       smal), zodat SUPPORT en NOTIFY niet meer tegen elkaar aan staan.
     - Mail: de knoppen achter een geveegde mail zijn beelden in Etiket-stijl (`PhSwipeIcon`: wit of limoen voor de
       eerste, inktrand, zwart balkje, icoon en woord in inkt) op papier, in plaats van wit op een gekleurd vlak.
-      Werkt alleen als iOS `.alwaysOriginal` in vegen-knoppen respecteert; niet op een toestel gezien.
+      Werkt alleen als iOS `.alwaysOriginal` in vegen-knoppen respecteert; niet op een toestel gezien. Daarna vervangen:
+      iOS 26 tekent veegknoppen als rondjes (het beeld werd afgesneden), dus Mail veegt nu zelf (`PhSwipeRow` in
+      `iOS/Phone/PhoneSwipe.swift`): vierkante knoppen met alleen een icoon, eerste limoen, helemaal doorvegen doet de
+      eerste, één rij tegelijk open. Board gebruikt nog de iOS-veegknoppen.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
