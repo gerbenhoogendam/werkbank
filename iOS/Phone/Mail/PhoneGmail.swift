@@ -391,6 +391,14 @@ final class PhoneGmail {
         return done
     }
 
+    /// Archiveren ongedaan maken: terug in de inbox (en een ster die er was weer terug).
+    func unarchive(_ threads: [(threadID: String, account: String)], starred: Set<String> = []) async {
+        for thread in threads { _ = await modify(thread.threadID, account: thread.account, add: ["INBOX"]) }
+        let restars = threads.map(\.threadID).filter { starred.contains($0) && !PhoneStars.shared.contains($0) }
+        if !restars.isEmpty { PhoneStars.shared.toggle(restars) }
+        for account in Set(threads.map(\.account)) { await reload(account) }
+    }
+
     func trash(_ threads: [(threadID: String, account: String)]) async -> Int {
         threads.forEach { dropFromInbox($0.threadID) }
         var done = 0

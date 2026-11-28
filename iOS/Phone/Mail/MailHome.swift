@@ -541,10 +541,16 @@ struct MailHome: View {
 
     private func archive(_ mails: [PhoneMail]) {
         let threads = mails.map { (threadID: $0.item.threadID, account: $0.account) }
+        let starred = Set(threads.map(\.threadID).filter { stars.contains($0) })
+        let detail = mails.count == 1 ? (mails[0].item.subject.isEmpty ? mails[0].item.senderDisplay : mails[0].item.subject)
+                                      : "\(mails.count) mails"
         endSelection()
         Task {
             let done = await gmail.archive(threads)
-            appState.showToast(done == 1 ? "Mail gearchiveerd" : "\(done) mails gearchiveerd")
+            guard done > 0 else { return appState.showToast("Archiveren mislukt") }
+            PhoneUndo.shared.show("Gearchiveerd", detail: detail) {
+                await PhoneGmail.shared.unarchive(threads, starred: starred)
+            }
         }
     }
 

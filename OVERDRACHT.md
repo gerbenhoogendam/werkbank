@@ -753,6 +753,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     werd tegen de bovenrand geplakt en lag over die van 07:00–08:00 heen (leek één afspraak). Nu 00:00–24:00; bij
     openen scrolt het naar een uur voor nu (niet voor 07:00), maar nooit voorbij de eerste afspraak van de dag
     (`AgendaDates.scrollHour`). Echte overlap stond al naast elkaar (`AgendaPlacedEvent`, lanes).
+72. **iPhone: archiveren ongedaan maken** (28 nov). Na archiveren (vegen, kiezen, in het gesprek) staat zes seconden
+    de balk "Gearchiveerd" met het onderwerp en ONGEDAAN MAKEN boven de tabbalk (`PhoneUndo`, `PhoneUndoBar`, zelfde
+    stijl als Verstuurd). Ongedaan maken zet het gesprek terug in de inbox, ook een ster die er was
+    (`PhoneGmail.unarchive`). Archiveren via "Taak maken" heeft nog geen balk.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

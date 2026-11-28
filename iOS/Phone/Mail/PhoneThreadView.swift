@@ -330,9 +330,13 @@ struct PhoneThreadView: View {
         } else {
             dismiss()
         }
+        let starred: Set<String> = PhoneStars.shared.contains(thread.threadID) ? [thread.threadID] : []
+        let detail = mail.item.subject.isEmpty ? mail.item.senderDisplay : mail.item.subject
         Task {
-            _ = await gmail.archive([thread])
-            appState.showToast("Mail gearchiveerd")
+            guard await gmail.archive([thread]) > 0 else { return appState.showToast("Archiveren mislukt") }
+            PhoneUndo.shared.show("Gearchiveerd", detail: detail) {
+                await PhoneGmail.shared.unarchive([thread], starred: starred)
+            }
         }
     }
 

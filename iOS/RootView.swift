@@ -41,14 +41,19 @@ struct RootView: View {
                 PhTabBar(tab: $navigation.tab, timerRunning: !running.isEmpty)
             }
 
-            // Verstuurd, met ongedaan maken: boven de tabbalk.
-            if let pending = outbox.pending {
-                VStack {
+            // Verstuurd of gearchiveerd, met ongedaan maken: boven de tabbalk.
+            if outbox.pending != nil || PhoneUndo.shared.pending != nil {
+                VStack(spacing: 8) {
                     Spacer()
-                    PhoneOutboxBar(pending: pending)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 72)
+                    if let item = PhoneUndo.shared.pending {
+                        PhoneUndoBar(item: item)
+                    }
+                    if let pending = outbox.pending {
+                        PhoneOutboxBar(pending: pending)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 72)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
