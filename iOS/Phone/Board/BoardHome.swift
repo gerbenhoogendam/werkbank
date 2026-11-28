@@ -24,6 +24,8 @@ struct BoardHome: View {
     @State private var newTask: BoardNewTaskStart?
     @State private var draft = ""
     @State private var editing: TodoCard?
+    /// De kaart die openstaat na vegen.
+    @State private var swipedOpen: String?
     /// Afgevinkt; de kaart gaat even later naar het archief.
     @State private var completing: Set<UUID> = []
     @FocusState private var addFocused: Bool
@@ -241,46 +243,28 @@ struct BoardHome: View {
                     .listRowBackground(Color.clear)
             }
             ForEach(columnCards) { card in
-                BoardTaskRow(card: card, minutes: minutes[card.id] ?? 0, isRunning: running.contains(card.id),
-                             isCompleting: completing.contains(card.id)) {
-                    complete(card)
-                } onOpen: {
-                    editing = card
+                PhSwipeRow(id: card.id.uuidString, openID: $swipedOpen, background: .clear,
+                           leading: leadingActions(card, next: next),
+                           trailing: [
+                               PhSwipeAction(id: "afronden", symbol: "checkmark", label: "Afronden", primary: true) {
+                                   complete(card)
+                               },
+                               PhSwipeAction(id: "verwijder", symbol: "trash", label: "Verwijder") {
+                                   withAnimation { BoardService.delete(card, in: context) }
+                               },
+                           ],
+                           fullTrailing: false,
+                           onTap: { editing = card }) {
+                    BoardTaskRow(card: card, minutes: minutes[card.id] ?? 0, isRunning: running.contains(card.id),
+                                 isCompleting: completing.contains(card.id)) {
+                        complete(card)
+                    } onOpen: {
+                        editing = card
+                    }
                 }
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    if let next {
-                        Button {
-                            withAnimation { BoardService.move(card, to: next, index: 0, undoable: true, in: context) }
-                            appState.showToast("Naar \(next.title)")
-                        } label: {
-                            Label(next.title, systemImage: "arrow.right")
-                        }
-                        .tint(Ph.ink)
-                    }
-                    Button {
-                        TimerService.startTimer(for: card, in: context)
-                        appState.showToast("Timer gestart: \(card.title)")
-                    } label: {
-                        Label("Timer", systemImage: "play.fill")
-                    }
-                    .tint(Ph.olive)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        withAnimation { BoardService.delete(card, in: context) }
-                    } label: {
-                        Label("Verwijder", systemImage: "trash")
-                    }
-                    Button {
-                        complete(card)
-                    } label: {
-                        Label("Afronden", systemImage: "checkmark")
-                    }
-                    .tint(Ph.olive)
-                }
                 .contextMenu { menu(for: card, columns: columns) }
             }
         }
@@ -288,6 +272,22 @@ struct BoardHome: View {
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 1)
         .contentMargins(.bottom, 16, for: .scrollContent)
+    }
+
+    /// Naar rechts vegen: naar de volgende kolom (limoen, ook bij helemaal doorvegen) en de timer starten.
+    private func leadingActions(_ card: TodoCard, next: BoardColumn?) -> [PhSwipeAction] {
+        var actions: [PhSwipeAction] = []
+        if let next {
+            actions.append(PhSwipeAction(id: "volgende", symbol: "arrow.right", label: "Naar \(next.title)", primary: true) {
+                withAnimation { BoardService.move(card, to: next, index: 0, undoable: true, in: context) }
+                appState.showToast("Naar \(next.title)")
+            })
+        }
+        actions.append(PhSwipeAction(id: "timer", symbol: "play.fill", label: "Timer", primary: next == nil) {
+            TimerService.startTimer(for: card, in: context)
+            appState.showToast("Timer gestart: \(card.title)")
+        })
+        return actions
     }
 
     @ViewBuilder private func menu(for card: TodoCard, columns: [BoardColumn]) -> some View {

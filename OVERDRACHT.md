@@ -746,7 +746,13 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
       Werkt alleen als iOS `.alwaysOriginal` in vegen-knoppen respecteert; niet op een toestel gezien. Daarna vervangen:
       iOS 26 tekent veegknoppen als rondjes (het beeld werd afgesneden), dus Mail veegt nu zelf (`PhSwipeRow` in
       `iOS/Phone/PhoneSwipe.swift`): vierkante knoppen met alleen een icoon, eerste limoen, helemaal doorvegen doet de
-      eerste, één rij tegelijk open. Board gebruikt nog de iOS-veegknoppen.
+      eerste, één rij tegelijk open. Board veegt ook zo: naar rechts volgende kolom (limoen) en timer, naar links
+      afronden (limoen) en verwijderen; doorvegen naar links doet niets (`fullTrailing: false`), zodat verwijderen
+      altijd een tik is.
+71. **iPhone Agenda: hele dag in het grid** (28 nov). Het grid liep van 07:00 tot 19:00; een afspraak van 06:00–07:00
+    werd tegen de bovenrand geplakt en lag over die van 07:00–08:00 heen (leek één afspraak). Nu 00:00–24:00; bij
+    openen scrolt het naar een uur voor nu (niet voor 07:00), maar nooit voorbij de eerste afspraak van de dag
+    (`AgendaDates.scrollHour`). Echte overlap stond al naast elkaar (`AgendaPlacedEvent`, lanes).
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

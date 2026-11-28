@@ -19,6 +19,9 @@ struct PhSwipeRow<Content: View>: View {
     var background: Color = Ph.card
     let leading: [PhSwipeAction]
     let trailing: [PhSwipeAction]
+    /// Helemaal doorvegen voert de eerste uit (uit voor iets als verwijderen).
+    var fullLeading = true
+    var fullTrailing = true
     let onTap: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -105,10 +108,10 @@ struct PhSwipeRow<Content: View>: View {
                 let predicted = start + value.predictedEndTranslation.width
                 let full = width * 0.6
                 withAnimation(.easeOut(duration: 0.2)) {
-                    if offset < -full || predicted < -width, let first = trailing.first {
+                    if fullTrailing, offset < -full || predicted < -width, let first = trailing.first {
                         offset = 0
                         first.run()
-                    } else if offset > full || predicted > width, let first = leading.first {
+                    } else if fullLeading, offset > full || predicted > width, let first = leading.first {
                         offset = 0
                         first.run()
                     } else if offset < -reveal(trailing.count) / 2 {

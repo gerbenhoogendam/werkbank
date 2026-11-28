@@ -17,9 +17,12 @@ enum AgendaDates {
         return cal
     }()
 
-    /// Het grid van de dag- en weekweergave: 07:00 tot 19:00.
-    static let startHour = 7
-    static let endHour = 19
+    /// Het grid van de dag- en weekweergave: de hele dag. Eerder 07:00–19:00, maar een afspraak buiten die uren werd
+    /// dan tegen de rand geplakt en lag over een andere heen (bv. 06:00–07:00 over 07:00–08:00).
+    static let startHour = 0
+    static let endHour = 24
+    /// Waar het grid bij openen naartoe scrolt als er niets eerder staat.
+    static let dayStartHour = 7
     static let hourHeight: CGFloat = 52
 
     private static func formatter(_ pattern: String) -> DateFormatter {
@@ -125,6 +128,17 @@ enum AgendaDates {
     }
 
     static var gridHeight: CGFloat { CGFloat(endHour - startHour) * hourHeight }
+
+    /// Het uur om bij openen naartoe te scrollen: een uur voor nu (niet voor 07:00), maar nooit voorbij de eerste
+    /// afspraak met een tijd, zodat een vroege afspraak in beeld is.
+    static func scrollHour(events: [AgendaEvent]) -> Int {
+        let now = calendar.component(.hour, from: .now)
+        var target = max(now - 1, dayStartHour)
+        if let first = events.filter({ !$0.isAllDay }).map({ calendar.component(.hour, from: $0.start) }).min() {
+            target = min(target, first)
+        }
+        return min(max(target, startHour), endHour - 1)
+    }
 }
 
 extension AgendaEvent {

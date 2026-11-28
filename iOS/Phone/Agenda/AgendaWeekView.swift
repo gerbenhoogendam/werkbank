@@ -23,8 +23,7 @@ struct AgendaWeekGrid: View {
                         .padding(.bottom, 24)
                 }
                 .onAppear {
-                    let hour = Calendar.current.component(.hour, from: .now)
-                    let target = min(max(hour - 1, AgendaDates.startHour), AgendaDates.endHour - 1)
+                    let target = AgendaDates.scrollHour(events: events)
                     Task { @MainActor in proxy.scrollTo(target, anchor: .top) }
                 }
             }
