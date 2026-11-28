@@ -128,8 +128,6 @@ enum AgendaDates {
 }
 
 extension AgendaEvent {
-    /// Afspraken die met "GH" beginnen zijn persoonlijk: niet in het grid, maar in de lijst erboven.
-    var isPersonal: Bool { title.hasPrefix("GH") }
 
     func overlaps(day: Date) -> Bool {
         let start = AgendaDates.startOfDay(day)
@@ -152,9 +150,10 @@ struct AgendaPlacedEvent: Identifiable {
     }
 }
 
-// MARK: - Persoonlijke afspraken (GH)
+// MARK: - Hele dagen
 
-/// Compacte lijst bovenaan: één regel van 22 pt per afspraak, in een putje met een inktlijn eronder.
+/// Compacte lijst bovenaan met afspraken van een hele dag: één regel van 22 pt per afspraak, in een putje met een
+/// inktlijn eronder.
 struct AgendaPersonalBand: View {
     let events: [AgendaEvent]
     let onOpen: (AgendaEvent) -> Void
@@ -163,9 +162,8 @@ struct AgendaPersonalBand: View {
         if !events.isEmpty {
             VStack(spacing: 0) {
                 ForEach(events) { event in
-                    Button {
-                        onOpen(event)
-                    } label: {
+                    // Een tik opent de afspraak; een veeg niet (dan gaat de agenda een dag verder).
+                    Group {
                         HStack(spacing: 8) {
                             Text(AgendaDates.weekdayShort(event.start))
                                 .font(Ph.text(9.5, .semibold))
@@ -188,7 +186,8 @@ struct AgendaPersonalBand: View {
                         .overlay(alignment: .bottom) { Rectangle().fill(Ph.line).frame(height: 1) }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .onTapGesture { onOpen(event) }
+                    .accessibilityAddTraits(.isButton)
                 }
             }
             .phWell(Ph.band)

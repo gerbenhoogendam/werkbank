@@ -118,12 +118,11 @@ struct AgendaWeekGrid: View {
                 let bottom = AgendaDates.offset(of: event.end, on: day)
                 let height = max(16, bottom - top - 2)
                 let laneWidth = width / CGFloat(placed.lanes)
-                Button {
-                    onOpen(event)
-                } label: {
-                    AgendaBlock(event: event, height: height, small: days.count > 3)
-                }
-                .buttonStyle(.plain)
+                // Een tik opent de afspraak; een veeg niet.
+                AgendaBlock(event: event, height: height, small: days.count > 3)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onOpen(event) }
+                    .accessibilityAddTraits(.isButton)
                 .frame(width: max(0, laneWidth - 2), height: height)
                 .offset(x: 1 + laneWidth * CGFloat(placed.lane), y: top + 1)
             }

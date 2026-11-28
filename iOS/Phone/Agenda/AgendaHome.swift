@@ -2,7 +2,7 @@ import SwiftUI
 
 /// De agenda op de iPhone: dag (werkweekstrook en uurgrid), drie werkdagen, werkweek in vijf kolommen of de lijst van
 /// de komende twee weken.
-/// Bij Dag staan afspraken die met "GH" beginnen compact bovenaan; bij 3 dagen en Week staan ze gewoon in het grid.
+/// Afspraken die met "GH" beginnen staan gewoon in het grid, net als de rest; bovenaan alleen afspraken van een hele dag.
 struct AgendaHome: View {
     private let service = CalendarService.shared
 
@@ -67,7 +67,7 @@ struct AgendaHome: View {
         case .week:
             return AgendaDates.workweekRange(selected)
         case .lijst:
-            return "KOMEND · \(upcoming.filter { !$0.isPersonal }.count) AFSPRAKEN"
+            return "KOMEND · \(upcoming.count) AFSPRAKEN"
         }
     }
 
@@ -228,12 +228,12 @@ struct AgendaHome: View {
             let weekEvents = fetch(from: monday, to: AgendaDates.adding(days: 7, to: monday))
             let dayEvents = weekEvents.filter { $0.overlaps(day: selected) }
             AgendaDayStrip(days: AgendaDates.workdays(of: selected), selected: stripSelection,
-                           events: weekEvents.filter { !$0.isPersonal })
+                           events: weekEvents)
                 .contentShape(Rectangle())
                 .simultaneousGesture(weekSwipe)
             VStack(alignment: .leading, spacing: 10) {
-                AgendaPersonalBand(events: dayEvents.filter { $0.isPersonal || $0.isAllDay }, onOpen: open)
-                AgendaDayGrid(day: selected, events: dayEvents.filter { !$0.isPersonal && !$0.isAllDay }, onOpen: open)
+                AgendaPersonalBand(events: dayEvents.filter(\.isAllDay), onOpen: open)
+                AgendaDayGrid(day: selected, events: dayEvents.filter { !$0.isAllDay }, onOpen: open)
             }
             .id(selected)
             .transition(.push(from: slideEdge))

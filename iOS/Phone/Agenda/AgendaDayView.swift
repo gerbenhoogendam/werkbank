@@ -131,12 +131,11 @@ struct AgendaDayGrid: View {
         let bottom = AgendaDates.offset(of: event.end, on: day)
         let height = max(20, bottom - top - 2)
         let laneWidth = width / CGFloat(placed.lanes)
-        return Button {
-            onOpen(event)
-        } label: {
-            AgendaBlock(event: event, height: height)
-        }
-        .buttonStyle(.plain)
+        // Een tik opent de afspraak; een veeg die op de afspraak begint niet (dan gaat de agenda een dag verder).
+        return AgendaBlock(event: event, height: height)
+            .contentShape(Rectangle())
+            .onTapGesture { onOpen(event) }
+            .accessibilityAddTraits(.isButton)
         .frame(width: max(0, laneWidth - 2), height: height)
         .offset(x: labelWidth + gap + laneWidth * CGFloat(placed.lane), y: top + 1)
     }

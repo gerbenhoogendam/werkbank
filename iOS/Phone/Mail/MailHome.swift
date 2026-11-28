@@ -37,6 +37,22 @@ struct MailHome: View {
 
     private var hiddenBoxes: Set<String> { PhoneMailSettings.hiddenInAll(hiddenRaw) }
 
+    /// Eén keer per keer dat de app start: Mail opent in GH.
+    private static var startedInGH = false
+
+    /// Bij het openen van de app begint Mail in GH (niet gecombineerd); ook als de mailboxen pas later binnen zijn.
+    private func startInGH() {
+        guard !Self.startedInGH, let gh = ghAccount else { return }
+        Self.startedInGH = true
+        box = gh
+    }
+
+    /// De mailbox GH: op korte naam, anders het deel voor de @.
+    private var ghAccount: String? {
+        gmail.accounts.first { gmail.displayName($0).lowercased() == "gh" }
+            ?? gmail.accounts.first { $0.split(separator: "@").first?.lowercased() == "gh" }
+    }
+
     /// Eén mailbox, of bij Alle de mailboxen die in Alle getoond worden.
     private var shownAccounts: [String] {
         let picked = gmail.accounts.filter(chosenBoxes.contains)
@@ -120,9 +136,11 @@ struct MailHome: View {
             }
         }
         .task {
+            startInGH()
             if gmail.accounts.isEmpty { welcomeActive = true }
             if gmail.inbox.isEmpty { await gmail.reloadAll() }
         }
+        .onChange(of: gmail.accounts.count) { _, _ in startInGH() }
         .onChange(of: PhoneNavigation.shared.inboxRequest) { _, _ in
             path = []
             selecting = false
@@ -215,14 +233,13 @@ struct MailHome: View {
     }
 
     private var boxItems: [PhSegmented<String>.Item] {
-        let inAll = gmail.accounts.filter { !hiddenBoxes.contains($0) }
-        let alle = PhSegmented<String>.Item(value: "", title: "Alle",
-                                            count: (inAll.isEmpty ? gmail.accounts : inAll)
-                                                .reduce(0) { $0 + (gmail.inbox[$1]?.filter(\.isUnread).count ?? 0) })
-        return [alle] + gmail.accounts.map { account in
+        let alle = PhSegmented<String>.Item(value: "", title: "Alle mailboxen", count: nil, icon: "tray.2")
+        // GH vooraan, dan de rest; Alle (gecombineerd) helemaal rechts als icoon: twee gestapelde bakjes.
+        let ordered = ghAccount.map { gh in [gh] + gmail.accounts.filter { $0 != gh } } ?? gmail.accounts
+        return ordered.map { account in
             PhSegmented<String>.Item(value: account, title: gmail.displayName(account),
                                      count: gmail.inbox[account]?.filter(\.isUnread).count ?? 0)
-        }
+        } + [alle]
     }
 
     // MARK: Ster
@@ -355,12 +372,12 @@ struct MailHome: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(chosen.contains(mail.id) ? Ph.chosen : Ph.card)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    swipeButton(left[0], mail)
+                    swipeButton(left[0], mail, primary: true)
                     swipeButton(left[1], mail)
                     swipeButton(left[2], mail)
                 }
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    swipeButton(right[0], mail)
+                    swipeButton(right[0], mail, primary: true)
                     swipeButton(right[1], mail)
                     swipeButton(right[2], mail)
                 }
@@ -378,36 +395,46 @@ struct MailHome: View {
         }
     }
 
-    /// Een handeling onder het vegen (Voorkeuren: vegen naar links en naar rechts; de gekozen staat vooraan en
-    /// gebeurt bij helemaal doorvegen).
+    /// Een handeling onder het vegen (Voorkeuren: vegen naar links en naar rechts; de gekozen staat vooraan, limoen,
+    /// en gebeurt bij helemaal doorvegen). De knoppen zijn beelden in de stijl van de app op papier.
     @ViewBuilder
-    private func swipeButton(_ kind: String, _ mail: PhoneMail) -> some View {
+    private func swipeButton(_ kind: String, _ mail: PhoneMail, primary: Bool = false) -> some View {
         switch kind {
         case "archief":
-            Button { archive([mail]) } label: { Label("Archiveer", systemImage: "archivebox") }
-                .tint(Ph.olive)
+            Button { archive([mail]) } label: {
+                Image(uiImage: PhSwipeIcon.image("archivebox", "Archief", primary: primary))
+            }
+            .tint(Ph.paper)
+            .accessibilityLabel("Archiveer")
         case "taak":
             Button { action = PhoneMailAction(kind: .task, mail: mail) } label: {
-                Label("Taak", systemImage: "checkmark.square")
+                Image(uiImage: PhSwipeIcon.image("checkmark.square", "Taak", primary: primary))
             }
-            .tint(Ph.ink)
+            .tint(Ph.paper)
+            .accessibilityLabel("Taak")
         case "ster":
+            let starred = stars.contains(mail.item.threadID)
             Button { stars.toggle([mail.item.threadID]) } label: {
-                Label(stars.contains(mail.item.threadID) ? "Ster eraf" : "Ster", systemImage: "star")
+                Image(uiImage: PhSwipeIcon.image(starred ? "star.slash" : "star", starred ? "Eraf" : "Ster",
+                                                 primary: primary))
             }
-            .tint(Ph.ink3)
+            .tint(Ph.paper)
+            .accessibilityLabel(starred ? "Ster eraf" : "Ster")
         case "tijd":
             Button { action = PhoneMailAction(kind: .time, mail: mail) } label: {
-                Label("Tijd", systemImage: "clock")
+                Image(uiImage: PhSwipeIcon.image("clock", "Tijd", primary: primary))
             }
-            .tint(Ph.ink)
+            .tint(Ph.paper)
+            .accessibilityLabel("Tijd")
         default:
             Button {
                 Task { await gmail.setUnread(!mail.item.isUnread, [(threadID: mail.item.threadID, account: mail.account)]) }
             } label: {
-                Label(mail.item.isUnread ? "Gelezen" : "Ongelezen", systemImage: "envelope")
+                Image(uiImage: PhSwipeIcon.image(mail.item.isUnread ? "envelope.open" : "envelope.badge",
+                                                 mail.item.isUnread ? "Gelezen" : "Ongelezen", primary: primary))
             }
-            .tint(Ph.ink2)
+            .tint(Ph.paper)
+            .accessibilityLabel(mail.item.isUnread ? "Gelezen" : "Ongelezen")
         }
     }
 

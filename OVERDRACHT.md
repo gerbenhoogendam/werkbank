@@ -732,6 +732,16 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     iPhone `PhoneGmail.move`); op de iPhone werd een mislukte prullenbak eerder genegeerd. (3) De kolommen nemen een
     sleep aan als verplaatsen (`ColumnMoveDrop`, cursor zonder plusje). Welke van deze de kopie gaf, is niet vastgesteld;
     op de Mac bevestigd: geen kopie meer (27 nov).
+70. **iPhone, na gebruik** (28 nov).
+    - Agenda: GH-afspraken worden nergens meer apart gezet (`isPersonal` en de GH-regels in de lijst zijn weg); ze
+      staan in het grid zoals de rest. De band bovenaan toont alleen afspraken van een hele dag.
+    - Agenda: afspraken openen met een tik (`onTapGesture`), niet meer als knop; een veeg die op een afspraak begint
+      gaat alleen een dag verder en opent de kaart niet.
+    - Mail: de mailboxbalk begint met GH, dan de rest; Alle (gecombineerd) staat rechts als icoon (`tray.2`,
+      `PhSegmented.Item.icon`). Bij het starten van de app opent Mail in GH (`startInGH`).
+    - Mail: de knoppen achter een geveegde mail zijn beelden in Etiket-stijl (`PhSwipeIcon`: wit of limoen voor de
+      eerste, inktrand, zwart balkje, icoon en woord in inkt) op papier, in plaats van wit op een gekleurd vlak.
+      Werkt alleen als iOS `.alwaysOriginal` in vegen-knoppen respecteert; niet op een toestel gezien.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

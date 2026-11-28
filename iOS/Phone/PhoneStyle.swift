@@ -220,6 +220,8 @@ struct PhSegmented<Value: Hashable>: View {
         let value: Value
         let title: String
         var count: Int? = nil
+        /// Een icoon in plaats van de titel (de titel blijft de toegankelijke naam).
+        var icon: String? = nil
     }
 
     let items: [Item]
@@ -261,11 +263,17 @@ struct PhSegmented<Value: Hashable>: View {
 
     private func cell(_ item: Item, on: Bool) -> some View {
         HStack(spacing: 5) {
-            Text(item.title.uppercased())
-                .font(Ph.text(11.5, .semibold))
-                .tracking(1.3)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            if let icon = item.icon {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .accessibilityLabel(item.title)
+            } else {
+                Text(item.title.uppercased())
+                    .font(Ph.text(11.5, .semibold))
+                    .tracking(1.3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
             if let count = item.count, count > 0 {
                 Text("\(count)")
                     .font(Ph.text(10.5, .semibold))
@@ -518,5 +526,32 @@ struct PhFlow: Layout {
             rows[rows.count - 1] = row
         }
         return rows.filter { !$0.indices.isEmpty }
+    }
+}
+
+/// Een knop achter een geveegde mail in de stijl van de app: wit (of limoen voor de eerste) met een inktrand, het
+/// zwarte balkje eronder, icoon en woord in inkt. Als beeld, want iOS tekent vegen-knoppen anders zelf (wit op kleur).
+@MainActor
+enum PhSwipeIcon {
+    private static var cache: [String: UIImage] = [:]
+
+    static func image(_ symbol: String, _ title: String, primary: Bool) -> UIImage {
+        let key = "\(symbol)|\(title)|\(primary)"
+        if let hit = cache[key] { return hit }
+        let face = VStack(spacing: 3) {
+            Image(systemName: symbol).font(.system(size: 17, weight: .medium))
+            Text(title.uppercased()).font(Ph.text(8.5, .semibold)).tracking(0.8).lineLimit(1)
+        }
+        .foregroundStyle(Ph.ink)
+        .frame(width: 66, height: 50)
+        .background(primary ? Ph.lime : Ph.card)
+        .overlay(Rectangle().strokeBorder(Ph.ink, lineWidth: 2))
+        .background(Rectangle().fill(Ph.ink).offset(y: 3))
+        .padding(.bottom, 3)
+        let renderer = ImageRenderer(content: face)
+        renderer.scale = 3
+        let image = (renderer.uiImage ?? UIImage()).withRenderingMode(.alwaysOriginal)
+        cache[key] = image
+        return image
     }
 }

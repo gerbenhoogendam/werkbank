@@ -79,7 +79,7 @@ struct AgendaListView: View {
                 .foregroundStyle(Ph.ink)
             PhCaps(text: sub(group.day), size: 10.5, color: today ? Ph.ink : Ph.ink2)
             Spacer(minLength: 8)
-            PhCaps(text: "\(group.events.filter { !$0.isPersonal }.count)", size: 10.5, color: today ? Ph.ink : Ph.ink2)
+            PhCaps(text: "\(group.events.count)", size: 10.5, color: today ? Ph.ink : Ph.ink2)
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
@@ -109,11 +109,7 @@ struct AgendaListView: View {
                 Button {
                     onOpen(event)
                 } label: {
-                    if event.isPersonal {
-                        personalRow(event, on: group.day)
-                    } else {
-                        eventRow(event, on: group.day)
-                    }
+                    eventRow(event, on: group.day)
                 }
                 .buttonStyle(.plain)
             }
@@ -181,29 +177,6 @@ struct AgendaListView: View {
         .frame(height: 46)
         .overlay(alignment: .bottom) { Rectangle().fill(Ph.hair).frame(height: 1) }
         .opacity(event.end <= .now ? 0.5 : 1)
-        .contentShape(Rectangle())
-    }
-
-    /// GH: een smalle regel in het putje, klein en grijs.
-    private func personalRow(_ event: AgendaEvent, on day: Date) -> some View {
-        let time = times(event, on: day)
-        return HStack(spacing: 8) {
-            Text(event.isAllDay ? "HELE DAG" : "\(time.start) – \(time.end)")
-                .font(Ph.text(10.5))
-                .monospacedDigit()
-                .foregroundStyle(Ph.ink2)
-                .lineLimit(1)
-                .padding(.leading, 10)
-                .frame(width: 98, alignment: .leading)
-            Text(event.title)
-                .font(Ph.text(11, .medium))
-                .foregroundStyle(event.end <= .now ? Ph.ink3 : Ph.ink2)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .frame(height: 24)
-        .background(Ph.band)
-        .overlay(alignment: .bottom) { Rectangle().fill(Ph.hair).frame(height: 1) }
         .contentShape(Rectangle())
     }
 }
