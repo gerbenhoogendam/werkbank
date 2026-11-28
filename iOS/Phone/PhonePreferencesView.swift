@@ -25,6 +25,7 @@ struct PhonePreferencesView: View {
     @AppStorage(PhoneLock.enabledKey) private var faceID = false
     @AppStorage(PhoneTimeReminder.enabledKey) private var reminder = false
     @AppStorage(PhoneTimeReminder.hoursKey) private var reminderHours = 6
+    @AppStorage(PhoneNavigationApp.key) private var navigationApp = PhoneNavigationApp.waze.rawValue
 
     @State private var claudeKey = ""
     @State private var icon = UIApplication.shared.alternateIconName ?? ""
@@ -48,6 +49,7 @@ struct PhonePreferencesView: View {
                         mailboxes
                         inbox
                         privacy
+                        agenda
                         time
                         claude
                         appIcon
@@ -197,6 +199,19 @@ struct PhonePreferencesView: View {
                     stepper("Onder uren", value: $reminderHours, range: 1...12, suffix: ":00")
                 }
                 toggle("Timer bij openen klantmail", isOn: $clientTimer)
+            }
+            .phCard()
+        }
+    }
+
+    private var agenda: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            section("Agenda")
+            VStack(spacing: 0) {
+                choice("Navigeren met", selection: Binding(get: { navigationApp }, set: { value in
+                    navigationApp = value
+                    sync.set(value, forKey: PhoneNavigationApp.key)
+                }), options: PhoneNavigationApp.allCases.map { ($0.rawValue, $0.title) })
             }
             .phCard()
         }

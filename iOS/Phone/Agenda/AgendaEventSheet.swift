@@ -107,10 +107,9 @@ struct AgendaEventSheet: View {
         }
     }
 
-    /// Route naar de plaats in Kaarten.
+    /// Route naar de plaats in de gekozen app (Voorkeuren › Agenda; standaard Waze).
     private func navigate(to location: String) {
-        guard let query = location.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
-              let url = URL(string: "http://maps.apple.com/?daddr=\(query)") else { return }
+        guard let url = PhoneNavigationApp.current.url(to: location) else { return }
         openURL(url)
     }
 

@@ -758,6 +758,10 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     stijl als Verstuurd). Ongedaan maken zet het gesprek terug in de inbox, ook een ster die er was
     (`PhoneGmail.unarchive`). Archiveren via "Taak maken" heeft nog geen balk. Board: na afronden (vinkje of vegen)
     dezelfde balk "Afgerond" met de titel; ongedaan maken zet de kaart terug op dezelfde plek (`CardPlace`).
+73. **iPhone: navigeren met Waze** (28 nov). NAVIGEER bij een afspraak opent standaard Waze; in Voorkeuren › Agenda
+    kies je Waze, Kaarten of Google (`PhoneNavigationApp`, sleutel `phone.agenda.navigationApp`, via iCloud). De
+    links zijn universele links (waze.com/ul, maps.apple.com, google.com/maps/dir): de app als hij er is, anders de
+    website; daarom geen `LSApplicationQueriesSchemes`.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele

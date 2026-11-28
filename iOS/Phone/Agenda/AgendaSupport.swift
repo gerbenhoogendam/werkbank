@@ -323,3 +323,31 @@ struct AgendaAccessCard: View {
         .padding(.horizontal, 16)
     }
 }
+
+/// Waarmee NAVIGEER bij een afspraak de route opent. De links openen de app als die er is, anders de website.
+enum PhoneNavigationApp: String, CaseIterable {
+    case waze, apple, google
+
+    static let key = "phone.agenda.navigationApp"
+
+    static var current: PhoneNavigationApp {
+        PhoneNavigationApp(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .waze
+    }
+
+    var title: String {
+        switch self {
+        case .waze: "Waze"
+        case .apple: "Kaarten"
+        case .google: "Google"
+        }
+    }
+
+    func url(to location: String) -> URL? {
+        guard let query = location.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        switch self {
+        case .waze: return URL(string: "https://waze.com/ul?q=\(query)&navigate=yes")
+        case .apple: return URL(string: "https://maps.apple.com/?daddr=\(query)")
+        case .google: return URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(query)&travelmode=driving")
+        }
+    }
+}
