@@ -64,7 +64,7 @@ struct BoardHome: View {
         // Ook na wijzigingen van buiten (iCloud): dubbele kolommen opruimen.
         .onChange(of: columnRecords.count) { BoardService.ensureColumns(in: context) }
         .sheet(item: $editing) { card in
-            TaskDetailView(card: card)
+            PhoneTaskDetailView(card: card)
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Ph.paper)
         }

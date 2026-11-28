@@ -770,6 +770,12 @@ Gemaakt, gecompileerd en door CI gekomen, maar nog niet in de app gezien:
     als Etiket via `look`; kleuren uit `etiketColors(light:dark:)` met donkerblauw `#004E73` en blauw `#2EC5FF`);
     `Etiket.lime`/`Etiket.olive` volgen het gekozen thema. Icoon Blauw (blauw vlak, papieren kolommen, oranje
     blokje): iPhone `AppIconBlauw` (Voorkeuren › Weergave › App-icoon), Mac Dock `DockIconBlauw`.
+76. **iPhone: taak openen in Etiket-stijl** (28 nov). `PhoneTaskDetailView` (`iOS/Phone/Board/PhoneTaskDetail.swift`)
+    vervangt op de iPhone het gedeelde `TaskDetailView`: titel, klant en logo-domein in kaarten, notities in een putje,
+    subtaken met vierkante vinkjes, mailtekst inklapbaar. Onderaan icoonknoppen zonder tekst: afvinken (limoen,
+    naar Gedaan) en, bij een taak uit een mail, archiveren (afvinken én de mail uit de inbox), plus KLAAR (klaar met
+    bewerken). Na afvinken de balk om het ongedaan te maken (ook de mail terug). Nieuwe taak (`BoardNewTaskSheet`)
+    was al in Etiket.
 ## Mailmodus (gebouwd 31 okt, nog niet in de app gezien)
 
 Dubbelklik op de titel van het Mail-paneel (of rechtermuisknop op een mail › Openen in mailmodus) maakt van het hele
